@@ -255,26 +255,158 @@ git commit  # 02e003c
 
 ---
 
-## Session 3 — 2026-02-17：Phase 1 实施（单环运转 + Web IDE 骨架）
+## Session 3 — 2026-02-17：Phase 1 规划 + 平台设计验证
 
-> Phase 1 目标：交付环（环 1）在"开发"阶段完整运转，Web IDE 骨架上线。
+> 本 session 因上下文压缩重启，从 summary 恢复状态。
 
-### 3.0 Phase 1 交付物清单
+### 3.1 Phase 1 实施计划制定
+
+**时间**: 2026-02-17
+
+**动作**: 进入 Plan Mode，启动 Explore + Plan Agent 评估 Phase 1 现状并设计实施计划。
+
+**关键发现**（代码探查）：
+
+| 组件 | 完成度 | 关键差距 |
+|------|--------|---------|
+| Web IDE 前端 | 90% | 基本完整，WebSocket + SSE fallback 已实现 |
+| Web IDE 后端 | 75% | **ClaudeAgentService 假流式**：50 字符分块 + Thread.sleep(20) 模拟 |
+| ClaudeAdapter | 95% | **缺少 Tool Calling**：不发 tools 参数、不解析 tool_use blocks |
+| McpProxyService | 80% | **端点路径不匹配**：调 `/tools/list`，但 McpServerBase 暴露 `/mcp/tools/list` |
+| AiChatController | 70% | **无持久化**：ConcurrentHashMap 存 session/message |
+| CLI | 90% | 基本完整 |
+
+**产出**: Phase 1 实施计划（7 个 Work Package），保存在 plan file 中。
+
+| WP | 名称 | 优先级 | 规模 |
+|----|------|--------|------|
+| WP1 | ModelAdapter Tool Calling 支持 | CRITICAL | L |
+| WP2 | ClaudeAgentService 真流式 + Agentic Loop | CRITICAL | L |
+| WP3 | MCP Proxy 端点修复 | HIGH | M |
+| WP4 | 数据库持久化 | HIGH | M |
+| WP5 | Spring 配置文件 | HIGH | S |
+| WP6 | 4 个 Foundation Skills 深化 | MEDIUM | M |
+| WP7 | 核心测试 | MEDIUM | M |
+
+---
+
+### 3.2 平台设计验证：.NET → Java 跨栈迁移模拟
+
+**时间**: 2026-02-17
+
+**动作**: 用户提出用 50K LOC .NET 项目迁移到 Java 的真实场景验证 Forge 平台设计。
+
+**关键约束**: 团队没有人会 .NET，需要 AI 做知识抢救 + 跨语言翻译。
+
+**模拟结果**:
+
+| 指标 | 传统模式（5-7人） | Forge 模式（1-2人） | 提效比 |
+|------|-----------------|-------------------|--------|
+| 总耗时 | 25-37 周 | 8-10 周 | 3-4x |
+| 人天 | 700-1300 | 60-100 | **10-13x** |
+| 代码考古 | 6-9 周 | 3-5 天 | **8-12x** |
+
+**设计校验结论**:
+1. codebase-profiler 必须支持 .NET 项目解析
+2. "业务规则提取"是最高价值步骤——需要专门的 Skill
+3. 跨栈迁移是 Forge 的甜点场景——目标栈完全匹配 Foundation Skills
+4. SKILL.md 内容应设计为运行时无关
+
+**产出**: `docs/planning/simulation-dotnet-to-java-migration.md`
+
+---
+
+### 3.3 平台设计验证：当前开发过程 vs Forge 对比
+
+**时间**: 2026-02-17
+
+**动作**: 基于 logbook 真实数据，对比当前开发过程（Claude Code CLI）与 Forge 平台的实际优劣。
+
+**核心发现**:
+
+| 维度 | 当前过程更优 | Forge 更优 |
+|------|-----------|-----------|
+| 速度 | **是**（38K 行 / 10 小时） | |
+| 灵活性 | **是**（Agent 失败立刻手动接管） | |
+| 质量 | | **是**（5 个已知 bug 中 4-5 个可被底线拦截） |
+| 知识持久性 | | **是**（进化环 vs 上下文压缩遗忘） |
+| Agent 可靠性 | | **是**（OODA 自修复 vs 33% 失败率人工兜底） |
+| 团队协作 | | **是**（统一规范、共享知识） |
+
+**结论**: "Claude Code 是跑车，Forge 是装甲运兵车。做原型用跑车，上战场用装甲车。我们现在用跑车造装甲车——这是对的。"
+
+**产出**: `docs/planning/analysis-current-vs-forge.md`
+
+---
+
+### 3.4 平台设计验证：Claude Code 独立性分析
+
+**时间**: 2026-02-17
+
+**动作**: 分析 Forge 平台对 Claude Code 的依赖程度及脱离路径。
+
+**核心发现**:
+- 60% 的代码基础设施（MCP Servers, Web IDE, Adapters, Baselines, CLI）**不依赖** Claude Code
+- 100% 的智能层（Skills, Profiles, Commands, Hooks, CLAUDE.md）**强依赖** Claude Code
+- Web IDE 路径已基本独立（直接调 Claude API），但缺少 Skill 加载 / OODA 循环等能力
+- Phase 2-3 应在 Web IDE 后端自建 SkillLoader + AgentLoop，使平台具备脱离能力
+
+**产出**: `docs/planning/analysis-claude-code-independence.md`
+
+---
+
+### 3.5 Session 3 总结
+
+**用时**: ~3 小时
+**产出**: 1 个实施计划 + 3 个分析文档
+**关键价值**: 通过三个维度的设计验证，确认了：
+1. Forge 平台设计对真实场景有效（.NET 迁移模拟）
+2. 当前开发方式和 Forge 平台各有适用场景（速度 vs 质量）
+3. 平台应在 Phase 2-3 具备脱离 Claude Code 的能力（供应商风险管控）
+
+**Phase 1 实施计划已就绪，等待用户批准后开始执行。**
+
+---
+
+### Phase 1 交付物清单
 
 | # | 交付物 | Phase 0 状态 | Phase 1 目标 |
 |---|--------|-------------|-------------|
 | 1 | 扩展到 10-15 名 CLI 试点用户 | 5 名种子 | 15 名试点 |
-| 2 | 再增 4 个 Foundation Skill | 10 个已有 | +spring-boot-patterns 已有，需深化 api-design/database-patterns/error-handling |
+| 2 | 再增 4 个 Foundation Skill | 10 个已有 | 深化 spring-boot-patterns/api-design/database-patterns/error-handling |
 | 3 | SuperAgent development-profile 完整实现 | 骨架 | OODA + 底线 + HITL 完整闭环 |
 | 4 | `forge-service-graph-mcp` | 代码已有 | 部署可用 + impact_analysis 可查询 |
 | 5 | `doc-generator` Agent | 骨架 | 热点代码优先补文档 |
 | 6 | Forge CLI 核心命令 | 5 命令骨架 | init/doctor/skill/mcp 完善 |
 | 7 | `/forge-review` 企业代码审查 | 547 行指令 | 结合 Skill + 底线实战验证 |
 | 8 | Web IDE 前端骨架 | Next.js 骨架 | 路由 + 布局 + SSO 认证 |
-| 9 | AI Chat MVP | WebSocket handler 骨架 | Claude Agent SDK + 流式对话 + MCP Tool 调用 |
+| 9 | AI Chat MVP | WebSocket handler 骨架 | Claude API 真流式 + MCP Tool 调用 + Agentic Loop |
 | 10 | 知识浏览器 MVP | 组件骨架 | 搜索 + 文档查看 + 架构图渲染 |
-| 11 | `model-adapter` 骨架 | 接口 + 3 实现 | ClaudeAdapter 完善 |
+| 11 | `model-adapter` 完善 | 接口 + ClaudeAdapter | Tool Calling + StreamEvent |
 | 12 | 度量基线采集 | 无 | PR 周期 / 审查时间基准数据 |
+
+---
+
+### Git 提交记录（更新）
+
+| Commit | 说明 | 文件数 | 插入行数 |
+|--------|------|--------|---------|
+| `02e003c` | feat: Initialize Forge platform | 227 | 37,179 |
+| `93b6ef7` | fix: Complete Phase 0 acceptance criteria | 19 | 1,421 |
+| `0ce24a5` | docs: Update dev logbook — Phase 0 complete, Phase 1 roadmap | - | - |
+
+---
+
+### docs/planning/ 文档清单
+
+| 文件 | 内容 | 创建时间 |
+|------|------|---------|
+| `baseline-v1.0.md` | 规划基线文档 | Session 1 |
+| `forge-vs-claude-code-analysis.md` | Forge vs Claude Code 理论对比 | Session 1 |
+| `dev-logbook.md` | 开发日志（本文件） | Session 2 |
+| `simulation-dotnet-to-java-migration.md` | .NET→Java 迁移模拟验证 | Session 3 |
+| `analysis-current-vs-forge.md` | 当前开发过程 vs Forge 实际优劣 | Session 3 |
+| `analysis-claude-code-independence.md` | Claude Code 独立性分析 | Session 3 |
 
 ---
 
