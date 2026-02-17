@@ -762,6 +762,82 @@ docker compose -f docker-compose.trial.yml --env-file .env.trial up --build
 | 6 | AI Chat 流式响应 | ⏳ 待 API Key 配置后验证 |
 | 7 | Tool Call / Agentic Loop | ⏳ 待 API Key 配置后验证 |
 
+### 5.9 经验提炼与平台融入
+
+> 从 Phase 1.5 的 90 分钟构建调试（13 次尝试、10 个计划外问题）中提炼出 4 大类平台能力，融入 baseline v1.3。
+
+#### 提炼过程
+
+Phase 1.5 Docker 部署是项目首次端到端验证。结果令人意外：**代码完成 + 37 测试通过 ≠ 能运行**。从首次 `docker compose up` 到 3 容器全部 healthy，经历了 13 次构建尝试，发现了 10 个计划阶段完全没有预料到的问题。
+
+关键数据：
+- 首次部署成功率：**7.7%**（1/13）
+- 平均每个问题定位+修复：**~7 分钟**
+- 计划工作 vs 计划外工作比例：**30 分钟 vs 90 分钟**（1:3）
+
+#### 4 大类平台能力提炼
+
+**类别 1：部署前飞行检查（Deployment Pre-flight）**
+
+| 可被 pre-flight 拦截的问题 | 尝试# | 发现方式 |
+|---------------------------|-------|---------|
+| 缺少 `package-lock.json` | #2 | `npm ci` 失败 |
+| Next.js `ws://` rewrite 不合法 | #3 | 构建报错 |
+| JDK 版本不匹配（系统 JDK 8 vs 要求 JDK 21） | #6 | Gradle 构建失败 |
+| `.dockerignore` 排除了需要的 build 产物 | #9 | Docker COPY 失败 |
+| 缺少 `public` 目录 | #10 | Docker COPY 失败 |
+
+→ **平台能力**：`deployment-readiness-check` Skill + `deployment-preflight-baseline.sh` 底线
+
+**类别 2：编译≠运行的鸿沟（Build-Run Gap）**
+
+| 编译通过但运行失败的案例 | 尝试# | 根因 |
+|-------------------------|-------|------|
+| TypeScript 类型错误（`unknown` as ReactNode） | #7 | `npm run dev` 不检查类型，`npm run build` 才检查 |
+| JSX namespace 找不到 | #8 | 同上 |
+| WebClient bean 缺失 | #12 | Spring 编译时无感知，启动时才报 `UnsatisfiedDependencyException` |
+| Actuator 端点 404 | #11 | 可能缺依赖或被 Security 拦截，编译无法发现 |
+
+→ **平台能力**：`runtime-health-baseline.sh` 底线（启动 → 验证端点 → Bean 完整性）
+
+**类别 3：环境差异（Environment Parity）**
+
+| 环境差异导致的问题 | 尝试# | 根因 |
+|-------------------|-------|------|
+| Docker 内 Gradle TLS 握手失败 | #4-5 | macOS Docker Desktop 网络层兼容问题 |
+| 系统默认 JDK 8 不兼容 Spring Boot 3 | #6 | 本地有 JDK 21 但 `JAVA_HOME` 未设置 |
+| `docker-compose.yml` `version` 字段过时 | — | Docker Compose v2 不再需要 |
+
+→ **平台能力**：`environment-parity` Skill（检测 local/Docker/CI 差异）
+
+**类别 4：设计退化风险（Design Regression）**
+
+在解决上述问题的过程中，我们意识到另一个风险：已经验证通过的设计（UI 路由、API 契约、数据模型、通信协议）在未来迭代中可能被无意修改，而没有人意识到这是一种退化。
+
+→ **平台能力**：
+- `design-baseline-v1.md` 设计基线文档（冻结已验证设计）
+- `design-regression-baseline.sh` 底线脚本（API 契约快照 + UI 路由 + 数据模型对比）
+- `design-baseline-guardian` Skill（修改前自动加载基线，修改后自动回归）
+- `design-baseline-tracker` 进化环组件（merge 后对比设计变更）
+
+#### 融入 baseline v1.3
+
+以上 4 类能力已融入 `docs/planning/baseline-v1.3.md`：
+
+| 融入位置 | 内容 |
+|---------|------|
+| §二 设计原则 | 新增原则 11（已验证设计不可隐式退化）+ 12（开发者痛点即平台能力） |
+| §四 4.3 Skill | 新增 3 个 Foundation Skill |
+| §四 4.4 底线 | 新增 3 个底线脚本 |
+| §四 4.6 进化环 | 新增 3 类知识沉淀通道 + design-baseline-tracker |
+| §十 度量体系 | 新增 3 个指标（设计保真度 / 部署效率 / 调试效率） |
+
+#### 核心洞察
+
+> "我们不只是在修 Docker bug——我们在发现平台应该提供的保护。每一个让我们痛苦的问题，都是未来开发者不应该再遇到的问题。把它编码为 Skill 和底线，就是把个人经验变成组织能力。"
+>
+> 这正是 Forge 双环架构的精髓：**交付环中的每一次挫折，都是进化环的养料。**
+
 ---
 
 ### Git 提交记录（更新）
@@ -777,6 +853,7 @@ docker compose -f docker-compose.trial.yml --env-file .env.trial up --build
 | `7f10907` | docs: Update planning baseline v1.1 → v1.2 | - | - |
 | `97fd1a3` | feat: Phase 1.5 — Docker one-click deployment for internal trial | 11 | 259 |
 | `937d73d` | docs: Update dev logbook — Phase 1.5 Docker deployment session | 1 | 144 |
+| (pending) | docs: Baseline v1.3 — design guardian system + platform capability extraction | 3 | ~1,500 |
 
 ### docs/ 文档清单（更新）
 
@@ -790,3 +867,5 @@ docker compose -f docker-compose.trial.yml --env-file .env.trial up --build
 | `docs/planning/analysis-claude-code-independence.md` | Claude Code 独立性分析 | Session 3 |
 | `docs/planning/phase1-implementation-plan.md` | Phase 1 五周实施计划 | Session 4 |
 | `docs/TRIAL-GUIDE.md` | Phase 1.5 内部试用引导 | Session 5 |
+| `docs/design-baseline-v1.md` | Web IDE 设计基线（Phase 1.5 冻结） | Session 5 |
+| `docs/planning/baseline-v1.3.md` | 规划基线 v1.3（设计守护 + 平台能力提炼） | Session 5 |
