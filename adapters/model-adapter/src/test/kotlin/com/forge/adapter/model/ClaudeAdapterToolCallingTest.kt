@@ -228,7 +228,12 @@ class ClaudeAdapterToolCallingTest {
         assertThat(json.get("model").asString).isEqualTo("claude-sonnet-4-20250514")
         assertThat(json.get("max_tokens").asInt).isEqualTo(1000)
         assertThat(json.get("stream").asBoolean).isTrue()
-        assertThat(json.get("system").asString).isEqualTo("You are helpful")
+        val systemArray = json.getAsJsonArray("system")
+        assertThat(systemArray).hasSize(1)
+        val systemBlock = systemArray[0].asJsonObject
+        assertThat(systemBlock.get("type").asString).isEqualTo("text")
+        assertThat(systemBlock.get("text").asString).isEqualTo("You are helpful")
+        assertThat(systemBlock.getAsJsonObject("cache_control").get("type").asString).isEqualTo("ephemeral")
 
         val toolsArray = json.getAsJsonArray("tools")
         assertThat(toolsArray).hasSize(1)

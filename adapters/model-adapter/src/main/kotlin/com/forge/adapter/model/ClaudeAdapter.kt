@@ -450,7 +450,15 @@ class ClaudeAdapter(
         body.add("messages", apiMessages)
 
         if (options.systemPrompt != null) {
-            body.addProperty("system", options.systemPrompt)
+            val systemArray = JsonArray()
+            val systemBlock = JsonObject()
+            systemBlock.addProperty("type", "text")
+            systemBlock.addProperty("text", options.systemPrompt)
+            val cacheControl = JsonObject()
+            cacheControl.addProperty("type", "ephemeral")
+            systemBlock.add("cache_control", cacheControl)
+            systemArray.add(systemBlock)
+            body.add("system", systemArray)
         }
         if (options.temperature != 0.7) {
             body.addProperty("temperature", options.temperature)
@@ -487,6 +495,7 @@ class ClaudeAdapter(
             .url("$baseUrl$MESSAGES_PATH")
             .addHeader("x-api-key", apiKey)
             .addHeader("anthropic-version", API_VERSION)
+            .addHeader("anthropic-beta", "prompt-caching-2024-07-31")
             .addHeader("content-type", "application/json")
             .post(jsonBody.toRequestBody("application/json".toMediaType()))
             .build()
