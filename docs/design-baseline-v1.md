@@ -1,10 +1,14 @@
-# Forge Web IDE — 设计基线 v2
+# Forge Web IDE — 设计基线 v4
 
-> 基线日期: 2026-02-18 | Phase 2 E2E 验证通过后更新（v1 → v2）
+> 基线日期: 2026-02-19 | Phase 2 全部完成后更新（v3 → v4）
 > 本文档冻结当前已验证的 UI/API/数据模型/架构设计细节，作为未来修改的对照基准。
 > 任何对本文档覆盖范围的修改，必须先意识到偏离、再决定是否接受。
 >
-> **v2 变更摘要**: 新增 Skill-Aware OODA Loop 架构（SkillLoader + ProfileRouter + SystemPromptAssembler）、Profile Badge UI、Prompt Caching、`/api/chat/skills` 和 `/api/chat/profiles` 端点、`profile_active` StreamEvent 类型。
+> **v4 变更摘要**: MCP 实连（McpProxyService → 真实 HTTP 调用 6 个 MCP 工具）、MetricsService（Micrometer 自定义指标 + Actuator/Prometheus 暴露）、agent-eval 真实模型调用（5 种断言类型）、BaselineService 底线集成、32 Skills / 5 Profiles、跨栈迁移 PoC（100% 业务规则覆盖）。
+>
+> v3 变更摘要: 新增 OODA 阶段指示器 UI（5 图标流转）、Profile Badge 增强（confidence 圆点 + 路由原因）、`ooda_phase` StreamEvent 类型、SSE 格式兼容规范、WebSocket CORS 配置修复、ClaudeAdapter `content_block_stop` 修复。
+>
+> v2 变更摘要: 新增 Skill-Aware OODA Loop 架构（SkillLoader + ProfileRouter + SystemPromptAssembler）、Profile Badge UI、Prompt Caching、`/api/chat/skills` 和 `/api/chat/profiles` 端点、`profile_active` StreamEvent 类型。
 
 ---
 
@@ -44,24 +48,40 @@
 └──────────┴──────────────────────────────────┴───────────────────────┘
 ```
 
-#### AI Chat Sidebar Profile Badge（Phase 2 新增）
+#### AI Chat Sidebar OODA 指示器 + Profile Badge（Sprint 2A）
 
-流式响应期间，在消息列表底部显示当前 active profile 信息：
+流式响应期间，在消息列表底部显示 OODA 阶段流转和当前 active profile 信息：
 
 ```
-┌──────────────────────────────────────────┐
-│ development | kotlin-conventions, +3     │  ← Profile Badge
-└──────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────┐
+│ 👁 Observe → 🧭 Orient → 🧠 Decide → ⚡ Act → ✅ Done    │  ← OODA 指示器
+│ ● development | kotlin-conventions, +14 | keyword 'pr'   │  ← Profile Badge
+└───────────────────────────────────────────────────────────┘
 ```
 
-**Profile Badge 设计规范**：
-- 位置：消息列表底部，`thinkingText` 指示器上方
+**OODA 阶段指示器设计规范**（v3 新增）：
+- 位置：消息列表底部、Profile Badge 上方
+- 仅在 `isStreaming && oodaPhase` 时显示
+- 5 个阶段 icon 水平排列：`Eye`(Observe), `Compass`(Orient), `Brain`(Decide), `Zap`(Act), `CheckCircle2`(Complete)
+- 当前阶段：`bg-primary/15 text-primary font-medium`，显示 icon + label 文字
+- 已完成阶段：`text-green-400`，仅显示 icon
+- 未到达阶段：`text-muted-foreground/40`，仅显示 icon
+- 容器：`flex items-center gap-0.5`
+- 每个阶段：`rounded px-1.5 py-0.5 text-xs transition-colors`
+
+**Profile Badge 设计规范**（v2 创建，v3 增强）：
+- 位置：OODA 指示器下方，`thinkingText` 指示器上方
 - 仅在 `isStreaming && activeProfile` 时显示
 - 样式：`border border-border rounded-md px-2 py-1 bg-muted/50`
 - 布局：`flex items-center gap-1.5 text-xs text-muted-foreground`
+- **Confidence 圆点**（v3 新增）：`h-1.5 w-1.5 rounded-full flex-shrink-0`
+  - 高置信度 (≥0.8): `bg-green-400`
+  - 中置信度 (≥0.5): `bg-yellow-400`
+  - 低置信度 (<0.5): `bg-muted-foreground`
 - Profile 名称：`font-medium text-primary`，去除 `-profile` 后缀
 - Skills 列表：最多显示 3 个，超出部分显示 `+N`
-- Profile 名和 Skills 之间用 `|` 分隔
+- **路由原因**（v3 新增）：`truncate italic`，显示路由决策原因
+- 各段之间用 `|`（`text-border`）分隔
 
 **Thinking 指示器设计规范**：
 - 三个圆点动画：`h-1.5 w-1.5 rounded-full bg-primary animate-thinking-dot`
@@ -122,7 +142,7 @@ Dashboard → 创建/选择 Workspace → 编辑文件（Monaco）
 | 正文字体 | Inter, system-ui | 无衬线 |
 | 等宽字体 | JetBrains Mono, Fira Code | 代码编辑器 + 终端 |
 | 自定义动画 | `animate-thinking-dot` | AI 思考指示器 (1.4s 循环，三点依次闪烁) |
-| 图标库 | lucide-react 0.460+ | 全局统一图标（Send, Paperclip, RotateCcw, StopCircle, User, Bot, Wrench, CheckCircle, Loader2, AlertCircle, Copy, Check 等） |
+| 图标库 | lucide-react 0.460+ | 全局统一图标（Send, Paperclip, RotateCcw, StopCircle, User, Bot, Wrench, CheckCircle, Loader2, AlertCircle, Copy, Check, Eye, Compass, Brain, Zap, CheckCircle2 等） |
 | 尺寸约定 | 图标 `h-3.5 w-3.5` ~ `h-4 w-4` | 小图标 3.5，正常 4，避免更大 |
 | 间距约定 | `gap-1.5` / `gap-2` / `px-2 py-1` | 紧凑但不拥挤，text-xs 为主 |
 | 交互反馈 | `hover:bg-accent` / `hover:text-foreground` | 统一使用 accent 色作为 hover 背景 |
@@ -192,6 +212,38 @@ Dashboard → 创建/选择 Workspace → 编辑文件（Monaco）
 | POST | `/api/mcp/tools/call` | `McpToolCallRequest { name, arguments }` | `McpToolCallResponse` | 调用工具 |
 | POST | `/api/mcp/tools/cache/invalidate` | — | `{ status: "cache_invalidated" }` | 清除工具缓存 |
 
+**MCP 工具清单**（v4 新增，McpProxyService 实连）:
+
+| 工具 | MCP Server | 说明 |
+|------|-----------|------|
+| `search_knowledge` | knowledge-mcp | 搜索知识库文档 |
+| `read_file` | knowledge-mcp | 读取知识库文件内容 |
+| `query_schema` | database-mcp | 查询数据库 schema |
+| `run_baseline` | backend (local) | 执行底线检查脚本 |
+| `list_baselines` | backend (local) | 列出可用底线脚本 |
+| `get_service_info` | service-graph-mcp | 获取服务信息 |
+
+#### Actuator / Metrics API（v4 新增）
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/actuator/health` | 健康检查（含 liveness/readiness 探针） |
+| GET | `/actuator/metrics` | Micrometer 指标列表 |
+| GET | `/actuator/metrics/{name}` | 单个指标详情（如 `forge.profile.route`） |
+| GET | `/actuator/prometheus` | Prometheus 格式指标导出 |
+
+**Forge 自定义指标**（`MetricsService`，v4 新增）:
+
+| 指标名 | 类型 | Tags | 说明 |
+|--------|------|------|------|
+| `forge.profile.route` | Counter | `profile`, `method` | Profile 路由次数 |
+| `forge.tool.calls` | Counter | `tool`, `status`(success/error) | 工具调用次数 |
+| `forge.baseline.results` | Counter | `baseline`, `result`(pass/fail) | 底线检查结果 |
+| `forge.ooda.phases` | Counter | `phase` | OODA 阶段触发次数 |
+| `forge.message.duration` | Timer | — | 消息处理端到端耗时 |
+| `forge.turn.duration` | Timer | `turn` | 每轮 Agentic Loop 耗时 |
+| `forge.tool.duration` | Timer | `tool` | 单次工具执行耗时 |
+
 #### Workflow API (`WorkflowController` → `/api/workflows`)
 
 | 方法 | 路径 | 请求体 | 响应体 | 说明 |
@@ -220,7 +272,11 @@ SSE 端点: `POST /api/chat/sessions/{sessionId}/stream`
 **StreamEvent 类型**:
 
 ```typescript
+type OodaPhase = "observe" | "orient" | "decide" | "act" | "complete";
+
 type StreamEvent =
+  | { type: "ooda_phase",                           // OODA 阶段流转（v3 新增）
+      phase?: OodaPhase }                           //   当前阶段
   | { type: "profile_active",                       // Profile 路由结果（Phase 2 新增，Agentic Loop 开始前发送）
       activeProfile?: string,                       //   路由到的 profile 名称
       loadedSkills?: string[],                      //   加载的 skill 列表
@@ -235,14 +291,30 @@ type StreamEvent =
   | { type: "done" }                                // 流结束
 ```
 
+**OODA 阶段映射**（v3 新增）:
+```
+observe  — streamMessage 开始，buildDynamicSystemPrompt 之前
+orient   — ProfileRouter 路由完成，emit profile_active 之前
+decide   — agenticStream 开始前，Claude 开始生成回复
+act      — agenticStream 中 stopReason==TOOL_USE，执行工具时
+complete — agenticStream 结束后，持久化消息前
+```
+
 **事件发送顺序**:
 ```
-profile_active → [thinking →] content* → [tool_use → tool_result →]* → content* → done
+ooda_phase(observe) → ooda_phase(orient) → profile_active → ooda_phase(decide)
+  → [thinking →] content* → [ooda_phase(act) → tool_use → tool_result →]* → content*
+  → ooda_phase(complete) → done
 ```
 
 **传输方式**:
-- SSE: `data: {JSON}\n\n` 格式，`data: [DONE]` 结束
+- SSE: Spring SseEmitter 输出 `data:{JSON}\n\n` 格式（**注意：冒号后无空格**），`data:[DONE]` 结束
 - WebSocket: 每行一个 JSON 对象
+
+**SSE 解析兼容规范**（v3 新增）:
+> Spring SseEmitter 发送 `data:` 后不带空格（如 `data:{"type":"content",...}`），
+> 但 SSE 标准允许 `data: ` 带空格。前端 `claude-client.ts` 必须兼容两种格式：
+> 用 `line.startsWith("data:")` 匹配，然后动态判断是否有空格再做 slice。
 
 ### 2.4 关键 DTO 结构
 
@@ -459,7 +531,11 @@ docker compose -f docker-compose.trial.yml up --build
 用户消息
     │
     ▼
+emit ooda_phase("observe") + metricsService.recordOodaPhase("observe")
+    │
+    ▼
 ProfileRouter.route(message) → ProfileRoutingResult {profile, confidence, reason}
+metricsService.recordProfileRoute(profile, reason)             ← v4 新增
     │   ├─ L1: 显式标签 @规划/@设计/@开发/@测试/@运维 (confidence=1.0)
     │   ├─ L2: 中英文关键词匹配 (confidence=0.6-0.8)
     │   ├─ L3: 分支名模式 feature/*/hotfix/*/release/* (confidence=0.5)
@@ -480,24 +556,67 @@ SystemPromptAssembler.assemble(profile, skills) → String
     │   [6] Available MCP 工具
     │
     ▼
-emit profile_active 事件 → 前端显示 Profile Badge
+emit ooda_phase("orient") + metricsService.recordOodaPhase("orient")
+emit profile_active 事件 → 前端显示 Profile Badge + Confidence 圆点
     │
     ▼
+emit ooda_phase("decide") + metricsService.recordOodaPhase("decide")
 agenticStream() — 最多 MAX_AGENTIC_TURNS(5) 轮
     │
     ├─ 每轮: ClaudeAdapter.streamWithTools(systemPrompt=动态prompt)
-    │   └─ Prompt Caching: system prompt 以 content block + cache_control 发送
+    │   ├─ Prompt Caching: system prompt 以 content block + cache_control 发送
+    │   ├─ content_block_stop: 仅对 tool_use block 发出 ToolUseEnd（v3 修复）
+    │   └─ agenticStream: ToolUseEnd 仅在 currentToolId.isNotBlank() 时处理（v3 防御）
+    │
+    ├─ 每轮结束: metricsService.recordTurnDuration(turn, ms)   ← v4 新增
     │
     ├─ 如果 stop_reason == TOOL_USE:
+    │    ├─ emit ooda_phase("act") + metricsService.recordOodaPhase("act")
     │    ├─ 执行工具 (McpProxyService.callTool)
+    │    ├─ metricsService.recordToolCall(name, success)       ← v4 新增
+    │    ├─ metricsService.recordToolDuration(name, ms)        ← v4 新增
     │    ├─ 发送 tool_result 事件
     │    └─ 继续下一轮
     │
-    └─ 如果 stop_reason == END_TURN:
+    └─ 如果 stop_reason == END_TURN / MAX_TOKENS:
+         ├─ emit ooda_phase("complete") + metricsService.recordOodaPhase("complete")
+         ├─ metricsService.recordMessageDuration(totalMs)      ← v4 新增
          ├─ 持久化消息和 tool calls
          ├─ 知识空白检测 (KnowledgeGapDetectorService)
          └─ 发送 done 事件
 ```
+
+**McpProxyService 实连架构**（v4 新增）:
+
+```
+ClaudeAgentService
+    │
+    ▼
+McpProxyService.callTool(name, args)
+    │   ├─ search_knowledge → WebClient POST → knowledge-mcp:8081
+    │   ├─ read_file         → WebClient POST → knowledge-mcp:8081
+    │   ├─ query_schema      → WebClient POST → database-mcp:8082
+    │   ├─ run_baseline      → BaselineService.runBaseline(name)  (local)
+    │   ├─ list_baselines    → BaselineService.listBaselines()    (local)
+    │   └─ get_service_info  → WebClient POST → service-graph-mcp:8083
+    │
+    ▼
+McpToolCallResponse { content: List<McpContent>, isError: Boolean }
+```
+
+MCP Server URL 从 `application.yml` 的 `forge.mcp.*` 配置读取。
+
+**MetricsService 注入点**（v4 新增）:
+
+| 注入位置 | 指标 | 说明 |
+|---------|------|------|
+| `buildDynamicSystemPrompt` | `forge.profile.route` | 每次 Profile 路由记录 profile + method |
+| `streamMessage` OODA 事件 (×4) | `forge.ooda.phases` | observe / orient / decide / complete |
+| `agenticStream` OODA act | `forge.ooda.phases` | act（仅 tool_use 时触发） |
+| `agenticStream` turn 结束 | `forge.turn.duration` | 每轮 agentic loop 耗时 |
+| `agenticStream` tool 执行（成功） | `forge.tool.calls` + `forge.tool.duration` | 工具名 + success 状态 + 耗时 |
+| `agenticStream` tool 执行（失败） | `forge.tool.calls` + `forge.tool.duration` | 工具名 + error 状态 + 耗时 |
+| `streamMessage` 完成 | `forge.message.duration` | 消息处理端到端总耗时 |
 
 **Prompt Caching 实现**:
 
@@ -524,6 +643,7 @@ agenticStream() — 最多 MAX_AGENTIC_TURNS(5) 轮
 - `forge.security.enabled: false` (环境变量 `FORGE_SECURITY_ENABLED`)
 - 所有端点无需认证即可访问
 - CORS 允许来源: `http://localhost:3000,http://localhost:9000` (可配置)
+- **WebSocket CORS**: `forge.websocket.allowed-origins` 必须为逗号分隔字符串（非 YAML list），默认 `http://localhost:3000,http://localhost:5173,http://localhost:9000`。`@Value` 注解不能解析 YAML list 类型，会静默回退默认值。
 - OAuth2 Resource Server 依赖已引入，待激活
 
 ### 4.7 后端技术栈
@@ -538,15 +658,17 @@ agenticStream() — 最多 MAX_AGENTIC_TURNS(5) 轮
 | 数据库迁移 | Flyway | (Spring Boot managed) |
 | HTTP 客户端 | Spring WebFlux (WebClient) | (Spring Boot managed) |
 | 安全 | Spring Security + OAuth2 Resource Server | (试用阶段禁用) |
+| 监控 | Spring Boot Actuator + Micrometer | 自定义 forge.* 指标（v4 新增） |
+| 指标导出 | micrometer-registry-prometheus | /actuator/prometheus 端点（v4 新增） |
 | YAML 解析 | Jackson Dataformat YAML | Skill/Profile frontmatter 解析 |
 | 序列化 | Jackson + Kotlin Module | (Spring Boot managed) |
-| 测试 | JUnit 5 + MockK 1.13 + AssertJ | 92 tests passing |
+| 测试 | JUnit 5 + MockK 1.13 + AssertJ | 128+ tests passing |
 
 ---
 
 ## 五、验证状态
 
-> Phase 2 E2E 验证结果 (2026-02-18) — 22/24 测试路径通过
+> Phase 2 全部完成后验证结果 (2026-02-19) — v4 更新
 
 | # | 验证项 | 状态 | 说明 |
 |---|--------|------|------|
@@ -554,16 +676,36 @@ agenticStream() — 最多 MAX_AGENTIC_TURNS(5) 轮
 | 2 | 容器启动 | ✅ | 3 容器 running, backend healthy |
 | 3 | Nginx 路由 | ✅ | 前端 200, API 正常返回 |
 | 4 | 前端页面加载 | ✅ | `http://localhost:9000` 返回 200 |
-| 5 | 后端 API | ✅ | `/api/knowledge/search` + `/api/chat/skills`(29) + `/api/chat/profiles`(5) |
-| 6 | AI Chat 流式响应 | ✅ | 真实 Claude API Key 验证通过 |
-| 7 | Profile 路由（显式标签） | ✅ | 5/5 — @规划/@设计/@开发/@测试/@运维 全部正确，confidence=1.0 |
-| 8 | Profile 路由（关键词） | ✅ | 5/5 — 中英文关键词检测正确 |
-| 9 | Profile 路由（默认回退） | ✅ | 1/1 — 无关消息回退到 development |
-| 10 | Profile 路由（标签覆盖） | ✅ | 1/1 — 标签优先级高于关键词 |
-| 11 | Prompt Caching | ✅ | 缓存命中后 system prompt 费用降 90% |
-| 12 | 降级与容错 | ⏳ | 2/2 未测试 |
+| 5 | 后端 API | ✅ | `/api/chat/skills`(32) + `/api/chat/profiles`(5) |
+| 6 | AI Chat 流式响应 | ✅ | WebSocket + SSE 双通道均正常 |
+| 7 | OODA 阶段指示器 | ✅ | Observe→Orient→Decide→[Act→]Complete 流转正常 |
+| 8 | Profile Badge + Confidence | ✅ | 名称、skills 列表、confidence 圆点、路由原因均显示 |
+| 9 | Profile 路由（显式标签） | ✅ | 5/5 — @规划/@设计/@开发/@测试/@运维 全部正确，confidence=1.0 |
+| 10 | Profile 路由（关键词） | ✅ | 5/5 — 中英文关键词检测正确 |
+| 11 | Profile 路由（默认回退） | ✅ | 1/1 — 无关消息回退到 development |
+| 12 | Prompt Caching | ✅ | 缓存命中后 system prompt 费用降 90% |
+| 13 | Agentic Loop 多轮 Tool Calling | ✅ | Turn 1 tool_use + Turn 2 content 正常 |
+| 14 | MCP 实连 | ✅ | 6 工具真实 HTTP 调用 MCP Server（v4 新增） |
+| 15 | BaselineService 底线集成 | ✅ | run_baseline / list_baselines 工具可用（v4 新增） |
+| 16 | MetricsService 指标采集 | ✅ | 7 个 forge.* 自定义指标注册（v4 新增） |
+| 17 | Actuator/Prometheus 端点 | ✅ | `/actuator/metrics/forge.*` + `/actuator/prometheus`（v4 新增） |
+| 18 | agent-eval 真实模型调用 | ✅ | ANTHROPIC_API_KEY 有则调 Claude，无则结构验证（v4 新增） |
+| 19 | 跨栈迁移 PoC | ✅ | .NET → Java, 11 条业务规则 100% 覆盖（v4 新增） |
+| 20 | 降级与容错 | ⏳ | 未测试 |
 
-**单元测试**: 92 tests, 0 failures（`./gradlew :web-ide:backend:build`）
+### Phase 2 验收标准达成（v4）
+
+| # | 标准 | 状态 |
+|---|------|------|
+| 1 | SkillLoader 独立加载 Skill | ✅ |
+| 2 | SuperAgent OODA 循环运转，底线一次通过率 ≥ 70% | ✅ |
+| 3 | 跨栈迁移 PoC：.NET → Java，业务规则覆盖率 ≥ 90% | ✅ (100%) |
+| 4 | Web IDE 可访问：知识搜索 → AI 对话 → Skill 感知 → 工具调用 | ✅ |
+| 5 | agent-eval 可运行真实评估场景 | ✅ |
+
+### 单元测试
+
+**总计**: 128+ tests, 0 failures
 
 | 测试文件 | 测试数 | 覆盖范围 |
 |---------|--------|---------|
@@ -572,12 +714,15 @@ agenticStream() — 最多 MAX_AGENTIC_TURNS(5) 轮
 | `SystemPromptAssemblerTest.kt` | 13 | 6 段组装 + MCP 降级 + 空集 + prompt 大小 |
 | `SkillLoaderIntegrationTest.kt` | 7 | 真实 plugins/ 目录集成验证 |
 | `ClaudeAdapterToolCallingTest.kt` | 9 | SSE 解析 + HTTP 错误 + tool_use 序列化 |
-| `ClaudeAgentServiceTest.kt` | 7 | 同步/流式 + Agentic Loop + 降级 |
-| `McpProxyServiceTest.kt` | 10 | Tool handlers + Cache + formatResult |
+| `ClaudeAgentServiceTest.kt` | 8 | 同步/流式 + Agentic Loop + 降级 + MetricsService |
+| `McpProxyServiceTest.kt` | 10+ | Tool dispatch + HTTP 调用 + formatResult |
 | `McpControllerTest.kt` | 3 | REST 端点 |
 | `ChatRepositoryTest.kt` | 8 | JPA CRUD + 排序 + cascade |
+| `MetricsServiceTest.kt` | 7 | Counter tags + Timer recording（v4 新增） |
+| `EvalRunnerTest.kt` | 18 | 5 断言类型 + 有/无 adapter + profile/tag 过滤（v4 新增） |
+| model-adapter tests | 11 | ClaudeAdapter + StreamEvent + tool calling |
 
-**Skill 加载验证**: 29 skills, 5 profiles（Docker 日志确认）
+**Skill 加载验证**: 32 skills, 5 profiles
 
 ---
 
@@ -647,7 +792,8 @@ export function ComponentName({ prop1, prop2 }: ComponentProps) {
 ```typescript
 (event: StreamEvent) => {
   switch (event.type) {
-    case "profile_active":  // 更新 Profile Badge state
+    case "ooda_phase":      // 更新 oodaPhase state → 驱动 OODA 指示器 5 图标流转（v3 新增）
+    case "profile_active":  // 更新 activeProfile state（含 confidence）→ Profile Badge + Confidence 圆点
     case "thinking":        // 更新 thinkingText state
     case "content":         // 增量追加到 fullContent，更新消息列表
     case "tool_use":        // push 到 toolCalls 数组，更新消息
@@ -657,6 +803,13 @@ export function ComponentName({ prop1, prop2 }: ComponentProps) {
   }
 }
 ```
+
+**AiChatSidebar 新增 State**（v3）：
+```typescript
+const [oodaPhase, setOodaPhase] = useState<OodaPhase | null>(null);
+// activeProfile state 增加 confidence 字段
+```
+`oodaPhase` 和 `activeProfile` 在 `finally` 块和 `handleStop` 中重置为 `null`。
 
 ---
 
@@ -671,7 +824,9 @@ export function ComponentName({ prop1, prop2 }: ComponentProps) {
 
 ---
 
-> 基线版本: v2
+> 基线版本: v4
 > 初始冻结日期: 2026-02-18 (v1, Phase 1.5)
-> 本次更新日期: 2026-02-18 (v2, Phase 2 E2E 验证后)
-> 下次评审: Phase 2 Sprint 2A 完成后
+> v2 更新日期: 2026-02-18 (Phase 2 E2E 验证后)
+> v3 更新日期: 2026-02-18 (Sprint 2A 验收通过后)
+> v4 更新日期: 2026-02-19 (Phase 2 全部完成 — Sprint 2B + 2C)
+> 下次评审: Phase 3 启动前
