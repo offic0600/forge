@@ -5,6 +5,7 @@ import com.forge.webide.entity.ChatMessageEntity
 import com.forge.webide.model.*
 import com.forge.webide.repository.ChatMessageRepository
 import com.forge.webide.repository.ChatSessionRepository
+import com.forge.webide.service.skill.*
 import io.mockk.*
 import kotlinx.coroutines.flow.flow
 import org.assertj.core.api.Assertions.assertThat
@@ -27,7 +28,20 @@ class ClaudeAgentServiceTest {
     private lateinit var knowledgeGapDetectorService: KnowledgeGapDetectorService
     private lateinit var chatSessionRepository: ChatSessionRepository
     private lateinit var chatMessageRepository: ChatMessageRepository
+    private lateinit var profileRouter: ProfileRouter
+    private lateinit var skillLoader: SkillLoader
+    private lateinit var systemPromptAssembler: SystemPromptAssembler
     private lateinit var service: ClaudeAgentService
+
+    private val defaultProfile = ProfileDefinition(
+        name = "development-profile",
+        description = "Test development profile",
+        skills = emptyList(),
+        baselines = emptyList(),
+        hitlCheckpoint = "",
+        oodaGuidance = "",
+        sourcePath = "test"
+    )
 
     @BeforeEach
     fun setUp() {
@@ -36,13 +50,29 @@ class ClaudeAgentServiceTest {
         knowledgeGapDetectorService = mockk(relaxed = true)
         chatSessionRepository = mockk(relaxed = true)
         chatMessageRepository = mockk(relaxed = true)
+        profileRouter = mockk()
+        skillLoader = mockk()
+        systemPromptAssembler = mockk()
+
+        // Default routing: always route to development profile
+        every { profileRouter.route(any(), any()) } returns ProfileRoutingResult(
+            profile = defaultProfile,
+            confidence = 0.3,
+            reason = "Default fallback"
+        )
+        every { skillLoader.loadSkillsForProfile(any()) } returns emptyList()
+        every { systemPromptAssembler.assemble(any(), any()) } returns "You are a test assistant."
+        every { systemPromptAssembler.fallbackPrompt() } returns "You are a test assistant."
 
         service = ClaudeAgentService(
             claudeAdapter = claudeAdapter,
             mcpProxyService = mcpProxyService,
             knowledgeGapDetectorService = knowledgeGapDetectorService,
             chatSessionRepository = chatSessionRepository,
-            chatMessageRepository = chatMessageRepository
+            chatMessageRepository = chatMessageRepository,
+            profileRouter = profileRouter,
+            skillLoader = skillLoader,
+            systemPromptAssembler = systemPromptAssembler
         )
 
         // Default: no conversation history

@@ -5,11 +5,16 @@ export interface StreamEvent {
     | "tool_use"
     | "tool_result"
     | "error"
-    | "done";
+    | "done"
+    | "profile_active";
   content?: string;
   toolCallId?: string;
   toolName?: string;
   toolInput?: Record<string, unknown>;
+  activeProfile?: string;
+  loadedSkills?: string[];
+  routingReason?: string;
+  confidence?: number;
 }
 
 export interface ChatContext {

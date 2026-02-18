@@ -24,6 +24,11 @@ export function AiChatSidebar({
   const [selectedContexts, setSelectedContexts] = useState<ContextItem[]>([]);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [thinkingText, setThinkingText] = useState<string>("");
+  const [activeProfile, setActiveProfile] = useState<{
+    name: string;
+    skills: string[];
+    reason: string;
+  } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -144,6 +149,13 @@ export function AiChatSidebar({
         contexts,
         (event: StreamEvent) => {
           switch (event.type) {
+            case "profile_active":
+              setActiveProfile({
+                name: event.activeProfile ?? "unknown",
+                skills: event.loadedSkills ?? [],
+                reason: event.routingReason ?? "",
+              });
+              break;
             case "thinking":
               setThinkingText(event.content ?? "");
               break;
@@ -307,6 +319,18 @@ export function AiChatSidebar({
         {messages.map((message) => (
           <ChatMessage key={message.id} message={message} />
         ))}
+        {activeProfile && isStreaming && (
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground border border-border rounded-md px-2 py-1 bg-muted/50">
+            <span className="font-medium text-primary">
+              {activeProfile.name.replace("-profile", "")}
+            </span>
+            <span className="text-border">|</span>
+            <span className="truncate">
+              {activeProfile.skills.slice(0, 3).join(", ")}
+              {activeProfile.skills.length > 3 && ` +${activeProfile.skills.length - 3}`}
+            </span>
+          </div>
+        )}
         {thinkingText && (
           <div className="flex items-start gap-2 text-sm text-muted-foreground">
             <div className="flex space-x-1 pt-1">

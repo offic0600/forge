@@ -5,6 +5,7 @@ import com.forge.webide.model.*
 import com.forge.webide.repository.ChatMessageRepository
 import com.forge.webide.repository.ChatSessionRepository
 import com.forge.webide.service.ClaudeAgentService
+import com.forge.webide.service.skill.SkillLoader
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
@@ -19,7 +20,8 @@ import java.util.UUID
 class AiChatController(
     private val claudeAgentService: ClaudeAgentService,
     private val chatSessionRepository: ChatSessionRepository,
-    private val chatMessageRepository: ChatMessageRepository
+    private val chatMessageRepository: ChatMessageRepository,
+    private val skillLoader: SkillLoader
 ) {
 
     @PostMapping("/sessions")
@@ -166,5 +168,33 @@ class AiChatController(
         )
 
         return emitter
+    }
+
+    @GetMapping("/skills")
+    fun listSkills(): ResponseEntity<List<Map<String, Any?>>> {
+        val skills = skillLoader.loadAllSkills().map { skill ->
+            mapOf(
+                "name" to skill.name,
+                "description" to skill.description,
+                "tags" to skill.tags,
+                "trigger" to skill.trigger,
+                "sourcePath" to skill.sourcePath
+            )
+        }
+        return ResponseEntity.ok(skills)
+    }
+
+    @GetMapping("/profiles")
+    fun listProfiles(): ResponseEntity<List<Map<String, Any?>>> {
+        val profiles = skillLoader.loadAllProfiles().map { profile ->
+            mapOf(
+                "name" to profile.name,
+                "description" to profile.description,
+                "skills" to profile.skills,
+                "baselines" to profile.baselines,
+                "hitlCheckpoint" to profile.hitlCheckpoint
+            )
+        }
+        return ResponseEntity.ok(profiles)
     }
 }

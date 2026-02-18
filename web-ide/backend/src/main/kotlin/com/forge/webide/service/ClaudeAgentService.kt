@@ -6,6 +6,9 @@ import com.forge.webide.repository.ChatMessageRepository
 import com.forge.webide.repository.ChatSessionRepository
 import com.forge.webide.entity.ChatMessageEntity
 import com.forge.webide.entity.ToolCallEntity
+import com.forge.webide.service.skill.ProfileRouter
+import com.forge.webide.service.skill.SkillLoader
+import com.forge.webide.service.skill.SystemPromptAssembler
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
@@ -29,7 +32,10 @@ class ClaudeAgentService(
     private val mcpProxyService: McpProxyService,
     private val knowledgeGapDetectorService: KnowledgeGapDetectorService,
     private val chatSessionRepository: ChatSessionRepository,
-    private val chatMessageRepository: ChatMessageRepository
+    private val chatMessageRepository: ChatMessageRepository,
+    private val profileRouter: ProfileRouter,
+    private val skillLoader: SkillLoader,
+    private val systemPromptAssembler: SystemPromptAssembler
 ) {
     private val logger = LoggerFactory.getLogger(ClaudeAgentService::class.java)
     private val executor = Executors.newFixedThreadPool(10)
@@ -39,19 +45,34 @@ class ClaudeAgentService(
 
     companion object {
         private const val MAX_AGENTIC_TURNS = 5
-        private const val SYSTEM_PROMPT = """You are Forge AI, an intelligent development assistant embedded in the Forge Web IDE.
+    }
 
-You help developers with:
-- Understanding and explaining code
-- Answering questions about the codebase and architecture
-- Suggesting improvements and best practices
-- Debugging issues
-- Writing and modifying code
-- Navigating the knowledge base
-
-When provided with file context, analyze the code carefully and provide specific, actionable advice.
-When using MCP tools, explain what you're doing and why.
-Always be concise but thorough in your responses."""
+    /**
+     * Build a dynamic system prompt based on the user's message.
+     * Falls back to a static prompt if skill loading fails.
+     */
+    private fun buildDynamicSystemPrompt(message: String): DynamicPromptResult {
+        return try {
+            val routing = profileRouter.route(message)
+            val skills = skillLoader.loadSkillsForProfile(routing.profile)
+            val systemPrompt = systemPromptAssembler.assemble(routing.profile, skills)
+            DynamicPromptResult(
+                systemPrompt = systemPrompt,
+                activeProfile = routing.profile.name,
+                loadedSkills = skills.map { it.name },
+                routingReason = routing.reason,
+                confidence = routing.confidence
+            )
+        } catch (e: Exception) {
+            logger.warn("Failed to build dynamic system prompt, using fallback: {}", e.message)
+            DynamicPromptResult(
+                systemPrompt = systemPromptAssembler.fallbackPrompt(),
+                activeProfile = "fallback",
+                loadedSkills = emptyList(),
+                routingReason = "Fallback due to error: ${e.message}",
+                confidence = 0.0
+            )
+        }
     }
 
     /**
@@ -77,10 +98,13 @@ Always be concise but thorough in your responses."""
         }
 
         return try {
+            val promptResult = buildDynamicSystemPrompt(message)
+            logger.info("Profile: {}, Skills: {}", promptResult.activeProfile, promptResult.loadedSkills)
+
             val options = CompletionOptions(
                 model = model,
                 maxTokens = 4096,
-                systemPrompt = SYSTEM_PROMPT
+                systemPrompt = promptResult.systemPrompt
             )
 
             // Run single-turn completion
@@ -133,11 +157,23 @@ Always be concise but thorough in your responses."""
                     )
                 }
 
+                val promptResult = buildDynamicSystemPrompt(message)
+                logger.info("Stream profile: {}, Skills: {}", promptResult.activeProfile, promptResult.loadedSkills)
+
                 val options = CompletionOptions(
                     model = model,
                     maxTokens = 4096,
-                    systemPrompt = SYSTEM_PROMPT
+                    systemPrompt = promptResult.systemPrompt
                 )
+
+                // Emit profile routing info
+                onEvent(mapOf(
+                    "type" to "profile_active",
+                    "activeProfile" to promptResult.activeProfile,
+                    "loadedSkills" to promptResult.loadedSkills,
+                    "routingReason" to promptResult.routingReason,
+                    "confidence" to promptResult.confidence
+                ))
 
                 // Persist the user message
                 persistMessage(sessionId, Message.Role.USER, fullMessage)
@@ -484,6 +520,14 @@ data class ChatMessageResponse(
 private data class AgenticResult(
     val content: String,
     val toolCalls: List<ToolCallRecord>
+)
+
+private data class DynamicPromptResult(
+    val systemPrompt: String,
+    val activeProfile: String,
+    val loadedSkills: List<String>,
+    val routingReason: String,
+    val confidence: Double
 )
 
 private data class PendingToolUse(
