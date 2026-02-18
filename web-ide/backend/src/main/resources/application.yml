@@ -38,7 +38,7 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: ${OAUTH2_ISSUER_URI:https://auth.example.com/realms/forge}
+          issuer-uri: ${OAUTH2_ISSUER_URI:http://localhost:8180/realms/forge}
           audiences: forge-web-ide
       client:
         registration:
@@ -50,7 +50,7 @@ spring:
             redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
         provider:
           forge:
-            issuer-uri: ${OAUTH2_ISSUER_URI:https://auth.example.com/realms/forge}
+            issuer-uri: ${OAUTH2_ISSUER_URI:http://localhost:8180/realms/forge}
 
   # ---------------------------------------------------------------------------
   # DataSource — H2 for local dev, PostgreSQL for production

@@ -22,6 +22,7 @@ class McpProxyServiceTest {
 
     private val baselineService = mockk<BaselineService>(relaxed = true)
     private val dataSource = mockk<DataSource>(relaxed = true)
+    private val workspaceService = WorkspaceService()
 
     private lateinit var service: McpProxyService
 
@@ -30,7 +31,7 @@ class McpProxyServiceTest {
 
     @BeforeEach
     fun setup() {
-        service = McpProxyService(baselineService, dataSource)
+        service = McpProxyService(baselineService, dataSource, workspaceService)
     }
 
     // --- Default Tool Tests ---
@@ -39,14 +40,17 @@ class McpProxyServiceTest {
     fun `listTools returns default tools when no servers configured`() {
         val tools = service.listTools()
 
-        assertThat(tools).hasSizeGreaterThanOrEqualTo(6)
+        assertThat(tools).hasSizeGreaterThanOrEqualTo(9)
         assertThat(tools.map { it.name }).contains(
             "search_knowledge",
             "read_file",
             "get_service_info",
             "run_baseline",
             "query_schema",
-            "list_baselines"
+            "list_baselines",
+            "workspace_write_file",
+            "workspace_read_file",
+            "workspace_list_files"
         )
     }
 
@@ -185,7 +189,112 @@ class McpProxyServiceTest {
         service.invalidateCache()
 
         val tools = service.listTools()
-        assertThat(tools).hasSizeGreaterThanOrEqualTo(6)
+        assertThat(tools).hasSizeGreaterThanOrEqualTo(9)
+    }
+
+    // --- Workspace Tool Tests ---
+
+    @Test
+    fun `workspace_write_file creates a file in workspace`() {
+        val ws = workspaceService.createWorkspace(
+            com.forge.webide.model.CreateWorkspaceRequest(name = "test-ws"), "testuser"
+        )
+
+        val result = service.callTool("workspace_write_file", mapOf(
+            "path" to "hello.ts",
+            "content" to "console.log('hello')"
+        ), ws.id)
+
+        assertThat(result.isError).isFalse()
+        assertThat(result.content[0].text).contains("hello.ts")
+
+        val content = workspaceService.getFileContent(ws.id, "hello.ts")
+        assertThat(content).isEqualTo("console.log('hello')")
+    }
+
+    @Test
+    fun `workspace_write_file requires path parameter`() {
+        val result = service.callTool("workspace_write_file", mapOf(
+            "content" to "some content"
+        ), "ws-123")
+
+        assertThat(result.isError).isTrue()
+        assertThat(result.content[0].text).contains("path")
+    }
+
+    @Test
+    fun `workspace_write_file requires content parameter`() {
+        val result = service.callTool("workspace_write_file", mapOf(
+            "path" to "test.txt"
+        ), "ws-123")
+
+        assertThat(result.isError).isTrue()
+        assertThat(result.content[0].text).contains("content")
+    }
+
+    @Test
+    fun `workspace_write_file blocks path traversal`() {
+        val result = service.callTool("workspace_write_file", mapOf(
+            "path" to "../../../etc/shadow",
+            "content" to "malicious"
+        ), "ws-123")
+
+        assertThat(result.isError).isTrue()
+        assertThat(result.content[0].text).containsIgnoringCase("path traversal")
+    }
+
+    @Test
+    fun `workspace_read_file returns file content`() {
+        val ws = workspaceService.createWorkspace(
+            com.forge.webide.model.CreateWorkspaceRequest(name = "test-ws-read"), "testuser"
+        )
+        workspaceService.createFile(ws.id, "data.json", "{\"key\":\"value\"}")
+
+        val result = service.callTool("workspace_read_file", mapOf(
+            "path" to "data.json"
+        ), ws.id)
+
+        assertThat(result.isError).isFalse()
+        assertThat(result.content[0].text).isEqualTo("{\"key\":\"value\"}")
+    }
+
+    @Test
+    fun `workspace_read_file returns error for missing file`() {
+        val ws = workspaceService.createWorkspace(
+            com.forge.webide.model.CreateWorkspaceRequest(name = "test-ws-miss"), "testuser"
+        )
+
+        val result = service.callTool("workspace_read_file", mapOf(
+            "path" to "nonexistent.txt"
+        ), ws.id)
+
+        assertThat(result.isError).isTrue()
+        assertThat(result.content[0].text).contains("not found")
+    }
+
+    @Test
+    fun `workspace_list_files returns file tree`() {
+        val ws = workspaceService.createWorkspace(
+            com.forge.webide.model.CreateWorkspaceRequest(name = "test-ws-list"), "testuser"
+        )
+
+        val result = service.callTool("workspace_list_files", emptyMap(), ws.id)
+
+        assertThat(result.isError).isFalse()
+        // Default workspace has files like src/index.ts, package.json, etc.
+        assertThat(result.content[0].text).contains("src")
+        assertThat(result.content[0].text).contains("package.json")
+    }
+
+    @Test
+    fun `workspace tools without workspaceId fall through to regular callTool`() {
+        val result = service.callTool("workspace_write_file", mapOf(
+            "path" to "test.txt",
+            "content" to "test"
+        ), null)
+
+        // Without workspaceId, it should fall through to regular callTool which returns unknown tool
+        assertThat(result.isError).isTrue()
     }
 
     // --- formatResult Tests ---

@@ -15,14 +15,21 @@ import {
   Copy,
   Wand2,
   ExternalLink,
+  FilePlus,
+  FolderPlus,
+  Pencil,
+  Trash2,
+  Plus,
 } from "lucide-react";
 import type { FileNode } from "@/lib/workspace-api";
+import { workspaceApi } from "@/lib/workspace-api";
 
 interface FileExplorerProps {
   files: FileNode[];
   activeFile: string | null;
   onFileSelect: (path: string) => void;
   workspaceId: string;
+  onFileTreeChanged?: () => void;
 }
 
 function getFileIcon(name: string, isDirectory: boolean, isOpen: boolean) {
@@ -153,6 +160,7 @@ export function FileExplorer({
   activeFile,
   onFileSelect,
   workspaceId,
+  onFileTreeChanged,
 }: FileExplorerProps) {
   const [contextMenu, setContextMenu] = useState<ContextMenuState>({
     visible: false,
@@ -199,6 +207,79 @@ export function FileExplorer({
     closeContextMenu();
   }, [contextMenu, onFileSelect, closeContextMenu]);
 
+  const handleNewFile = useCallback(
+    async (parentPath?: string) => {
+      const prefix = parentPath ? `${parentPath}/` : "";
+      const fileName = window.prompt("New file name:", `${prefix}new-file.ts`);
+      if (!fileName) return;
+      try {
+        await workspaceApi.createFile(workspaceId, fileName, "");
+        onFileTreeChanged?.();
+        onFileSelect(fileName);
+      } catch (err) {
+        console.error("Failed to create file:", err);
+      }
+      closeContextMenu();
+    },
+    [workspaceId, onFileTreeChanged, onFileSelect, closeContextMenu]
+  );
+
+  const handleNewFolder = useCallback(
+    async (parentPath?: string) => {
+      const prefix = parentPath ? `${parentPath}/` : "";
+      const folderName = window.prompt("New folder name:", `${prefix}new-folder`);
+      if (!folderName) return;
+      try {
+        await workspaceApi.createFile(workspaceId, `${folderName}/.gitkeep`, "");
+        onFileTreeChanged?.();
+      } catch (err) {
+        console.error("Failed to create folder:", err);
+      }
+      closeContextMenu();
+    },
+    [workspaceId, onFileTreeChanged, closeContextMenu]
+  );
+
+  const handleRename = useCallback(
+    async () => {
+      const oldPath = contextMenu.path;
+      const newPath = window.prompt("Rename to:", oldPath);
+      if (!newPath || newPath === oldPath) {
+        closeContextMenu();
+        return;
+      }
+      try {
+        const content = await workspaceApi.getFileContent(workspaceId, oldPath);
+        await workspaceApi.createFile(workspaceId, newPath, content);
+        await workspaceApi.deleteFile(workspaceId, oldPath);
+        onFileTreeChanged?.();
+        onFileSelect(newPath);
+      } catch (err) {
+        console.error("Failed to rename file:", err);
+      }
+      closeContextMenu();
+    },
+    [workspaceId, contextMenu.path, onFileTreeChanged, onFileSelect, closeContextMenu]
+  );
+
+  const handleDelete = useCallback(
+    async () => {
+      const confirmed = window.confirm(`Delete "${contextMenu.path}"?`);
+      if (!confirmed) {
+        closeContextMenu();
+        return;
+      }
+      try {
+        await workspaceApi.deleteFile(workspaceId, contextMenu.path);
+        onFileTreeChanged?.();
+      } catch (err) {
+        console.error("Failed to delete file:", err);
+      }
+      closeContextMenu();
+    },
+    [workspaceId, contextMenu.path, onFileTreeChanged, closeContextMenu]
+  );
+
   return (
     <div
       className="h-full select-none"
@@ -211,9 +292,22 @@ export function FileExplorer({
         <span className="text-xs font-semibold uppercase text-muted-foreground">
           Explorer
         </span>
-        <button className="rounded p-0.5 hover:bg-accent">
-          <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
-        </button>
+        <div className="flex items-center gap-0.5">
+          <button
+            className="rounded p-0.5 hover:bg-accent"
+            title="New File"
+            onClick={() => handleNewFile()}
+          >
+            <FilePlus className="h-3.5 w-3.5 text-muted-foreground" />
+          </button>
+          <button
+            className="rounded p-0.5 hover:bg-accent"
+            title="New Folder"
+            onClick={() => handleNewFolder()}
+          >
+            <FolderPlus className="h-3.5 w-3.5 text-muted-foreground" />
+          </button>
+        </div>
       </div>
 
       {/* File Tree */}
@@ -262,20 +356,56 @@ export function FileExplorer({
           )}
           <button
             className="flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent"
+            onClick={() =>
+              handleNewFile(contextMenu.isDirectory ? contextMenu.path : undefined)
+            }
+          >
+            <FilePlus className="h-3.5 w-3.5" />
+            New File
+          </button>
+          {contextMenu.isDirectory && (
+            <button
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent"
+              onClick={() => handleNewFolder(contextMenu.path)}
+            >
+              <FolderPlus className="h-3.5 w-3.5" />
+              New Folder
+            </button>
+          )}
+          <div className="my-1 border-t border-border" />
+          <button
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent"
             onClick={handleCopyPath}
           >
             <Copy className="h-3.5 w-3.5" />
             Copy Path
           </button>
           {!contextMenu.isDirectory && (
-            <button
-              className="flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent"
-              onClick={handleAiExplain}
-            >
-              <Wand2 className="h-3.5 w-3.5" />
-              AI Explain
-            </button>
+            <>
+              <button
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent"
+                onClick={handleRename}
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                Rename
+              </button>
+              <button
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent"
+                onClick={handleAiExplain}
+              >
+                <Wand2 className="h-3.5 w-3.5" />
+                AI Explain
+              </button>
+            </>
           )}
+          <div className="my-1 border-t border-border" />
+          <button
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-destructive hover:bg-accent"
+            onClick={handleDelete}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Delete
+          </button>
         </div>
       )}
     </div>

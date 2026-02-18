@@ -9,7 +9,8 @@ export interface StreamEvent {
     | "error"
     | "done"
     | "profile_active"
-    | "ooda_phase";
+    | "ooda_phase"
+    | "file_changed";
   content?: string;
   toolCallId?: string;
   toolName?: string;
@@ -19,6 +20,8 @@ export interface StreamEvent {
   routingReason?: string;
   confidence?: number;
   phase?: OodaPhase;
+  path?: string;
+  action?: string;
 }
 
 export interface ChatContext {

@@ -202,6 +202,21 @@ Always be concise but thorough in your responses."""
                 sb.appendLine("- **${tool.name}**: ${tool.description}")
             }
 
+            // Add delivery behavior guidance for workspace tools
+            val hasWorkspaceTools = tools.any { it.name == "workspace_write_file" }
+            if (hasWorkspaceTools) {
+                sb.appendLine()
+                sb.appendLine("### Delivery Behavior")
+                sb.appendLine()
+                sb.appendLine("You are a delivery assistant, not a chatbot. When users request code:")
+                sb.appendLine("1. **Always use `workspace_write_file`** to write code into workspace files")
+                sb.appendLine("2. Do NOT only show code in chat — actually create the files")
+                sb.appendLine("3. Use `workspace_list_files` first to understand the current project structure")
+                sb.appendLine("4. After writing files, briefly summarize which files you created or modified")
+                sb.appendLine("5. To modify existing files, first use `workspace_read_file` to read them, then use `workspace_write_file` to write the complete updated content")
+                sb.appendLine("6. Choose appropriate file paths based on the project structure and conventions")
+            }
+
             // Add baseline tool usage guidance
             val hasBaselineTool = tools.any { it.name == "run_baseline" }
             if (hasBaselineTool) {

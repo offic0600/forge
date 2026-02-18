@@ -206,7 +206,7 @@ class ClaudeAgentServiceTest {
         // Return different flows for sequential calls
         coEvery { claudeAdapter.streamWithTools(any(), any(), any()) } returnsMany listOf(turn1Events, turn2Events)
 
-        every { mcpProxyService.callTool("search_knowledge", any()) } returns McpToolCallResponse(
+        every { mcpProxyService.callTool("search_knowledge", any(), any()) } returns McpToolCallResponse(
             content = listOf(McpContent(type = "text", text = "Spring Boot docs found")),
             isError = false
         )
@@ -243,7 +243,7 @@ class ClaudeAgentServiceTest {
         coVerify(exactly = 2) { claudeAdapter.streamWithTools(any(), any(), any()) }
 
         // Verify tool was called
-        verify(exactly = 1) { mcpProxyService.callTool("search_knowledge", any()) }
+        verify(exactly = 1) { mcpProxyService.callTool("search_knowledge", any(), any()) }
     }
 
     @Test
@@ -266,7 +266,7 @@ class ClaudeAgentServiceTest {
             McpTool("search_knowledge", "Search", emptyMap())
         )
         coEvery { claudeAdapter.streamWithTools(any(), any(), any()) } returnsMany listOf(turn1Events, turn2Events)
-        every { mcpProxyService.callTool(any(), any()) } throws RuntimeException("MCP server down")
+        every { mcpProxyService.callTool(any(), any(), any()) } throws RuntimeException("MCP server down")
 
         val receivedEvents = CopyOnWriteArrayList<Map<String, Any?>>()
         val latch = CountDownLatch(1)

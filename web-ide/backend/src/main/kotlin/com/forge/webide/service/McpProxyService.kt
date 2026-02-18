@@ -26,7 +26,8 @@ import javax.sql.DataSource
 @Service
 class McpProxyService(
     private val baselineService: BaselineService,
-    private val dataSource: DataSource
+    private val dataSource: DataSource,
+    private val workspaceService: WorkspaceService
 ) {
 
     private val logger = LoggerFactory.getLogger(McpProxyService::class.java)
@@ -88,6 +89,17 @@ class McpProxyService(
         }
 
         return allTools.ifEmpty { getDefaultTools() }
+    }
+
+    /**
+     * Call an MCP tool by name with the given arguments, with workspace context.
+     * Workspace tools (workspace_*) require a workspaceId to operate on.
+     */
+    fun callTool(toolName: String, arguments: Map<String, Any?>, workspaceId: String?): McpToolCallResponse {
+        if (toolName.startsWith("workspace_") && workspaceId != null) {
+            return handleWorkspaceTool(toolName, arguments, workspaceId)
+        }
+        return callTool(toolName, arguments)
     }
 
     /**
@@ -166,6 +178,89 @@ class McpProxyService(
                 isError = true
             )
         }
+    }
+
+    // ---- Workspace tool implementations ----
+
+    private fun handleWorkspaceTool(
+        toolName: String,
+        args: Map<String, Any?>,
+        workspaceId: String
+    ): McpToolCallResponse {
+        return try {
+            when (toolName) {
+                "workspace_write_file" -> {
+                    val path = args["path"] as? String
+                        ?: return errorResponse("'path' parameter is required")
+                    val content = args["content"] as? String
+                        ?: return errorResponse("'content' parameter is required")
+                    if (path.contains("..")) {
+                        return errorResponse("Path traversal not allowed")
+                    }
+                    workspaceService.createFile(workspaceId, path, content)
+                    logger.info("Workspace file written: workspace=$workspaceId, path=$path, size=${content.length}")
+                    McpToolCallResponse(
+                        content = listOf(McpContent(
+                            type = "text",
+                            text = "File written successfully: $path (${content.length} chars)"
+                        )),
+                        isError = false
+                    )
+                }
+                "workspace_read_file" -> {
+                    val path = args["path"] as? String
+                        ?: return errorResponse("'path' parameter is required")
+                    if (path.contains("..")) {
+                        return errorResponse("Path traversal not allowed")
+                    }
+                    val content = workspaceService.getFileContent(workspaceId, path)
+                        ?: return errorResponse("File not found: $path")
+                    McpToolCallResponse(
+                        content = listOf(McpContent(type = "text", text = content)),
+                        isError = false
+                    )
+                }
+                "workspace_list_files" -> {
+                    val tree = workspaceService.getFileTree(workspaceId)
+                    val text = formatFileTree(tree)
+                    McpToolCallResponse(
+                        content = listOf(McpContent(type = "text", text = text)),
+                        isError = false
+                    )
+                }
+                else -> errorResponse("Unknown workspace tool: $toolName")
+            }
+        } catch (e: Exception) {
+            logger.error("Workspace tool execution failed: tool=$toolName: ${e.message}", e)
+            McpToolCallResponse(
+                content = listOf(McpContent(type = "text", text = "Workspace tool error: ${e.message}")),
+                isError = true
+            )
+        }
+    }
+
+    private fun errorResponse(message: String): McpToolCallResponse {
+        return McpToolCallResponse(
+            content = listOf(McpContent(type = "text", text = "Error: $message")),
+            isError = true
+        )
+    }
+
+    private fun formatFileTree(nodes: List<com.forge.webide.model.FileNode>, indent: String = ""): String {
+        if (nodes.isEmpty()) return "Workspace is empty."
+        val sb = StringBuilder()
+        sb.appendLine("Workspace files:")
+        for (node in nodes.sortedWith(compareBy({ it.type.name }, { it.name }))) {
+            if (node.type == com.forge.webide.model.FileType.DIRECTORY) {
+                sb.appendLine("$indent${node.name}/")
+                node.children?.let { children ->
+                    sb.append(formatFileTree(children, "$indent  "))
+                }
+            } else {
+                sb.appendLine("$indent${node.name}")
+            }
+        }
+        return sb.toString()
     }
 
     // ---- Built-in tool implementations (Trial mode) ----
@@ -532,6 +627,37 @@ class McpProxyService(
 
     private fun getDefaultTools(): List<McpTool> {
         return listOf(
+            McpTool(
+                name = "workspace_write_file",
+                description = "Create or overwrite a file in the current workspace. Always use this tool when generating code, configuration, or documentation — write files instead of only showing code in the chat response.",
+                inputSchema = mapOf(
+                    "type" to "object",
+                    "properties" to mapOf(
+                        "path" to mapOf("type" to "string", "description" to "File path relative to workspace root (e.g. 'src/hello.ts', 'README.md')"),
+                        "content" to mapOf("type" to "string", "description" to "Complete file content to write")
+                    ),
+                    "required" to listOf("path", "content")
+                )
+            ),
+            McpTool(
+                name = "workspace_read_file",
+                description = "Read a file from the current workspace. Use this to understand existing code before modifying it.",
+                inputSchema = mapOf(
+                    "type" to "object",
+                    "properties" to mapOf(
+                        "path" to mapOf("type" to "string", "description" to "File path relative to workspace root")
+                    ),
+                    "required" to listOf("path")
+                )
+            ),
+            McpTool(
+                name = "workspace_list_files",
+                description = "List all files in the current workspace. Use this to understand the project structure before creating or modifying files.",
+                inputSchema = mapOf(
+                    "type" to "object",
+                    "properties" to mapOf<String, Any>()
+                )
+            ),
             McpTool(
                 name = "search_knowledge",
                 description = "Search the knowledge base for documentation, ADRs, runbooks, conventions, and API docs. Returns matching documents with titles and excerpts.",

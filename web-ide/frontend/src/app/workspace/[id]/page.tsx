@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ChevronRight,
   PanelLeftClose,
@@ -44,6 +44,29 @@ export default function WorkspacePage() {
     enabled: workspaceId !== "new" && !!workspace,
   });
 
+  const queryClient = useQueryClient();
+  const [unsavedFiles, setUnsavedFiles] = useState<Set<string>>(new Set());
+  const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Listen for file_changed events from AI chat
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { path, action } = (e as CustomEvent).detail as {
+        path: string;
+        action: string;
+      };
+      // Refresh file tree
+      queryClient.invalidateQueries({ queryKey: ["files", workspaceId] });
+      // Auto-open newly created or modified files
+      if (path && (action === "created" || action === "modified")) {
+        // Small delay to let the tree refresh
+        setTimeout(() => handleFileSelect(path), 300);
+      }
+    };
+    window.addEventListener("forge:file-changed", handler);
+    return () => window.removeEventListener("forge:file-changed", handler);
+  }, [workspaceId, queryClient, handleFileSelect]);
+
   const handleFileSelect = useCallback(
     async (filePath: string) => {
       setActiveFile(filePath);
@@ -65,10 +88,41 @@ export default function WorkspacePage() {
     if (!activeFile) return;
     try {
       await workspaceApi.saveFile(workspaceId, activeFile, fileContent);
+      setUnsavedFiles((prev) => {
+        const next = new Set(prev);
+        next.delete(activeFile);
+        return next;
+      });
     } catch (err) {
       console.error("Failed to save file:", err);
     }
   }, [workspaceId, activeFile, fileContent]);
+
+  // Track unsaved changes and auto-save after 5 seconds of inactivity
+  const handleContentChange = useCallback(
+    (value: string | undefined) => {
+      setFileContent(value ?? "");
+      if (activeFile) {
+        setUnsavedFiles((prev) => new Set(prev).add(activeFile));
+        if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+        autoSaveTimerRef.current = setTimeout(async () => {
+          if (activeFile) {
+            try {
+              await workspaceApi.saveFile(workspaceId, activeFile, value ?? "");
+              setUnsavedFiles((prev) => {
+                const next = new Set(prev);
+                next.delete(activeFile);
+                return next;
+              });
+            } catch {
+              // Silent fail for auto-save
+            }
+          }
+        }, 5000);
+      }
+    },
+    [workspaceId, activeFile]
+  );
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -248,6 +302,9 @@ export default function WorkspacePage() {
               activeFile={activeFile}
               onFileSelect={handleFileSelect}
               workspaceId={workspaceId}
+              onFileTreeChanged={() =>
+                queryClient.invalidateQueries({ queryKey: ["files", workspaceId] })
+              }
             />
           </div>
         )}
@@ -260,6 +317,7 @@ export default function WorkspacePage() {
               {openFiles.map((fp) => {
                 const fileName = fp.split("/").pop() ?? fp;
                 const isActive = fp === activeFile;
+                const isUnsaved = unsavedFiles.has(fp);
                 return (
                   <div
                     key={fp}
@@ -270,6 +328,9 @@ export default function WorkspacePage() {
                     }`}
                     onClick={() => handleFileSelect(fp)}
                   >
+                    {isUnsaved && (
+                      <span className="h-2 w-2 rounded-full bg-primary flex-shrink-0" title="Unsaved changes" />
+                    )}
                     <span>{fileName}</span>
                     <button
                       className="ml-1 rounded-sm hover:bg-muted p-0.5"
@@ -291,7 +352,7 @@ export default function WorkspacePage() {
             {activeFile ? (
               <MonacoEditor
                 value={fileContent}
-                onChange={(value) => setFileContent(value ?? "")}
+                onChange={handleContentChange}
                 filePath={activeFile}
                 readOnly={!isEditing}
                 onToggleEdit={() => setIsEditing(!isEditing)}

@@ -10,7 +10,9 @@ import {
   AlertCircle,
   Copy,
   Check,
+  FileDown,
 } from "lucide-react";
+import { workspaceApi } from "@/lib/workspace-api";
 
 export interface ToolCall {
   id: string;
@@ -31,16 +33,21 @@ export interface Message {
 
 interface ChatMessageProps {
   message: Message;
+  workspaceId?: string;
 }
 
 function CodeBlock({
   code,
   language,
+  workspaceId,
 }: {
   code: string;
   language: string;
+  workspaceId?: string;
 }) {
   const [copied, setCopied] = React.useState(false);
+  const [applying, setApplying] = React.useState(false);
+  const [applied, setApplied] = React.useState(false);
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(code);
@@ -48,20 +55,89 @@ function CodeBlock({
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleApply = async () => {
+    if (!workspaceId || applying) return;
+
+    // Suggest a file name based on language
+    const extMap: Record<string, string> = {
+      typescript: ".ts",
+      ts: ".ts",
+      tsx: ".tsx",
+      javascript: ".js",
+      js: ".js",
+      jsx: ".jsx",
+      kotlin: ".kt",
+      java: ".java",
+      python: ".py",
+      go: ".go",
+      rust: ".rs",
+      html: ".html",
+      css: ".css",
+      json: ".json",
+      yaml: ".yml",
+      yml: ".yml",
+      sql: ".sql",
+      bash: ".sh",
+      sh: ".sh",
+      markdown: ".md",
+      md: ".md",
+    };
+    const ext = extMap[language] || `.${language || "txt"}`;
+    const suggestedName = `src/new-file${ext}`;
+
+    const fileName = window.prompt("Save as:", suggestedName);
+    if (!fileName) return;
+
+    setApplying(true);
+    try {
+      await workspaceApi.createFile(workspaceId, fileName, code);
+      setApplied(true);
+      setTimeout(() => setApplied(false), 3000);
+      // Notify workspace to refresh
+      window.dispatchEvent(
+        new CustomEvent("forge:file-changed", {
+          detail: { path: fileName, action: "created" },
+        })
+      );
+    } catch (err) {
+      console.error("Failed to apply code:", err);
+    } finally {
+      setApplying(false);
+    }
+  };
+
   return (
     <div className="group relative my-2 rounded-md border border-border bg-[#1e1e1e]">
       <div className="flex items-center justify-between border-b border-border px-3 py-1">
         <span className="text-xs text-muted-foreground">{language || "code"}</span>
-        <button
-          onClick={handleCopy}
-          className="rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100"
-        >
-          {copied ? (
-            <Check className="h-3.5 w-3.5 text-green-400" />
-          ) : (
-            <Copy className="h-3.5 w-3.5" />
+        <div className="flex items-center gap-1">
+          {workspaceId && (
+            <button
+              onClick={handleApply}
+              disabled={applying}
+              className="rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100 disabled:opacity-50"
+              title="Apply to workspace"
+            >
+              {applied ? (
+                <Check className="h-3.5 w-3.5 text-green-400" />
+              ) : applying ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <FileDown className="h-3.5 w-3.5" />
+              )}
+            </button>
           )}
-        </button>
+          <button
+            onClick={handleCopy}
+            className="rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100"
+          >
+            {copied ? (
+              <Check className="h-3.5 w-3.5 text-green-400" />
+            ) : (
+              <Copy className="h-3.5 w-3.5" />
+            )}
+          </button>
+        </div>
       </div>
       <pre className="overflow-x-auto p-3 text-xs">
         <code>{code}</code>
@@ -70,7 +146,7 @@ function CodeBlock({
   );
 }
 
-function renderMarkdown(content: string): React.ReactNode[] {
+function renderMarkdown(content: string, workspaceId?: string): React.ReactNode[] {
   const parts: React.ReactNode[] = [];
   const codeBlockRegex = /```(\w*)\n([\s\S]*?)```/g;
   let lastIndex = 0;
@@ -93,6 +169,7 @@ function renderMarkdown(content: string): React.ReactNode[] {
         key={`code-${match.index}`}
         language={match[1]}
         code={match[2].trim()}
+        workspaceId={workspaceId}
       />
     );
 
@@ -245,11 +322,11 @@ function ToolCallDisplay({ toolCall }: { toolCall: ToolCall }) {
   );
 }
 
-export function ChatMessage({ message }: ChatMessageProps) {
+export function ChatMessage({ message, workspaceId }: ChatMessageProps) {
   const isUser = message.role === "user";
   const renderedContent = useMemo(
-    () => renderMarkdown(message.content),
-    [message.content]
+    () => renderMarkdown(message.content, isUser ? undefined : workspaceId),
+    [message.content, isUser, workspaceId]
   );
 
   return (

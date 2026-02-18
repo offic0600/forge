@@ -42,11 +42,16 @@ class SecurityConfig {
                     auth
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                         .requestMatchers("/ws/**").permitAll() // WebSocket upgrade
+                        .requestMatchers("/api/auth/**").permitAll() // Auth endpoints
+                        .requestMatchers("/h2-console/**").permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .anyRequest().authenticated()
                 }
                 .oauth2ResourceServer { oauth2 ->
                     oauth2.jwt { }
+                }
+                .headers { headers ->
+                    headers.frameOptions { it.sameOrigin() } // For H2 console
                 }
         } else {
             http

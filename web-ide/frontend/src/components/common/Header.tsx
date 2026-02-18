@@ -12,6 +12,7 @@ import {
   Search,
 } from "lucide-react";
 import { RoleSwitch } from "./RoleSwitch";
+import { logout, isAuthenticated } from "@/lib/auth";
 
 interface HeaderProps {
   role: "developer" | "product";
@@ -112,7 +113,10 @@ export function Header({ role, onRoleChange }: HeaderProps) {
                     <Settings className="h-3.5 w-3.5" />
                     Settings
                   </Link>
-                  <button className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-destructive hover:bg-accent">
+                  <button
+                    onClick={() => { setUserMenuOpen(false); logout(); }}
+                    className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-destructive hover:bg-accent"
+                  >
                     <LogOut className="h-3.5 w-3.5" />
                     Sign out
                   </button>

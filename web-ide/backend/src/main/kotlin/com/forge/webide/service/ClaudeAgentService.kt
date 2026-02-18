@@ -199,7 +199,8 @@ class ClaudeAgentService(
                         messages = history + Message(role = Message.Role.USER, content = fullMessage),
                         options = options,
                         tools = tools,
-                        onEvent = onEvent
+                        onEvent = onEvent,
+                        workspaceId = workspaceId
                     )
                 }
 
@@ -244,7 +245,8 @@ class ClaudeAgentService(
         messages: List<Message>,
         options: CompletionOptions,
         tools: List<ToolDefinition>,
-        onEvent: (Map<String, Any?>) -> Unit
+        onEvent: (Map<String, Any?>) -> Unit,
+        workspaceId: String = ""
     ): AgenticResult {
         var currentMessages = messages.toMutableList()
         var allToolCalls = mutableListOf<ToolCallRecord>()
@@ -348,7 +350,7 @@ class ClaudeAgentService(
                 for (toolUse in currentToolUses) {
                     val startMs = System.currentTimeMillis()
                     val result = try {
-                        val mcpResult = mcpProxyService.callTool(toolUse.name, toolUse.input)
+                        val mcpResult = mcpProxyService.callTool(toolUse.name, toolUse.input, workspaceId.ifBlank { null })
                         val output = McpProxyService.formatResult(mcpResult)
                         val status = if (mcpResult.isError) "error" else "complete"
                         val durationMs = System.currentTimeMillis() - startMs
@@ -370,6 +372,16 @@ class ClaudeAgentService(
                             "content" to output,
                             "durationMs" to durationMs
                         ))
+
+                        // Emit file_changed event for workspace write operations
+                        if (toolUse.name == "workspace_write_file" && !mcpResult.isError) {
+                            val filePath = toolUse.input["path"] as? String ?: ""
+                            onEvent(mapOf(
+                                "type" to "file_changed",
+                                "action" to "created",
+                                "path" to filePath
+                            ))
+                        }
 
                         ToolResult(toolUseId = toolUse.id, content = output, isError = mcpResult.isError)
                     } catch (e: Exception) {

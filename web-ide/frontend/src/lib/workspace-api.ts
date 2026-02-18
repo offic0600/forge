@@ -26,11 +26,29 @@ export interface CreateWorkspaceRequest {
   template?: string;
 }
 
+function getAuthHeader(): Record<string, string> {
+  if (typeof window === "undefined") return {};
+  const token = localStorage.getItem("forge_access_token");
+  if (!token) return {};
+  return { Authorization: `Bearer ${token}` };
+}
+
+function handleAuthError(response: Response): void {
+  if (response.status === 401 && typeof window !== "undefined") {
+    // Redirect to login on auth failure
+    window.location.href = "/login";
+  }
+}
+
 class WorkspaceApi {
   private baseUrl: string;
 
   constructor(baseUrl: string = "") {
     this.baseUrl = baseUrl;
+  }
+
+  private headers(extra: Record<string, string> = {}): Record<string, string> {
+    return { ...getAuthHeader(), ...extra };
   }
 
   /**
@@ -39,10 +57,11 @@ class WorkspaceApi {
   async createWorkspace(request: CreateWorkspaceRequest): Promise<Workspace> {
     const response = await fetch(`${this.baseUrl}/api/workspaces`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: this.headers({ "Content-Type": "application/json" }),
       body: JSON.stringify(request),
     });
 
+    handleAuthError(response);
     if (!response.ok) {
       const error = await response.text();
       throw new Error(`Failed to create workspace: ${error}`);
@@ -55,8 +74,11 @@ class WorkspaceApi {
    * List all workspaces for the current user.
    */
   async listWorkspaces(): Promise<Workspace[]> {
-    const response = await fetch(`${this.baseUrl}/api/workspaces`);
+    const response = await fetch(`${this.baseUrl}/api/workspaces`, {
+      headers: this.headers(),
+    });
 
+    handleAuthError(response);
     if (!response.ok) {
       throw new Error(`Failed to list workspaces: ${response.status}`);
     }
@@ -68,8 +90,11 @@ class WorkspaceApi {
    * Get workspace details by ID.
    */
   async getWorkspace(id: string): Promise<Workspace> {
-    const response = await fetch(`${this.baseUrl}/api/workspaces/${id}`);
+    const response = await fetch(`${this.baseUrl}/api/workspaces/${id}`, {
+      headers: this.headers(),
+    });
 
+    handleAuthError(response);
     if (!response.ok) {
       throw new Error(`Failed to get workspace: ${response.status}`);
     }
@@ -83,8 +108,10 @@ class WorkspaceApi {
   async deleteWorkspace(id: string): Promise<void> {
     const response = await fetch(`${this.baseUrl}/api/workspaces/${id}`, {
       method: "DELETE",
+      headers: this.headers(),
     });
 
+    handleAuthError(response);
     if (!response.ok) {
       throw new Error(`Failed to delete workspace: ${response.status}`);
     }
@@ -96,7 +123,7 @@ class WorkspaceApi {
   async activateWorkspace(id: string): Promise<Workspace> {
     const response = await fetch(
       `${this.baseUrl}/api/workspaces/${id}/activate`,
-      { method: "POST" }
+      { method: "POST", headers: this.headers() }
     );
 
     if (!response.ok) {
@@ -112,7 +139,7 @@ class WorkspaceApi {
   async suspendWorkspace(id: string): Promise<Workspace> {
     const response = await fetch(
       `${this.baseUrl}/api/workspaces/${id}/suspend`,
-      { method: "POST" }
+      { method: "POST", headers: this.headers() }
     );
 
     if (!response.ok) {
@@ -127,9 +154,11 @@ class WorkspaceApi {
    */
   async getFileTree(workspaceId: string): Promise<FileNode[]> {
     const response = await fetch(
-      `${this.baseUrl}/api/workspaces/${workspaceId}/files`
+      `${this.baseUrl}/api/workspaces/${workspaceId}/files`,
+      { headers: this.headers() }
     );
 
+    handleAuthError(response);
     if (!response.ok) {
       throw new Error(`Failed to get file tree: ${response.status}`);
     }
@@ -145,9 +174,11 @@ class WorkspaceApi {
     filePath: string
   ): Promise<string> {
     const response = await fetch(
-      `${this.baseUrl}/api/workspaces/${workspaceId}/files/content?path=${encodeURIComponent(filePath)}`
+      `${this.baseUrl}/api/workspaces/${workspaceId}/files/content?path=${encodeURIComponent(filePath)}`,
+      { headers: this.headers() }
     );
 
+    handleAuthError(response);
     if (!response.ok) {
       throw new Error(`Failed to get file content: ${response.status}`);
     }
@@ -167,11 +198,12 @@ class WorkspaceApi {
       `${this.baseUrl}/api/workspaces/${workspaceId}/files/content`,
       {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: this.headers({ "Content-Type": "application/json" }),
         body: JSON.stringify({ path: filePath, content }),
       }
     );
 
+    handleAuthError(response);
     if (!response.ok) {
       throw new Error(`Failed to save file: ${response.status}`);
     }
@@ -189,11 +221,12 @@ class WorkspaceApi {
       `${this.baseUrl}/api/workspaces/${workspaceId}/files`,
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: this.headers({ "Content-Type": "application/json" }),
         body: JSON.stringify({ path: filePath, content }),
       }
     );
 
+    handleAuthError(response);
     if (!response.ok) {
       throw new Error(`Failed to create file: ${response.status}`);
     }
@@ -208,9 +241,10 @@ class WorkspaceApi {
   ): Promise<void> {
     const response = await fetch(
       `${this.baseUrl}/api/workspaces/${workspaceId}/files?path=${encodeURIComponent(filePath)}`,
-      { method: "DELETE" }
+      { method: "DELETE", headers: this.headers() }
     );
 
+    handleAuthError(response);
     if (!response.ok) {
       throw new Error(`Failed to delete file: ${response.status}`);
     }

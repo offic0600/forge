@@ -248,6 +248,18 @@ export function AiChatSidebar({
                 )
               );
               break;
+            case "file_changed": {
+              // Notify workspace page to refresh file tree and open the file
+              window.dispatchEvent(
+                new CustomEvent("forge:file-changed", {
+                  detail: {
+                    path: event.path ?? "",
+                    action: event.action ?? "created",
+                  },
+                })
+              );
+              break;
+            }
             case "done":
               break;
           }
@@ -333,7 +345,7 @@ export function AiChatSidebar({
           </div>
         )}
         {messages.map((message) => (
-          <ChatMessage key={message.id} message={message} />
+          <ChatMessage key={message.id} message={message} workspaceId={workspaceId} />
         ))}
         {isStreaming && (activeProfile || oodaPhase) && (
           <div className="space-y-1.5 mx-1">
