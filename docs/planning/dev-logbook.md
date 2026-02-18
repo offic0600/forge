@@ -1669,3 +1669,281 @@ Sprint 2C 是 Phase 2 最后一个 Sprint，目标是达成全部验收标准：
 | Phase 1 | ✅ 完成 |
 | Phase 1.5 | ✅ 完成 |
 | **Phase 2** | **✅ 全部完成（Sprint 2A + 2B + 2C）** |
+
+---
+
+## Session 12 — 2026-02-19：Phase 2.5 — AI 交付闭环 + Keycloak SSO + 编辑器增强
+
+> Phase 2 已全部完成。本 session 目标：实现 Phase 2.5 的 8 大功能块，让 AI 从"聊天展示代码"进化为"直接写文件到 workspace"，并补齐 SSO 认证、文件管理、自动保存等生产级功能。
+
+### 12.1 Phase 2.5 功能概览
+
+**核心理念**: AI → Workspace 交付闭环。AI 不再仅在聊天中展示代码，而是通过 workspace 工具直接创建/修改文件，文件树自动刷新，编辑器自动打开。
+
+**8 大功能块**:
+
+| # | 功能 | 核心价值 |
+|---|------|---------|
+| 1 | AI → Workspace 交付闭环 | workspace_write_file/read_file/list_files 工具 + file_changed 事件 |
+| 2 | Keycloak SSO | OIDC PKCE 登录/回调/JWT 验证/登出 |
+| 3 | Context Picker 修复 | /api/context/search 端点实连 4 个类别 |
+| 4 | 代码块 Apply 按钮 | 聊天中代码块一键写入 workspace |
+| 5 | FileExplorer CRUD | 右键新建文件/文件夹、重命名、删除 |
+| 6 | 未保存标记 + 自动保存 | 蓝色圆点 + 5 秒自动保存 |
+| 7 | System Prompt 交付指导 | AI 被指导必须写文件而非仅展示代码 |
+| 8 | 知识库 5 篇新文档 | git-workflow、code-review-checklist、forge-mcp-tools、troubleshooting-guide、ADR-004 |
+
+---
+
+### 12.2 后端实现
+
+#### 12.2.1 Workspace 工具（McpProxyService 扩展）
+
+**McpProxyService.kt** 新增 3 个 workspace 工具 + 路由逻辑：
+
+| 工具 | 功能 | 安全检查 |
+|------|------|---------|
+| `workspace_write_file` | 创建/覆盖 workspace 文件 | 路径遍历检查（`..` 禁止） |
+| `workspace_read_file` | 读取 workspace 文件内容 | 路径遍历检查 |
+| `workspace_list_files` | 列出 workspace 文件树 | 无 |
+
+**实现细节**:
+- 新增 `callTool(name, args, workspaceId)` 三参数重载，workspace 工具需要 workspaceId 上下文
+- `handleWorkspaceTool()` 分发到 WorkspaceService 的 createFile/getFileContent/getFileTree
+- `formatFileTree()` 递归格式化文件树为人类可读文本
+- `getDefaultTools()` 从 6 → 9 个工具（workspace 工具排在最前）
+
+#### 12.2.2 ClaudeAgentService 集成
+
+- `agenticStream()` 的 `callTool` 调用改为三参数版本，传入 workspaceId
+- 新增 `file_changed` 事件：当 `workspace_write_file` 成功时，emit `{type: "file_changed", action: "created", path: "..."}`
+- `streamMessage()` 将 workspaceId 传递给 agenticStream
+
+#### 12.2.3 System Prompt 交付指导
+
+**SystemPromptAssembler.kt** 新增 "Delivery Behavior" section：
+- 检测到 workspace_write_file 工具时自动注入
+- 6 条行为指导：必须写文件、先 list 再 write、先 read 再 modify 等
+
+#### 12.2.4 Auth & Context API
+
+| 文件 | 端点 | 功能 |
+|------|------|------|
+| `AuthController.kt` | `GET /api/auth/config` | 返回 Keycloak OIDC 配置 |
+| | `GET /api/auth/me` | 返回当前用户信息 |
+| `ContextController.kt` | `GET /api/context/search` | 搜索 4 类上下文（files/knowledge/schema/services） |
+
+**SecurityConfig.kt** 更新：
+- `/api/auth/**` 和 `/h2-console/**` 加入 permitAll
+- frameOptions 设为 sameOrigin（H2 console 需要）
+
+**application.yml**：OAuth2 issuer-uri 从 `auth.example.com` → `localhost:8180`
+
+---
+
+### 12.3 前端实现
+
+#### 12.3.1 Keycloak SSO
+
+**新建文件**:
+
+| 文件 | 功能 |
+|------|------|
+| `lib/auth.ts` | OIDC PKCE 流程封装：login/logout/token 管理/isAuthenticated |
+| `app/login/page.tsx` | 登录页面，自动跳转 Keycloak |
+| `app/auth/callback/page.tsx` | OIDC 回调页面，交换 authorization code → access_token |
+
+**layout.tsx** 改造：
+- 新增 auth guard：非公开页面检查 `isAuthenticated()`
+- 未认证 → 尝试 `/api/auth/me`，401 → 重定向 `/login`
+- 公开页面（`/login`, `/auth/callback`）直接渲染，无 shell
+
+**Header.tsx**：Sign out 按钮调用 `logout()` 函数
+
+**workspace-api.ts**：所有 fetch 调用添加 `Authorization: Bearer <token>` header + 401 自动重定向
+
+#### 12.3.2 代码块 Apply 按钮
+
+**ChatMessage.tsx** `CodeBlock` 组件增强：
+- 新增 `Apply` 按钮（FileDown 图标），仅在 workspace 内显示
+- 点击后 `window.prompt()` 输入文件名（自动推断扩展名）
+- 调用 `workspaceApi.createFile()` 写入 workspace
+- 写入后 dispatch `forge:file-changed` 自定义事件
+
+**语言→扩展名映射**：支持 20+ 语言（ts/tsx/js/jsx/kotlin/java/python/go/rust/html/css/json/yaml/sql/bash/markdown 等）
+
+#### 12.3.3 FileExplorer CRUD
+
+**FileExplorer.tsx** 右键菜单增强：
+
+| 操作 | 实现 |
+|------|------|
+| New File | `window.prompt()` 输入文件名 → `workspaceApi.createFile()` → 刷新树 + 打开文件 |
+| New Folder | 创建 `{folder}/.gitkeep` 占位文件 |
+| Rename | 读取旧文件内容 → 创建新文件 → 删除旧文件（原子模拟） |
+| Delete | `window.confirm()` 确认 → `workspaceApi.deleteFile()` |
+
+顶部工具栏新增 FilePlus / FolderPlus 快捷按钮。
+
+#### 12.3.4 未保存标记 + 自动保存
+
+**workspace/[id]/page.tsx**：
+- `unsavedFiles: Set<string>` 状态跟踪未保存文件
+- 编辑器 onChange → 添加到 unsavedFiles → 启动 5 秒 debounce timer
+- 5 秒后自动调用 `workspaceApi.saveFile()` → 从 unsavedFiles 移除
+- Cmd+S / Ctrl+S 手动保存也清除标记
+- 文件 tab 显示蓝色圆点（`bg-primary rounded-full h-2 w-2`）
+
+#### 12.3.5 file_changed 事件驱动
+
+**AiChatSidebar.tsx** → 收到 `file_changed` SSE 事件 → dispatch `forge:file-changed` DOM 自定义事件
+**workspace/[id]/page.tsx** → 监听 `forge:file-changed` → `queryClient.invalidateQueries(["files"])` + `handleFileSelect(path)`
+
+---
+
+### 12.4 基础设施
+
+#### Docker 4 容器架构
+
+**docker-compose.trial.yml**：3 → 4 容器
+
+| 容器 | 镜像 | 端口 | 新增 |
+|------|------|------|------|
+| keycloak | `quay.io/keycloak/keycloak:24.0` | 8180→8080 | **新增** |
+| backend | 自建 | 8080 | +OAuth2 env vars, depends_on keycloak |
+| frontend | 自建 | 3000 | +Keycloak env vars |
+| nginx | 自建 | 9000→80 | +/auth/ proxy |
+
+**keycloak/realm-export.json**：预配置 `forge` realm + `forge-web-ide` 客户端（public, PKCE）
+
+**nginx-trial.conf**：新增 `/auth/` location → proxy_pass to keycloak:8080
+
+---
+
+### 12.5 知识库扩展（5 篇新文档）
+
+| 文件 | 内容 |
+|------|------|
+| `knowledge-base/conventions/git-workflow.md` | Git 分支策略、commit 规范、PR 流程 |
+| `knowledge-base/conventions/code-review-checklist.md` | 代码审查检查项清单 |
+| `knowledge-base/api-docs/forge-mcp-tools.md` | Forge MCP 9 工具完整参考文档 |
+| `knowledge-base/runbooks/troubleshooting-guide.md` | 常见问题排查指南 |
+| `knowledge-base/adr/ADR-004-web-ide-architecture.md` | Web IDE 架构决策记录 |
+
+---
+
+### 12.6 测试
+
+**新增测试**:
+
+| 文件 | 测试数 | 覆盖范围 |
+|------|--------|---------|
+| `McpProxyServiceTest.kt` | +9 | workspace_write_file（创建/缺 path/缺 content/路径遍历）、workspace_read_file（成功/不存在）、workspace_list_files、无 workspaceId 回退 |
+| `ContextControllerTest.kt` | 新建 | /api/context/search 4 类别搜索测试 |
+| `ClaudeAgentServiceTest.kt` | 修改 | callTool 签名从 2 参数 → 3 参数适配 |
+
+**现有测试**: 全部通过，总计 130+ tests, 0 failures
+
+---
+
+### 12.7 验收测试文档
+
+创建 `docs/phase2.5-e2e-acceptance-test.md`：
+- 保留 Phase 2 全部 59 个原有测试用例（更新 MCP 工具 6→9、容器 3→4、知识库 7→12+、测试 128→130+）
+- 新增 9 个场景 / 30 个测试用例（A~I）
+- **总计 24 个场景 / 89 个测试用例 / 336 个检查项**
+
+---
+
+### 12.8 Session 12 总结
+
+**用时**: ~2 小时
+**代码变更**:
+- 新建文件 12 个（3 后端 + 3 前端 + 1 基础设施 + 5 知识库）
+- 修改文件 17 个（6 后端 + 7 前端 + 2 基础设施 + 2 测试）
+- 新建文档 1 个（验收测试）
+- **总计 30 个文件，+3,190 行**
+
+**关键里程碑**:
+- AI 从"聊天展示代码"进化为"直接写文件到 workspace"（交付闭环）
+- Keycloak SSO 完整流程（OIDC PKCE 登录/回调/JWT/登出）
+- MCP 工具从 6 → 9（+3 workspace 工具）
+- Docker 从 3 → 4 容器（+keycloak）
+- FileExplorer 完整 CRUD（新建/重命名/删除）
+- 编辑器未保存标记 + 5 秒自动保存
+- 知识库从 7 → 12+ 文档
+
+---
+
+### Git 提交记录（全量更新）
+
+| Commit | 说明 | 文件数 | 插入行数 |
+|--------|------|--------|---------|
+| `02e003c` | feat: Initialize Forge platform | 227 | 37,179 |
+| `93b6ef7` | fix: Complete Phase 0 acceptance criteria | 19 | 1,421 |
+| `0ce24a5` | docs: Update dev logbook | - | - |
+| `35a8361` | docs: Add platform design validation analyses | - | - |
+| `495503d` | docs: Update planning baseline v1.0 → v1.1 | - | - |
+| `0381e91` | feat: Phase 1 — real streaming, agentic loop, DB persistence, skills, tests | ~20 | ~2,500 |
+| `7f10907` | docs: Update planning baseline v1.1 → v1.2 | - | - |
+| `97fd1a3` | feat: Phase 1.5 — Docker one-click deployment for internal trial | 11 | 259 |
+| `937d73d` | docs: Update dev logbook — Phase 1.5 Docker deployment session | 1 | 144 |
+| `de93147` | fix: resolve 10 issues found during Docker e2e verification | - | - |
+| `311aa12` | docs: Baseline v1.3 — design guardian system + platform capability extraction | 3 | ~1,500 |
+| `82033b0` | docs: Session 5 design retrospective | 2 | ~250 |
+| `5737423` | feat: Phase 2 — Skill-Aware OODA Loop with dynamic system prompt | 16 | 2,154 |
+| `e6a89c2` | docs: update dev logbook — Phase 2 session | 1 | - |
+| `38ef5f2` | docs: add Phase 2 E2E test results + fix Docker plugins mount | 2 | - |
+| `ee600eb` | feat: enable Anthropic Prompt Caching + update dev logbook Session 7 | 3 | - |
+| `ba52d4b` | feat: Sprint 2A — OODA visualization, Profile UX enhancement, 3 bug fixes | 10 | ~522 |
+| `b6dcceb` | feat: Sprint 2C — agent-eval real model calling, MetricsService, cross-stack PoC | 11 | 1,522 |
+| `e4dad8a` | feat: Sprint 2B — MCP real connections, BaselineService, 3 new Skills | - | - |
+| `2e17588` | docs: update design baseline v3 → v4 (Phase 2 complete) | - | - |
+| `f8b8679` | docs: update dev logbook — Session 10 (Sprint 2B) + Session 11 (Sprint 2C) | - | - |
+| `f8edd6a` | docs: add Phase 2 E2E acceptance test design (15 scenarios, 59 test cases) | 1 | 851 |
+| `bf91bd3` | docs: add Phase 2.5 E2E acceptance test (24 scenarios, 89 test cases) | 1 | 1,307 |
+| `4759ee0` | feat: Phase 2.5 — Keycloak SSO, AI→Workspace delivery loop, Context Picker, FileExplorer CRUD, auto-save | 29 | 1,883 |
+
+### docs/ 文档清单（全量更新）
+
+| 文件 | 内容 | 创建/更新时间 |
+|------|------|-------------|
+| `docs/planning/baseline-v1.0.md` | 规划基线文档 | Session 1 |
+| `docs/planning/forge-vs-claude-code-analysis.md` | Forge vs Claude Code 理论对比 | Session 1 |
+| `docs/planning/dev-logbook.md` | 开发日志（本文件） | Session 2, 持续更新 |
+| `docs/planning/simulation-dotnet-to-java-migration.md` | .NET→Java 迁移模拟验证 | Session 3 |
+| `docs/planning/analysis-current-vs-forge.md` | 当前开发过程 vs Forge 实际优劣 | Session 3 |
+| `docs/planning/analysis-claude-code-independence.md` | Claude Code 独立性分析 | Session 3 |
+| `docs/planning/phase1-implementation-plan.md` | Phase 1 五周实施计划 | Session 4 |
+| `docs/TRIAL-GUIDE.md` | Phase 1.5 内部试用引导 | Session 5 |
+| `docs/design-baseline-v1.md` | Web IDE 设计基线（**v4**, Phase 2 complete） | Session 5 创建, Session 11 升级 |
+| `docs/planning/baseline-v1.3.md` | 规划基线 v1.3（设计守护 + 平台能力提炼） | Session 5 |
+| `docs/planning/session5-design-retrospective.md` | Session 5 设计回顾 | Session 5 |
+| `docs/phase2-skill-aware-ooda-loop.md` | Phase 2 Skill-Aware OODA Loop 实施计划 | Session 6 |
+| `docs/phase2-feature-list-and-test-paths.md` | Phase 2 功能清单 + E2E 测试路径与结果 | Session 7 |
+| `docs/phase2-completion-plan.md` | Phase 2 完成计划（Sprint 2A/2B/2C） | Session 8 |
+| `docs/user-guide-trial.md` | 内部试用指南 | Session 9 |
+| `docs/sprint2a-acceptance-test.md` | Sprint 2A 验收测试（9 场景 / 36 用例） | Session 9 |
+| `docs/cross-stack-poc-report.md` | 跨栈迁移 PoC 报告（.NET → Java, 11 规则 100% 覆盖） | Session 11 |
+| `docs/phase2-e2e-acceptance-test.md` | Phase 2 E2E 验收测试（15 场景 / 59 用例） | **Session 12** |
+| `docs/phase2.5-e2e-acceptance-test.md` | Phase 2.5 E2E 验收测试（24 场景 / 89 用例） | **Session 12** |
+
+### 项目统计快照（Session 12）
+
+| 指标 | 数值 |
+|------|------|
+| 总文件数 | ~295+ |
+| 总代码行数 | ~50,000+ |
+| Git Commits | 23 |
+| Sessions | 12 |
+| 单元测试 | 130+ |
+| Skills 加载 | 32 (5 profiles) |
+| MCP 工具 | 9 (6 实连 + 3 workspace) |
+| Docker 容器 | 4 (backend + frontend + nginx + keycloak) |
+| 知识库文档 | 12+ |
+| E2E 验收测试 | 89 用例 / 336 检查项 |
+| Phase 0 | ✅ 完成 |
+| Phase 1 | ✅ 完成 |
+| Phase 1.5 | ✅ 完成 |
+| Phase 2 | ✅ 完成 |
+| **Phase 2.5** | **✅ 全部完成** |
