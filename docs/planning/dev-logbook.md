@@ -1672,11 +1672,11 @@ Sprint 2C 是 Phase 2 最后一个 Sprint，目标是达成全部验收标准：
 
 ---
 
-## Session 12 — 2026-02-19：Phase 2.5 — AI 交付闭环 + Keycloak SSO + 编辑器增强
+## Session 12 — 2026-02-19：Phase 1.6 — AI 交付闭环 + Keycloak SSO + 编辑器增强
 
-> Phase 2 已全部完成。本 session 目标：实现 Phase 2.5 的 8 大功能块，让 AI 从"聊天展示代码"进化为"直接写文件到 workspace"，并补齐 SSO 认证、文件管理、自动保存等生产级功能。
+> Phase 2 已全部完成。本 session 目标：实现 Phase 1.6 的 8 大功能块，让 AI 从"聊天展示代码"进化为"直接写文件到 workspace"，并补齐 SSO 认证、文件管理、自动保存等生产级功能。
 
-### 12.1 Phase 2.5 功能概览
+### 12.1 Phase 1.6 功能概览
 
 **核心理念**: AI → Workspace 交付闭环。AI 不再仅在聊天中展示代码，而是通过 workspace 工具直接创建/修改文件，文件树自动刷新，编辑器自动打开。
 
@@ -1848,7 +1848,7 @@ Sprint 2C 是 Phase 2 最后一个 Sprint，目标是达成全部验收标准：
 
 ### 12.7 验收测试文档
 
-创建 `docs/phase2.5-e2e-acceptance-test.md`：
+创建 `docs/phase1.6-e2e-acceptance-test.md`：
 - 保留 Phase 2 全部 59 个原有测试用例（更新 MCP 工具 6→9、容器 3→4、知识库 7→12+、测试 128→130+）
 - 新增 9 个场景 / 30 个测试用例（A~I）
 - **总计 24 个场景 / 89 个测试用例 / 336 个检查项**
@@ -1901,8 +1901,8 @@ Sprint 2C 是 Phase 2 最后一个 Sprint，目标是达成全部验收标准：
 | `2e17588` | docs: update design baseline v3 → v4 (Phase 2 complete) | - | - |
 | `f8b8679` | docs: update dev logbook — Session 10 (Sprint 2B) + Session 11 (Sprint 2C) | - | - |
 | `f8edd6a` | docs: add Phase 2 E2E acceptance test design (15 scenarios, 59 test cases) | 1 | 851 |
-| `bf91bd3` | docs: add Phase 2.5 E2E acceptance test (24 scenarios, 89 test cases) | 1 | 1,307 |
-| `4759ee0` | feat: Phase 2.5 — Keycloak SSO, AI→Workspace delivery loop, Context Picker, FileExplorer CRUD, auto-save | 29 | 1,883 |
+| `bf91bd3` | docs: add Phase 1.6 E2E acceptance test (24 scenarios, 89 test cases) | 1 | 1,307 |
+| `4759ee0` | feat: Phase 1.6 — Keycloak SSO, AI→Workspace delivery loop, Context Picker, FileExplorer CRUD, auto-save | 29 | 1,883 |
 
 ### docs/ 文档清单（全量更新）
 
@@ -1926,7 +1926,7 @@ Sprint 2C 是 Phase 2 最后一个 Sprint，目标是达成全部验收标准：
 | `docs/sprint2a-acceptance-test.md` | Sprint 2A 验收测试（9 场景 / 36 用例） | Session 9 |
 | `docs/cross-stack-poc-report.md` | 跨栈迁移 PoC 报告（.NET → Java, 11 规则 100% 覆盖） | Session 11 |
 | `docs/phase2-e2e-acceptance-test.md` | Phase 2 E2E 验收测试（15 场景 / 59 用例） | **Session 12** |
-| `docs/phase2.5-e2e-acceptance-test.md` | Phase 2.5 E2E 验收测试（24 场景 / 89 用例） | **Session 12** |
+| `docs/phase1.6-e2e-acceptance-test.md` | Phase 1.6 E2E 验收测试（24 场景 / 89 用例） | **Session 12** |
 
 ### 项目统计快照（Session 12）
 
@@ -1946,4 +1946,4 @@ Sprint 2C 是 Phase 2 最后一个 Sprint，目标是达成全部验收标准：
 | Phase 1 | ✅ 完成 |
 | Phase 1.5 | ✅ 完成 |
 | Phase 2 | ✅ 完成 |
-| **Phase 2.5** | **✅ 全部完成** |
+| **Phase 1.6** | **✅ 全部完成** |

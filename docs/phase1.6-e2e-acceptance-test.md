@@ -1,13 +1,13 @@
-# Phase 2.5 端到端验收测试 — 全功能覆盖
+# Phase 1.6 端到端验收测试 — 全功能覆盖
 
 > 测试前提：`docker compose -f docker-compose.trial.yml --env-file .env.trial up --build` 已启动（含 4 容器：backend, frontend, nginx, keycloak）
 > 访问地址：http://localhost:9000
 > Keycloak 管理后台：http://localhost:8180
 > 测试人：人工验收
-> 覆盖范围：Phase 2 全部功能 + Phase 2.5 新增功能
+> 覆盖范围：Phase 2 全部功能 + Phase 1.6 新增功能
 >
-> 本文档在 `phase2-e2e-acceptance-test.md`（59 个用例）基础上扩展，新增 Phase 2.5 专属功能验收用例。
-> Phase 2.5 新增功能：Keycloak SSO、AI → Workspace 交付闭环、Context Picker 实连、代码块 Apply 按钮、FileExplorer CRUD、未保存标记 + 自动保存、System Prompt 交付指导、知识库 5 篇新文档。
+> 本文档在 `phase2-e2e-acceptance-test.md`（59 个用例）基础上扩展，新增 Phase 1.6 专属功能验收用例。
+> Phase 1.6 新增功能：Keycloak SSO、AI → Workspace 交付闭环、Context Picker 实连、代码块 Apply 按钮、FileExplorer CRUD、未保存标记 + 自动保存、System Prompt 交付指导、知识库 5 篇新文档。
 
 ---
 
@@ -787,11 +787,11 @@ docker compose -f infrastructure/docker/docker-compose.trial.yml exec backend ls
 **预期**：
 - [ ] `/plugins` 包含 `forge-foundation`, `forge-superagent`, `forge-deployment`, `forge-knowledge`
 - [ ] `/knowledge-base` 包含 `adr`, `api-docs`, `conventions`, `runbooks`
-- [ ] `/knowledge-base` 总文件数 12+（Phase 2 的 7 + Phase 2.5 新增 5 篇）
+- [ ] `/knowledge-base` 总文件数 12+（Phase 2 的 7 + Phase 1.6 新增 5 篇）
 
 ---
 
-## 场景 A：Keycloak SSO 认证（Phase 2.5 新增）
+## 场景 A：Keycloak SSO 认证（Phase 1.6 新增）
 
 > 验证 Keycloak OIDC PKCE 登录、JWT 验证和登出流程。
 
@@ -848,7 +848,7 @@ curl -H "Authorization: Bearer <token>" http://localhost:9000/api/chat/skills
 
 ---
 
-## 场景 B：AI 交付闭环 — 代码写入 Workspace（Phase 2.5 核心）
+## 场景 B：AI 交付闭环 — 代码写入 Workspace（Phase 1.6 核心）
 
 > 验证 AI 通过 workspace 工具直接将代码写入用户 workspace，实现从"聊天展示"到"文件交付"的闭环。
 
@@ -920,7 +920,7 @@ curl -H "Authorization: Bearer <token>" http://localhost:9000/api/chat/skills
 
 ---
 
-## 场景 C：Context Picker 实连（Phase 2.5 新增）
+## 场景 C：Context Picker 实连（Phase 1.6 新增）
 
 > 验证 @ Context Picker 通过 /api/context/search 端点实连 4 个类别的真实数据。
 
@@ -943,7 +943,7 @@ curl -H "Authorization: Bearer <token>" http://localhost:9000/api/chat/skills
 **预期**：
 - [ ] Knowledge 类别调用 `/api/context/search?category=knowledge`
 - [ ] 列表显示知识库中的文档
-- [ ] 包含 Phase 2.5 新增的文档（如 git-workflow、troubleshooting-guide 等）
+- [ ] 包含 Phase 1.6 新增的文档（如 git-workflow、troubleshooting-guide 等）
 - [ ] 选择后作为上下文附加
 
 ### TC-C.3 搜索过滤
@@ -958,7 +958,7 @@ curl -H "Authorization: Bearer <token>" http://localhost:9000/api/chat/skills
 
 ---
 
-## 场景 D：FileExplorer CRUD（Phase 2.5 新增）
+## 场景 D：FileExplorer CRUD（Phase 1.6 新增）
 
 > 验证文件树的右键菜单操作：新建、重命名、删除。
 
@@ -1013,7 +1013,7 @@ curl -H "Authorization: Bearer <token>" http://localhost:9000/api/chat/skills
 
 ---
 
-## 场景 E：编辑器增强 — 未保存标记 + 自动保存（Phase 2.5 新增）
+## 场景 E：编辑器增强 — 未保存标记 + 自动保存（Phase 1.6 新增）
 
 > 验证文件编辑的保存状态指示和自动保存功能。
 
@@ -1051,7 +1051,7 @@ curl -H "Authorization: Bearer <token>" http://localhost:9000/api/chat/skills
 
 ---
 
-## 场景 F：知识库内容升级（Phase 2.5 新增）
+## 场景 F：知识库内容升级（Phase 1.6 新增）
 
 > 验证新增的 5 篇知识库文档。
 
@@ -1064,7 +1064,7 @@ find knowledge-base/ -name "*.md" | wc -l
 ```
 
 **预期**：
-- [ ] 知识库总文件数 12+（Phase 2 的 7 + Phase 2.5 新增 5）
+- [ ] 知识库总文件数 12+（Phase 2 的 7 + Phase 1.6 新增 5）
 - [ ] 新增文档包括：
   - [ ] `git-workflow.md`（Git 工作流规范）
   - [ ] `code-review-checklist.md`（代码审查清单）
@@ -1087,9 +1087,9 @@ curl "http://localhost:9000/api/knowledge/search?query=troubleshooting"
 
 ---
 
-## 场景 G：API 健康度升级（Phase 2.5 新增）
+## 场景 G：API 健康度升级（Phase 1.6 新增）
 
-> 验证 Phase 2.5 新增的 API 端点。
+> 验证 Phase 1.6 新增的 API 端点。
 
 ### TC-G.1 MCP Tools 列表包含 9 个工具
 
@@ -1099,7 +1099,7 @@ curl http://localhost:9000/api/mcp/tools | python3 -m json.tool
 ```
 
 **预期**：
-- [ ] 返回 9 个工具（Phase 2 的 6 + Phase 2.5 新增 3）
+- [ ] 返回 9 个工具（Phase 2 的 6 + Phase 1.6 新增 3）
 - [ ] 新增工具：
   - [ ] `workspace_write_file`（写入文件到 workspace）
   - [ ] `workspace_read_file`（读取 workspace 文件）
@@ -1137,7 +1137,7 @@ curl http://localhost:9000/api/auth/config
 
 ---
 
-## 场景 H：Header 角色切换 + 导航增强（Phase 2.5 新增）
+## 场景 H：Header 角色切换 + 导航增强（Phase 1.6 新增）
 
 > 验证 Header 中的角色切换和导航增强功能。
 
@@ -1172,9 +1172,9 @@ curl http://localhost:9000/api/auth/config
 
 ---
 
-## 场景 I：Docker 4 容器部署完整性（Phase 2.5 新增）
+## 场景 I：Docker 4 容器部署完整性（Phase 1.6 新增）
 
-> 专门验证 Phase 2.5 的 4 容器架构完整性。
+> 专门验证 Phase 1.6 的 4 容器架构完整性。
 
 ### TC-I.1 4 个容器状态
 
@@ -1237,16 +1237,16 @@ docker compose -f infrastructure/docker/docker-compose.trial.yml logs backend | 
 | 14. 全量单元测试 | 1 | /1 | /1 | 130+ tests |
 | 15. Docker 部署完整性 | 3 | /3 | /3 | 4 容器 |
 | **Phase 2 小计** | **59** | **/59** | **/59** | |
-| A. Keycloak SSO | 4 | /4 | /4 | **Phase 2.5 新增** |
-| B. AI 交付闭环 | 5 | /5 | /5 | **Phase 2.5 核心** |
-| C. Context Picker 实连 | 3 | /3 | /3 | **Phase 2.5 新增** |
-| D. FileExplorer CRUD | 4 | /4 | /4 | **Phase 2.5 新增** |
-| E. 编辑器增强 | 3 | /3 | /3 | **Phase 2.5 新增** |
-| F. 知识库内容升级 | 2 | /2 | /2 | **Phase 2.5 新增** |
-| G. API 健康度升级 | 3 | /3 | /3 | **Phase 2.5 新增** |
-| H. Header + 导航增强 | 3 | /3 | /3 | **Phase 2.5 新增** |
-| I. Docker 4 容器 | 3 | /3 | /3 | **Phase 2.5 新增** |
-| **Phase 2.5 新增小计** | **30** | **/30** | **/30** | |
+| A. Keycloak SSO | 4 | /4 | /4 | **Phase 1.6 新增** |
+| B. AI 交付闭环 | 5 | /5 | /5 | **Phase 1.6 核心** |
+| C. Context Picker 实连 | 3 | /3 | /3 | **Phase 1.6 新增** |
+| D. FileExplorer CRUD | 4 | /4 | /4 | **Phase 1.6 新增** |
+| E. 编辑器增强 | 3 | /3 | /3 | **Phase 1.6 新增** |
+| F. 知识库内容升级 | 2 | /2 | /2 | **Phase 1.6 新增** |
+| G. API 健康度升级 | 3 | /3 | /3 | **Phase 1.6 新增** |
+| H. Header + 导航增强 | 3 | /3 | /3 | **Phase 1.6 新增** |
+| I. Docker 4 容器 | 3 | /3 | /3 | **Phase 1.6 新增** |
+| **Phase 1.6 新增小计** | **30** | **/30** | **/30** | |
 | **总计** | **89** | **/89** | **/89** | |
 
 ---
@@ -1280,15 +1280,15 @@ open http://localhost:8180           # Keycloak 管理后台（admin/admin）
 8. **度量指标是否正确记录**：每次交互后 forge.* 指标递增，Prometheus 端点可导出（Sprint 2C）
 9. **32 Skills 是否全部加载**：API 和 Docker 日志都确认 32 个（Sprint 2B 新增 3 个）
 10. **agent-eval 双模式是否工作**：无 key 降级为结构验证，有 key 调用真实模型（Sprint 2C）
-11. **AI 是否写文件而非仅展示代码**：workspace_write_file 工具调用必须出现，代码交付到文件树（Phase 2.5 核心）
-12. **文件树是否自动刷新**：file_changed 事件驱动，无需手动刷新（Phase 2.5）
-13. **Keycloak SSO 流程是否顺畅**：OIDC PKCE 登录 → 回调 → JWT 存储 → 登出（Phase 2.5）
-14. **Context Picker 是否返回真实数据**：4 个类别都从后端 API 获取，不是 mock 数据（Phase 2.5）
-15. **自动保存是否可靠**：5 秒后蓝色圆点消失，内容持久化（Phase 2.5）
+11. **AI 是否写文件而非仅展示代码**：workspace_write_file 工具调用必须出现，代码交付到文件树（Phase 1.6 核心）
+12. **文件树是否自动刷新**：file_changed 事件驱动，无需手动刷新（Phase 1.6）
+13. **Keycloak SSO 流程是否顺畅**：OIDC PKCE 登录 → 回调 → JWT 存储 → 登出（Phase 1.6）
+14. **Context Picker 是否返回真实数据**：4 个类别都从后端 API 获取，不是 mock 数据（Phase 1.6）
+15. **自动保存是否可靠**：5 秒后蓝色圆点消失，内容持久化（Phase 1.6）
 
 ---
 
-## Phase 2.5 验收标准对照
+## Phase 1.6 验收标准对照
 
 | # | 验收标准 | 对应测试场景 |
 |---|---------|-------------|

@@ -47,7 +47,7 @@ AI (Claude) ──tool_use──→ McpProxyService ──→ WorkspaceService �
 ### Negative
 
 - In-memory WorkspaceService means files are lost on restart (acceptable for trial mode; production would use persistent storage)
-- No diff/merge — AI overwrites entire files (acceptable for Phase 2.5; Phase 3 can add diff view)
+- No diff/merge — AI overwrites entire files (acceptable for Phase 1.6; Phase 3 can add diff view)
 
 ## Related
 
