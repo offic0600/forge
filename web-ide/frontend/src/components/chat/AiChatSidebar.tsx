@@ -30,7 +30,10 @@ export function AiChatSidebar({
   const [isStreaming, setIsStreaming] = useState(false);
   const [showContextPicker, setShowContextPicker] = useState(false);
   const [selectedContexts, setSelectedContexts] = useState<ContextItem[]>([]);
-  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    return localStorage.getItem(`forge_chat_session_${workspaceId}`);
+  });
   const [thinkingText, setThinkingText] = useState<string>("");
   const [activeProfile, setActiveProfile] = useState<{
     name: string;
@@ -42,6 +45,40 @@ export function AiChatSidebar({
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+
+  // Restore chat history when session is loaded from localStorage
+  useEffect(() => {
+    if (!sessionId) return;
+    (async () => {
+      try {
+        const res = await fetch(`/api/chat/sessions/${sessionId}/messages`);
+        if (!res.ok) {
+          // Session expired or invalid, clear it
+          localStorage.removeItem(`forge_chat_session_${workspaceId}`);
+          setSessionId(null);
+          return;
+        }
+        const data = (await res.json()) as Array<{
+          id: string;
+          role: string;
+          content: string;
+          timestamp: string;
+        }>;
+        if (data.length > 0) {
+          setMessages(
+            data.map((m) => ({
+              id: m.id,
+              role: m.role === "user" ? "user" as const : "assistant" as const,
+              content: m.content,
+              timestamp: m.timestamp,
+            }))
+          );
+        }
+      } catch {
+        // Ignore - fresh session
+      }
+    })();
+  }, [sessionId, workspaceId]);
 
   // Scroll to bottom on new messages
   useEffect(() => {
@@ -90,6 +127,7 @@ export function AiChatSidebar({
       if (!res.ok) throw new Error("Failed to create chat session");
       const data = (await res.json()) as { id: string };
       setSessionId(data.id);
+      localStorage.setItem(`forge_chat_session_${workspaceId}`, data.id);
       return data.id;
     } catch (err) {
       console.error("Failed to init session:", err);
@@ -142,6 +180,7 @@ export function AiChatSidebar({
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
     setSelectedContexts([]);
+    setShowContextPicker(false);
     setIsStreaming(true);
     setThinkingText("");
 
@@ -308,8 +347,31 @@ export function AiChatSidebar({
   };
 
   const handleContextSelect = (item: ContextItem) => {
+    if (item.type === "profile") {
+      // Profile tags: replace the trailing @ in input with @tag so backend ProfileRouter detects it
+      const tag = `@${item.label} `;
+      setInput((prev) => {
+        const lastAt = prev.lastIndexOf("@");
+        if (lastAt >= 0) {
+          return prev.substring(0, lastAt) + tag + prev.substring(lastAt + 1);
+        }
+        return tag + prev;
+      });
+      setShowContextPicker(false);
+      inputRef.current?.focus();
+      return;
+    }
+    // Non-profile context: add as chip and remove the trailing @ from input
     setSelectedContexts((prev) => [...prev, item]);
+    setInput((prev) => {
+      const lastAt = prev.lastIndexOf("@");
+      if (lastAt >= 0) {
+        return prev.substring(0, lastAt) + prev.substring(lastAt + 1);
+      }
+      return prev;
+    });
     setShowContextPicker(false);
+    inputRef.current?.focus();
   };
 
   const handleRemoveContext = (id: string) => {

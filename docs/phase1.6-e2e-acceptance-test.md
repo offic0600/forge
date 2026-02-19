@@ -66,18 +66,18 @@
 ```
 
 **预期**：
-- [ ] OODA 指示器出现，从 Observe → Orient 依次流转
-- [ ] Profile Badge 出现，显示 `development`（因为包含"实现"关键词）
-- [ ] Badge 上有黄色或绿色置信度圆点
-- [ ] Badge 显示 routing reason（如 `keyword '实现'`）
-- [ ] Badge 显示加载的 Skills（如 `kotlin-conventions, spring-boot-patterns +N`）
-- [ ] OODA 流转到 Decide，然后 Claude 开始流式输出
-- [ ] 回复中包含 Kotlin 代码块（```kotlin）
-- [ ] 代码块有语法高亮 + "Copy" 按钮
-- [ ] 回复体现 Spring Boot 专业知识（如 @Valid, @RestController, @RequestBody）
-- [ ] 回复体现 Kotlin 规范（如 data class, val 而非 var）
-- [ ] 流式结束后，OODA 指示器消失
-- [ ] 消息气泡有时间戳
+- [x] OODA 指示器出现，从 Observe → Orient 依次流转
+- [x] Profile Badge 出现，显示 `development`（因为包含"实现"关键词）
+- [x] Badge 上有黄色或绿色置信度圆点
+- [x] Badge 显示 routing reason（如 `keyword '实现'`）
+- [x] Badge 显示加载的 Skills（如 `kotlin-conventions, spring-boot-patterns +N`）
+- [x] OODA 流转到 Decide，然后 Claude 开始流式输出
+- [x] 回复中包含 Kotlin 代码块（```kotlin）
+- [x] 代码块有语法高亮 + "Copy" 按钮
+- [x] 回复体现 Spring Boot 专业知识（如 @Valid, @RestController, @RequestBody）
+- [x] 回复体现 Kotlin 规范（如 data class, val 而非 var）
+- [x] 流式结束后，OODA 指示器消失
+- [x] 消息气泡有时间戳
 
 ### TC-2.2 追问 — 验证会话连续性
 
@@ -87,11 +87,11 @@
 ```
 
 **预期**：
-- [ ] Claude 知道上一条消息的上下文（指的是刚才的用户注册 Controller）
-- [ ] 生成的测试代码引用了上面的 Controller 类名和方法名
-- [ ] OODA 指示器再次出现并流转
-- [ ] Profile 可能还是 development（因为"测试"关键词可能路由到 testing）
-- [ ] 无论路由到哪个 profile，回复都应包含测试代码
+- [x] Claude 知道上一条消息的上下文（指的是刚才的用户注册 Controller）
+- [x] 生成的测试代码引用了上面的 Controller 类名和方法名
+- [x] OODA 指示器再次出现并流转
+- [x] Profile 可能还是 development（因为"测试"关键词可能路由到 testing）
+- [x] 无论路由到哪个 profile，回复都应包含测试代码
 
 ### TC-2.3 显式切换 Profile — @设计 标签
 
@@ -101,8 +101,8 @@
 ```
 
 **预期**：
-- [ ] Profile Badge 切换为 `design`（不再是 development）
-- [ ] 置信度圆点为绿色（confidence = 1.0，因为是显式标签）
+- [x] Profile Badge 切换为 `design`（不再是 development）
+- [x] 置信度圆点为绿色（confidence = 1.0，因为是显式标签）
 - [ ] routing reason 显示 `'@设计'`
 - [ ] 加载的 Skills 变化（design profile 的 skills 和 development 不同）
 - [ ] 回复偏向架构层面（如提到模块拆分、高可用、安全性、可扩展性），而非直接写代码
@@ -115,7 +115,7 @@
 ```
 
 **预期**：
-- [ ] Profile Badge 切换为 `testing`
+- [x] Profile Badge 切换为 `testing`
 - [ ] 绿色圆点（显式标签）
 - [ ] 回复偏向测试策略（测试金字塔、边界条件、mock 策略等）
 
@@ -127,8 +127,8 @@ deploy this service to kubernetes with rolling update strategy
 ```
 
 **预期**：
-- [ ] Profile Badge 显示 `ops`（"deploy" + "kubernetes" 是运维关键词）
-- [ ] 回复涉及 K8s deployment yaml、rolling update 配置等
+- [x] Profile Badge 显示 `ops`（"deploy" + "kubernetes" 是运维关键词）
+- [x] 回复涉及 K8s deployment yaml、rolling update 配置等
 
 ---
 
@@ -144,13 +144,13 @@ deploy this service to kubernetes with rolling update strategy
 ```
 
 **预期**：
-- [ ] OODA 流转到 Act 阶段（表示正在执行工具）
-- [ ] 出现 Tool Call 卡片，工具名为 `search_knowledge`
-- [ ] Tool Call 卡片显示输入参数（如 `{"query": "Spring Boot"}`）
-- [ ] Tool Call 完成后卡片状态变为绿色 ✓
-- [ ] 展开 Tool Call 详情，能看到返回的知识库文档内容
-- [ ] Claude 基于工具返回结果给出回复
-- [ ] OODA 完成从 Act 回到 Decide → Complete 的完整流转
+- [x] OODA 流转到 Act 阶段（表示正在执行工具）
+- [x] 出现 Tool Call 卡片，工具名为 `search_knowledge`
+- [x] Tool Call 卡片显示输入参数（如 `{"query": "Spring Boot"}`）
+- [x] Tool Call 完成后卡片状态变为绿色 ✓
+- [x] 展开 Tool Call 详情，能看到返回的知识库文档内容
+- [x] Claude 基于工具返回结果给出回复
+- [x] OODA 完成从 Act 回到 Decide → Complete 的完整流转
 
 ### TC-3.2 触发底线检查工具调用
 
@@ -160,9 +160,9 @@ deploy this service to kubernetes with rolling update strategy
 ```
 
 **预期**：
-- [ ] 出现 Tool Call 卡片，工具名为 `run_baseline` 或 `list_baselines`
-- [ ] 工具执行有结果返回（pass/fail 或可用底线列表）
-- [ ] Claude 对底线检查结果进行解读
+- [x] 出现 Tool Call 卡片，工具名为 `run_baseline` 或 `list_baselines`
+- [x] 工具执行有结果返回（pass/fail 或可用底线列表）
+- [x] Claude 对底线检查结果进行解读
 
 ### TC-3.3 多轮工具调用（Agentic Loop）
 
@@ -172,19 +172,19 @@ deploy this service to kubernetes with rolling update strategy
 ```
 
 **预期**：
-- [ ] Claude 先发起 `search_knowledge` 工具调用（Turn 1）
-- [ ] 收到工具结果后，Claude 继续思考并给出回复（Turn 2）
-- [ ] OODA 指示器流转：Observe → Orient → Decide → Act（工具调用）→ Decide → Complete
-- [ ] 最终回复引用了工具返回的知识库内容
+- [x] Claude 先发起 `search_knowledge` 工具调用（Turn 1）
+- [x] 收到工具结果后，Claude 继续思考并给出回复（Turn 2）
+- [x] OODA 指示器流转：Observe → Orient → Decide → Act（工具调用）→ Decide → Complete
+- [x] 最终回复引用了工具返回的知识库内容
 
 ### TC-3.4 工具调用失败的优雅降级
 
 **操作**：发送一条可能触发工具调用但工具可能出错的消息（如搜索一个不存在的知识领域）
 
 **预期**：
-- [ ] Tool Call 卡片状态显示为红色错误（如果工具报错）
-- [ ] Claude 不崩溃，继续给出回复（可能是 fallback 回复或承认工具调用失败）
-- [ ] 整个对话流程不中断
+- [x] Tool Call 卡片状态显示为红色错误（如果工具报错）
+- [x] Claude 不崩溃，继续给出回复（可能是 fallback 回复或承认工具调用失败）
+- [x] 整个对话流程不中断
 
 ---
 
@@ -250,43 +250,43 @@ class UserService(val userRepo: UserRepository) {
 **操作**：导航到 Knowledge 页面（`/knowledge`）
 
 **预期**：
-- [ ] 四个标签页可见：Docs / Architecture / Services / APIs
-- [ ] 默认在 Docs 标签页
-- [ ] 左侧有搜索框
+- [x] 四个标签页可见：Docs / Architecture / Services / APIs
+- [x] 默认在 Docs 标签页
+- [x] 左侧有搜索框
 
 ### TC-5.2 文档搜索与查看
 
 **操作**：在搜索框输入 "Spring" 或任意关键词
 
 **预期**：
-- [ ] 搜索结果列表出现（来自 `/api/knowledge/search` 接口）
-- [ ] 每个结果有标题、类型标签、摘要
-- [ ] 点击一个结果，右侧显示文档详情
+- [x] 搜索结果列表出现（来自 `/api/knowledge/search` 接口）
+- [x] 每个结果有标题、类型标签、摘要
+- [x] 点击一个结果，右侧显示文档详情
 
 ### TC-5.3 架构图查看
 
 **操作**：切换到 Architecture 标签页
 
 **预期**：
-- [ ] 有架构图列表（可能为 mock 数据）
-- [ ] 有缩放控件（放大/缩小/重置）
+- [x] 有架构图列表（可能为 mock 数据）
+- [x] 有缩放控件（放大/缩小/重置）
 
 ### TC-5.4 服务依赖图
 
 **操作**：切换到 Services 标签页
 
 **预期**：
-- [ ] 有服务节点图（ReactFlow 渲染）
-- [ ] 节点有颜色区分（健康/退化/故障）
+- [x] 有服务节点图（ReactFlow 渲染）
+- [x] 节点有颜色区分（健康/退化/故障）
 
 ### TC-5.5 API Explorer
 
 **操作**：切换到 APIs 标签页
 
 **预期**：
-- [ ] API 目录列表可见
-- [ ] 每个 API 有方法标签（GET/POST 等）颜色区分
-- [ ] 点击展开能看到参数和响应示例
+- [x] API 目录列表可见
+- [x] 每个 API 有方法标签（GET/POST 等）颜色区分
+- [x] 点击展开能看到参数和响应示例
 
 ---
 
@@ -324,7 +324,7 @@ class UserService(val userRepo: UserRepository) {
 
 **预期**：
 - [ ] Context Picker 弹出
-- [ ] 有 4 个类型标签：Files / Knowledge / Schema / Services
+- [ ] 有 5 个类型标签：Profiles / Files / Knowledge / Schema / Services
 - [ ] 有搜索框（自动获取焦点）
 - [ ] 按 Escape 关闭 Context Picker
 
@@ -449,37 +449,37 @@ class UserService(val userRepo: UserRepository) {
 **操作**：浏览器访问 http://localhost:9000/api/chat/skills
 
 **预期**：
-- [ ] 返回 JSON 数组
-- [ ] 包含 **32** 个 skills
-- [ ] 每个 skill 有 name, description 字段
-- [ ] 包含 3 个来自 Phase 1.5 的 skill：`deployment-readiness-check`、`design-baseline-guardian`、`environment-parity`
+- [x] 返回 JSON 数组
+- [x] 包含 **32** 个 skills
+- [x] 每个 skill 有 name, description 字段
+- [x] 包含 3 个来自 Phase 1.5 的 skill：`deployment-readiness-check`、`design-baseline-guardian`、`environment-parity`
 
 ### TC-9.2 Profiles 加载（5 Profiles）
 
 **操作**：浏览器访问 http://localhost:9000/api/chat/profiles
 
 **预期**：
-- [ ] 返回 5 个 profiles
-- [ ] 包含 planning-profile, design-profile, development-profile, testing-profile, ops-profile
-- [ ] development-profile 的 skills 列表最长
+- [x] 返回 5 个 profiles
+- [x] 包含 planning-profile, design-profile, development-profile, testing-profile, ops-profile
+- [x] development-profile 的 skills 列表最长
 
 ### TC-9.3 MCP Tools 列表（9 工具）
 
 **操作**：浏览器访问 http://localhost:9000/api/mcp/tools
 
 **预期**：
-- [ ] 返回 JSON 数组
-- [ ] 包含 **9** 个工具：`search_knowledge`、`read_file`、`query_schema`、`run_baseline`、`list_baselines`、`get_service_info`、`workspace_write_file`、`workspace_read_file`、`workspace_list_files`
-- [ ] 每个工具有 name, description, inputSchema
-- [ ] 3 个 workspace 工具的 description 清晰描述用途（注：workspaceId 由后端在调用时注入，不在 inputSchema 中暴露）
+- [x] 返回 JSON 数组
+- [x] 包含 **9** 个工具：`search_knowledge`、`read_file`、`query_schema`、`run_baseline`、`list_baselines`、`get_service_info`、`workspace_write_file`、`workspace_read_file`、`workspace_list_files`
+- [x] 每个工具有 name, description, inputSchema
+- [x] 3 个 workspace 工具的 description 清晰描述用途（注：workspaceId 由后端在调用时注入，不在 inputSchema 中暴露）
 
 ### TC-9.4 Knowledge 搜索
 
 **操作**：浏览器访问 http://localhost:9000/api/knowledge/search
 
 **预期**：
-- [ ] 返回 JSON 数组
-- [ ] 包含知识库文档
+- [x] 返回 JSON 数组
+- [x] 包含知识库文档
 
 ---
 
@@ -495,9 +495,9 @@ curl http://localhost:9000/actuator/health
 ```
 
 **预期**：
-- [ ] 返回 JSON，`status` 为 `UP`
-- [ ] 包含 `groups` 字段（`liveness`, `readiness`）
-- [ ] 注：默认不展示组件详情；如需 `db`/`diskSpace`，需配置 `management.endpoint.health.show-details=always`
+- [x] 返回 JSON，`status` 为 `UP`
+- [x] 包含 `groups` 字段（`liveness`, `readiness`）
+- [x] 注：默认不展示组件详情；如需 `db`/`diskSpace`，需配置 `management.endpoint.health.show-details=always`
 
 ### TC-10.2 Metrics 列表
 
@@ -507,14 +507,14 @@ curl http://localhost:9000/actuator/metrics
 ```
 
 **预期**：
-- [ ] 返回 JSON，`names` 数组包含大量指标名
-- [ ] 列表中包含 Forge 自定义指标（**需先通过 AI Chat 发送消息触发注册**，Micrometer 延迟注册）：
-  - [ ] `forge.profile.route`
-  - [ ] `forge.tool.calls`
-  - [ ] `forge.ooda.phases`
-  - [ ] `forge.message.duration`
-  - [ ] `forge.turn.duration`
-  - [ ] `forge.tool.duration`
+- [x] 返回 JSON，`names` 数组包含大量指标名
+- [x] 列表中包含 Forge 自定义指标（**需先通过 AI Chat 发送消息触发注册**，Micrometer 延迟注册）：
+  - [x] `forge.profile.route`
+  - [x] `forge.tool.calls`
+  - [x] `forge.ooda.phases`
+  - [x] `forge.message.duration`
+  - [x] `forge.turn.duration`
+  - [x] `forge.tool.duration`
 
 ### TC-10.3 Profile 路由指标验证
 
@@ -526,9 +526,9 @@ curl http://localhost:9000/actuator/metrics/forge.profile.route
 ```
 
 **预期**：
-- [ ] 返回指标详情 JSON
-- [ ] `measurements` 中 `COUNT` > 0
-- [ ] `availableTags` 包含 `profile` 和 `method` 两个 tag
+- [x] 返回指标详情 JSON
+- [x] `measurements` 中 `COUNT` > 0
+- [x] `availableTags` 包含 `profile` 和 `method` 两个 tag
 
 ### TC-10.4 OODA 阶段指标验证
 
@@ -538,9 +538,9 @@ curl http://localhost:9000/actuator/metrics/forge.ooda.phases
 ```
 
 **预期**：
-- [ ] 返回指标详情
-- [ ] `availableTags` 包含 `phase` tag
-- [ ] phase 值包含 `observe`、`orient`、`decide`、`complete`（如果之前有工具调用还包含 `act`）
+- [x] 返回指标详情
+- [x] `availableTags` 包含 `phase` tag
+- [x] phase 值包含 `observe`、`orient`、`decide`、`complete`（如果之前有工具调用还包含 `act`）
 
 ### TC-10.5 工具调用指标验证
 
@@ -550,9 +550,9 @@ curl http://localhost:9000/actuator/metrics/forge.tool.calls
 ```
 
 **预期**：
-- [ ] 返回指标详情
-- [ ] `availableTags` 包含 `tool` 和 `status` 两个 tag
-- [ ] tool 值包含之前调用过的工具名（如 `search_knowledge`）
+- [x] 返回指标详情
+- [x] `availableTags` 包含 `tool` 和 `status` 两个 tag
+- [x] tool 值包含之前调用过的工具名（如 `search_knowledge`）
 
 ### TC-10.6 Prometheus 格式导出
 

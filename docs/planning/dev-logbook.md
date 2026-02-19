@@ -2417,7 +2417,8 @@ echo "Regression test workspace cleaned up"
 
 | Commit | 说明 |
 |--------|------|
-| *(pending)* | fix: 11 FileExplorer bugs + enum serialization + CLAUDE.md upgrade + buglist |
+| `9b6f62e` | fix: 11 FileExplorer bugs + enum serialization + CLAUDE.md upgrade + buglist |
+| `531506c` | fix: BUG-012 AI写文件到workspace + 验收测试场景1/D/E通过 |
 
 ### 项目统计快照（Session 15）
 
@@ -2435,3 +2436,83 @@ echo "Regression test workspace cleaned up"
 | **Bug 追踪** | **12 个 Bug 已修复（docs/buglist.md）** |
 | Phase 0~1.6 | ✅ 完成 |
 | **验收测试进度** | **场景 1 + D 通过，其余待验证** |
+
+---
+
+## Session 16 — 2026-02-20：Phase 1.6 E2E 验收测试（续）
+
+### 16.1 目标
+
+继续 Phase 1.6 验收测试，修复测试中发现的 Bug。Session 15 已通过场景 1 + D + E + BUG-012，本次继续场景 2/3/5/9/10。
+
+### 16.2 Bug 修复
+
+| Bug ID | 严重等级 | 问题 | 修复 |
+|--------|---------|------|------|
+| BUG-013 | P1 | 刷新页面后 AI 不记得对话历史 | sessionId 持久化到 localStorage + 从后端 API 恢复消息历史 |
+| BUG-015 | P2 | `@设计`/`@测试` 被 ContextPicker 拦截 | ContextPicker 新增 Profiles tab（5 个静态选项）；选中 profile 时插入 `@tag` 到输入框而非 context chip |
+| BUG-015b | P2 | ContextPicker 抢焦点导致输入无法发送 | 移除 ContextPicker 自动 focus；选中后清理输入框中的 `@`；提交时关闭 picker |
+| BUG-016 | P2 | Agentic loop 8 轮耗尽后 AI 无文字输出 | MAX_TURNS 5→8 + safety net（注入 user message 强制总结）— 未完全生效，**挂起** |
+| BUG-017 | P1 | Knowledge Services 页面白屏崩溃 | ServiceType/ServiceStatus 枚举加 `@JsonValue` 序列化为小写（与 BUG-008 同类） |
+
+### 16.3 文件变更
+
+| 操作 | 文件 | 说明 |
+|------|------|------|
+| 修改 | `web-ide/frontend/src/components/chat/AiChatSidebar.tsx` | BUG-013 sessionId 持久化 + BUG-015 profile 选择 + 提交关闭 picker |
+| 修改 | `web-ide/frontend/src/components/chat/ContextPicker.tsx` | BUG-015 新增 Profiles tab + 移除自动 focus |
+| 修改 | `web-ide/frontend/src/lib/claude-client.ts` | BUG-012 workspaceId 参数（Session 15 遗留） |
+| 修改 | `web-ide/backend/.../ClaudeAgentService.kt` | MAX_TURNS 5→8 + safety net 强制总结轮 |
+| 修改 | `web-ide/backend/.../model/Models.kt` | BUG-017 ServiceType/ServiceStatus @JsonValue 小写 |
+| 修改 | `docs/buglist.md` | 新增 BUG-013~017 记录 |
+
+### 16.4 验收测试进度
+
+| 场景 | 状态 | 备注 |
+|------|------|------|
+| 场景 1（新人入职） | ✅ 3/3 | Session 15 已通过 |
+| 场景 2（AI 写代码） | ⚠️ 3/5 | TC-2.1/2.2/2.5 通过；TC-2.3/2.4 Profile 路由正常但受 BUG-016 影响输出不完整 |
+| 场景 3（MCP 工具调用） | ✅ 4/4 | 全部通过 |
+| 场景 5（知识库探索） | ✅ 5/5 | TC-5.4 修复 BUG-017 后通过 |
+| 场景 9（API 健康度） | ✅ 4/4 | curl 自动化验证：32 Skills, 5 Profiles, 9 Tools, Knowledge OK |
+| 场景 10（Actuator 指标） | ✅ 5/5 | 6 个 forge.* 指标，OODA 5 phases 全覆盖 |
+| 场景 D（FileExplorer CRUD） | ✅ 4/4 | Session 15 已通过 |
+| 场景 E（未保存+自动保存） | ✅ 3/3 | Session 15/16 已通过 |
+| **累计** | **31/33 已通过** | 2 个受 BUG-016 影响挂起 |
+
+### 16.5 待测场景
+
+- 场景 4（代码审查）、场景 6（对话高级功能）、场景 7（5 Profile 轮转）
+- 场景 8（边界异常）、场景 11（MCP 直接调用）、场景 12（工作流）
+- 场景 13（agent-eval）、场景 14（全量单元测试）、场景 15（Docker 部署）
+- 场景 A（Keycloak SSO）、场景 B（AI 交付闭环）
+
+### 16.6 经验沉淀
+
+1. **枚举序列化问题反复出现**：BUG-008（FileType/WorkspaceStatus）和 BUG-017（ServiceType/ServiceStatus）是同一类问题。Kotlin enum 默认序列化为大写，前端期望小写。应全局排查所有枚举
+2. **`docker compose` 环境变量**：`docker compose up` 默认只读 `.env`，不读 `.env.trial`。必须显式 `--env-file .env.trial`
+3. **ContextPicker 与 Profile 路由冲突**：`@` 符号被两个功能争抢。最终方案是在 Picker 中加 Profiles tab，选中后插入文本而非 chip
+4. **Agentic loop 轮数不足**：5 轮不够复杂任务。提高到 8 轮 + safety net，但 safety net 的空工具最终轮效果不佳，需进一步研究
+
+### Git 提交记录（Session 16）
+
+| Commit | 说明 |
+|--------|------|
+| *(pending)* | fix: BUG-013/015/017 + agentic safety net + 验收场景2/3/5/9/10 |
+
+### 项目统计快照（Session 16）
+
+| 指标 | 数值 |
+|------|------|
+| 总文件数 | ~325+ |
+| Git Commits | 30 |
+| Sessions | 16 |
+| 单元测试 | **147** |
+| Skills 加载 | 32 (5 profiles) |
+| MCP 工具 | 9 |
+| Docker 容器 | 4 |
+| 知识库文档 | 13 |
+| E2E 验收测试 | 89 用例，**31/33 已通过**（累计通过率 94%） |
+| **Bug 追踪** | **17 个（15 已修复，1 挂起，1 BUG-014 记录未编号）** |
+| Phase 0~1.6 | ✅ 完成 |
+| **验收测试进度** | **场景 1/3/5/9/10/D/E 全通过，场景 2 大部分通过** |

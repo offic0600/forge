@@ -45,7 +45,7 @@ class ClaudeAgentService(
     private var model: String = "claude-sonnet-4-20250514"
 
     companion object {
-        private const val MAX_AGENTIC_TURNS = 5
+        private const val MAX_AGENTIC_TURNS = 8
     }
 
     /**
@@ -425,6 +425,32 @@ class ClaudeAgentService(
 
             // No more tool calls — we're done
             break
+        }
+
+        // Safety net: if all turns exhausted and AI still wanted to use tools,
+        // inject a user message requesting summary and do one final turn WITHOUT tools
+        if (finalContent.isBlank()) {
+            logger.info("All $MAX_AGENTIC_TURNS turns exhausted with tool_use. Forcing final summary turn.")
+            onEvent(mapOf("type" to "ooda_phase", "phase" to "complete"))
+
+            // Add a user message to explicitly instruct the AI to summarize
+            currentMessages.add(Message(
+                role = Message.Role.USER,
+                content = "你已经收集了足够的信息。请基于以上工具调用的结果，直接给出完整、详细的回复。不要再调用任何工具。"
+            ))
+
+            var summaryText = StringBuilder()
+            claudeAdapter.streamWithTools(currentMessages, options, emptyList()).collect { event ->
+                when (event) {
+                    is StreamEvent.ContentDelta -> {
+                        summaryText.append(event.text)
+                        onEvent(mapOf("type" to "content", "content" to event.text))
+                    }
+                    else -> {} // ignore other events in summary turn
+                }
+            }
+            finalContent = summaryText.toString()
+            logger.debug("Summary turn produced ${finalContent.length} chars")
         }
 
         return AgenticResult(content = finalContent, toolCalls = allToolCalls)

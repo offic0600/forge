@@ -9,11 +9,12 @@ import {
   Server,
   Search,
   X,
+  UserCircle,
 } from "lucide-react";
 
 export interface ContextItem {
   id: string;
-  type: "file" | "knowledge" | "schema" | "service";
+  type: "file" | "knowledge" | "schema" | "service" | "profile";
   label: string;
   description?: string;
   preview?: string;
@@ -25,7 +26,7 @@ interface ContextPickerProps {
   onClose: () => void;
 }
 
-type Category = "files" | "knowledge" | "schema" | "services";
+type Category = "profiles" | "files" | "knowledge" | "schema" | "services";
 
 const categories: {
   id: Category;
@@ -33,10 +34,19 @@ const categories: {
   icon: React.ElementType;
   type: ContextItem["type"];
 }[] = [
+  { id: "profiles", label: "Profiles", icon: UserCircle, type: "profile" },
   { id: "files", label: "Files", icon: File, type: "file" },
   { id: "knowledge", label: "Knowledge", icon: BookOpen, type: "knowledge" },
   { id: "schema", label: "Schema", icon: Database, type: "schema" },
   { id: "services", label: "Services", icon: Server, type: "service" },
+];
+
+const PROFILE_ITEMS: ContextItem[] = [
+  { id: "profile-planning", type: "profile", label: "规划", description: "需求分析、产品规划" },
+  { id: "profile-design", type: "profile", label: "设计", description: "架构设计、API 设计、ADR" },
+  { id: "profile-development", type: "profile", label: "开发", description: "编码实现、Bug 修复、重构" },
+  { id: "profile-testing", type: "profile", label: "测试", description: "测试策略、用例设计、覆盖率" },
+  { id: "profile-ops", type: "profile", label: "运维", description: "部署、发布、监控、回滚" },
 ];
 
 export function ContextPicker({
@@ -44,13 +54,11 @@ export function ContextPicker({
   onSelect,
   onClose,
 }: ContextPickerProps) {
-  const [activeCategory, setActiveCategory] = useState<Category>("files");
+  const [activeCategory, setActiveCategory] = useState<Category>("profiles");
   const [searchQuery, setSearchQuery] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    searchRef.current?.focus();
-  }, []);
+  // No auto-focus: keep focus on the main chat input so users can keep typing
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -62,7 +70,10 @@ export function ContextPicker({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
-  const { data: items, isLoading } = useQuery<ContextItem[]>({
+  // Profiles are static (no API call needed)
+  const isProfileCategory = activeCategory === "profiles";
+
+  const { data: apiItems, isLoading } = useQuery<ContextItem[]>({
     queryKey: ["context-items", activeCategory, searchQuery, workspaceId],
     queryFn: async () => {
       const params = new URLSearchParams({
@@ -75,7 +86,17 @@ export function ContextPicker({
       return res.json();
     },
     placeholderData: (prev) => prev,
+    enabled: !isProfileCategory,
   });
+
+  const items = isProfileCategory
+    ? PROFILE_ITEMS.filter(
+        (p) =>
+          !searchQuery ||
+          p.label.includes(searchQuery) ||
+          (p.description?.includes(searchQuery) ?? false)
+      )
+    : apiItems;
 
   return (
     <div className="max-h-72 overflow-hidden">
@@ -130,6 +151,9 @@ export function ContextPicker({
               onClick={() => onSelect(item)}
               className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-left text-sm hover:bg-accent"
             >
+              {activeCategory === "profiles" && (
+                <UserCircle className="h-3.5 w-3.5 text-orange-400 flex-shrink-0" />
+              )}
               {activeCategory === "files" && (
                 <File className="h-3.5 w-3.5 text-blue-400 flex-shrink-0" />
               )}

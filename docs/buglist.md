@@ -21,6 +21,10 @@
 | BUG-010 | P2 | ✅ 已修复 | McpControllerTest mock 签名不匹配（2参数→3参数） |
 | BUG-011 | P2 | ✅ 已修复 | handleFileSelect 声明顺序错误导致 TypeScript 编译失败 |
 | BUG-012 | P0 | ✅ 已修复 | AI 不写文件到 workspace（WebSocket 未传 workspaceId） |
+| BUG-013 | P1 | ✅ 已修复 | 刷新页面后 AI 不记得对话历史（sessionId 未持久化） |
+| BUG-015 | P2 | ✅ 已修复 | @设计/@测试 等 Profile 标签被 ContextPicker 拦截，无法路由到后端 |
+| BUG-016 | P2 | ⏸ 挂起 | Agentic loop 8 轮耗尽后 AI 无文字输出（safety net 未生效） |
+| BUG-017 | P1 | ✅ 已修复 | Knowledge Services 页面白屏崩溃（ServiceType/ServiceStatus 枚举大小写） |
 
 ---
 
@@ -107,12 +111,12 @@
 
 ## 统计
 
-- **总计**: 12 个 Bug
-- **已修复**: 12 个
-- **待修复**: 0 个
+- **总计**: 16 个 Bug
+- **已修复**: 15 个
+- **挂起**: 1 个 (BUG-016)
 - **P0 (阻塞)**: 2 个 (BUG-008, BUG-012)
-- **P1 (严重)**: 2 个 (BUG-001, BUG-005)
-- **P2 (一般)**: 8 个
+- **P1 (严重)**: 3 个 (BUG-001, BUG-005, BUG-013)
+- **P2 (一般)**: 10 个
 
 ## 影响文件
 
@@ -125,7 +129,8 @@
 | `web-ide/backend/src/test/kotlin/com/forge/webide/controller/McpControllerTest.kt` | BUG-010 |
 | `web-ide/backend/src/main/kotlin/com/forge/webide/websocket/ChatWebSocketHandler.kt` | BUG-012 |
 | `web-ide/frontend/src/lib/claude-client.ts` | BUG-012 |
-| `web-ide/frontend/src/components/chat/AiChatSidebar.tsx` | BUG-012 |
+| `web-ide/frontend/src/components/chat/AiChatSidebar.tsx` | BUG-012, BUG-013, BUG-015 |
+| `web-ide/frontend/src/components/chat/ContextPicker.tsx` | BUG-015 |
 
 ---
 
@@ -141,3 +146,22 @@
   2. `AiChatSidebar.tsx`: 调用时传入 `workspaceId`
   3. `ChatWebSocketHandler.kt`: 从 payload 中提取 `workspaceId` 并传给 `claudeAgentService.streamMessage()`
 - **文件**: `claude-client.ts`, `AiChatSidebar.tsx`, `ChatWebSocketHandler.kt`
+
+### BUG-015: @Profile 标签被 ContextPicker 拦截
+- **发现**: Session 16, Phase 1.6 验收测试 TC-2.3 / TC-2.4
+- **症状**: 在聊天输入框输入 `@设计` 或 `@测试`，Context Picker 弹出并搜索 "设计"/"测试"，显示 "No results"。Profile 标签无法到达后端 ProfileRouter
+- **根因**: `AiChatSidebar.tsx` 的 `handleKeyDown` 在按下 `@` 键时无条件打开 ContextPicker，而 ContextPicker 只有 Files/Knowledge/Schema/Services 四个类别，没有 Profiles 选项
+- **修复**:
+  1. `ContextPicker.tsx`: 新增 "Profiles" 类别（放在第一个 tab），包含 5 个静态 Profile 选项（规划/设计/开发/测试/运维），不需要 API 调用
+  2. `AiChatSidebar.tsx`: `handleContextSelect` 判断 `item.type === "profile"` 时，将 `@标签名 ` 插入到输入框文本前缀，而非添加为 context attachment。这样 `@设计` 等标签保留在消息文本中，后端 ProfileRouter 可以正常检测
+- **文件**: `ContextPicker.tsx`, `AiChatSidebar.tsx`
+
+### BUG-016: Agentic loop 耗尽后无文字输出（⏸ 挂起）
+- **发现**: Session 16, Phase 1.6 验收测试 TC-2.3
+- **症状**: `@设计 帮我看下这个系统的架构`，AI 调了 8 轮工具（workspace_list_files, workspace_read_file, search_knowledge 等），全部 stopReason=TOOL_USE，最终无文字总结输出
+- **已尝试修复**:
+  1. MAX_AGENTIC_TURNS 5 → 8（仍不够）
+  2. Safety net：轮数耗尽后注入 user message + 无工具最终轮 → 产出 0 chars，未生效
+- **根因推测**: Claude API 在长工具链后的空工具调用可能不产生 ContentDelta；或 conversation 过长导致模型输出为空
+- **状态**: ⏸ 挂起，后续排查
+- **文件**: `ClaudeAgentService.kt`

@@ -134,11 +134,13 @@ data class ServiceNode(
 )
 
 enum class ServiceType {
-    SERVICE, DATABASE, QUEUE, EXTERNAL
+    SERVICE, DATABASE, QUEUE, EXTERNAL;
+    @JsonValue fun toValue() = name.lowercase()
 }
 
 enum class ServiceStatus {
-    HEALTHY, DEGRADED, DOWN
+    HEALTHY, DEGRADED, DOWN;
+    @JsonValue fun toValue() = name.lowercase()
 }
 
 data class ServiceGraph(
