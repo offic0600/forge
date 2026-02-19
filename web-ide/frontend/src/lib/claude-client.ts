@@ -46,7 +46,8 @@ class ClaudeClient {
     message: string,
     contexts: ChatContext[],
     onEvent: (event: StreamEvent) => void,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    workspaceId?: string
   ): Promise<void> {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const host = this.baseUrl || window.location.host;
@@ -89,6 +90,7 @@ class ClaudeClient {
             type: "message",
             content: message,
             contexts,
+            workspaceId,
           })
         );
       };

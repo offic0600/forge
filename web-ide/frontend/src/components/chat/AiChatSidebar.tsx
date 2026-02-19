@@ -264,7 +264,8 @@ export function AiChatSidebar({
               break;
           }
         },
-        abortController.signal
+        abortController.signal,
+        workspaceId
       );
     } catch (err) {
       if ((err as Error).name !== "AbortError") {

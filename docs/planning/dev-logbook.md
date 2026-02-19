@@ -2306,6 +2306,7 @@ fun callTool(@RequestBody request: McpToolCallRequest): ResponseEntity<McpToolCa
 | BUG-009 | P2 | rebuildFileTree 2 层 | 递归 MutableNode 树构建 | ~20min |
 | BUG-010 | P2 | mock 签名不匹配 | 添加第三个 any() | ~2min |
 | BUG-011 | P2 | 声明顺序错误 | 调整 useCallback 位置 | ~2min |
+| BUG-012 | **P0** | **WebSocket 未传 workspaceId** | 前端传 + 后端提取 | ~15min |
 
 **BUG-008 是根本原因**：`FileType.DIRECTORY` 被 Jackson 序列化为 `"DIRECTORY"`（大写），前端 TypeScript 类型定义为 `"directory"`（小写）。`node.type === "directory"` 永远 false → 所有节点都被当文件渲染 → 文件夹无展开箭头 → 层级结构不显示。
 
@@ -2337,8 +2338,10 @@ fun callTool(@RequestBody request: McpToolCallRequest): ResponseEntity<McpToolCa
 |------|------|------|
 | 场景 1：新人入职 (TC-1.1~1.3) | ✅ 3/3 | 手动 UI |
 | 场景 D：FileExplorer CRUD (TC-D.1~D.4) | ✅ 4/4 | 手动 UI（修复 11 Bug 后通过） |
+| 场景 E：编辑器增强 (TC-E.1~E.3) | ✅ 3/3 | 手动 UI |
+| 场景 2：TC-2.1 AI 写文件到 workspace | ✅ 通过 | 手动 UI（修复 BUG-012 后通过） |
 
-**待验证场景**：E, 2, 3, B, C, 4~8, 10~15, A, F~I
+**待验证场景**：2 剩余(TC-2.2~2.5), 3, B, C, 4~8, 10~15, A, F~I
 
 ---
 
@@ -2429,6 +2432,6 @@ echo "Regression test workspace cleaned up"
 | Docker 容器 | 4 (backend + frontend + nginx + keycloak) |
 | 知识库文档 | 13 |
 | E2E 验收测试 | 89 用例（场景 1 + D 已通过，含 11 Bug 修复） |
-| **Bug 追踪** | **11 个 Bug 已修复（docs/buglist.md）** |
+| **Bug 追踪** | **12 个 Bug 已修复（docs/buglist.md）** |
 | Phase 0~1.6 | ✅ 完成 |
 | **验收测试进度** | **场景 1 + D 通过，其余待验证** |

@@ -20,6 +20,7 @@
 | BUG-009 | P2 | ✅ 已修复 | rebuildFileTree 只支持 2 层扁平结构，不支持多级嵌套 |
 | BUG-010 | P2 | ✅ 已修复 | McpControllerTest mock 签名不匹配（2参数→3参数） |
 | BUG-011 | P2 | ✅ 已修复 | handleFileSelect 声明顺序错误导致 TypeScript 编译失败 |
+| BUG-012 | P0 | ✅ 已修复 | AI 不写文件到 workspace（WebSocket 未传 workspaceId） |
 
 ---
 
@@ -106,10 +107,10 @@
 
 ## 统计
 
-- **总计**: 11 个 Bug
-- **已修复**: 11 个
+- **总计**: 12 个 Bug
+- **已修复**: 12 个
 - **待修复**: 0 个
-- **P0 (阻塞)**: 1 个 (BUG-008)
+- **P0 (阻塞)**: 2 个 (BUG-008, BUG-012)
 - **P1 (严重)**: 2 个 (BUG-001, BUG-005)
 - **P2 (一般)**: 8 个
 
@@ -122,3 +123,21 @@
 | `web-ide/backend/src/main/kotlin/com/forge/webide/model/Models.kt` | BUG-008 |
 | `web-ide/frontend/src/app/workspace/[id]/page.tsx` | BUG-011 |
 | `web-ide/backend/src/test/kotlin/com/forge/webide/controller/McpControllerTest.kt` | BUG-010 |
+| `web-ide/backend/src/main/kotlin/com/forge/webide/websocket/ChatWebSocketHandler.kt` | BUG-012 |
+| `web-ide/frontend/src/lib/claude-client.ts` | BUG-012 |
+| `web-ide/frontend/src/components/chat/AiChatSidebar.tsx` | BUG-012 |
+
+---
+
+### BUG-012: AI 不写文件到 workspace（WebSocket 未传 workspaceId）
+- **发现**: Session 15, Phase 1.6 验收测试 场景 2 / 场景 B
+- **症状**: AI 能调用 workspace_list_files、search_knowledge 等读取工具，但从不调用 workspace_write_file 写入文件。代码仅在聊天中展示，不写入 workspace
+- **根因**: 三层断链：
+  1. 前端 `claude-client.ts` 的 `streamMessage()` 不接受也不传递 workspaceId 参数
+  2. WebSocket 消息 payload 中不包含 workspaceId
+  3. 后端 `ChatWebSocketHandler.kt:113` 硬编码 `workspaceId = ""`，导致 `McpProxyService.callTool()` 中 workspace 工具路由失败（需要非空 workspaceId）
+- **修复**:
+  1. `claude-client.ts`: `streamMessage()` 新增 `workspaceId` 参数，WebSocket 消息中包含 workspaceId
+  2. `AiChatSidebar.tsx`: 调用时传入 `workspaceId`
+  3. `ChatWebSocketHandler.kt`: 从 payload 中提取 `workspaceId` 并传给 `claudeAgentService.streamMessage()`
+- **文件**: `claude-client.ts`, `AiChatSidebar.tsx`, `ChatWebSocketHandler.kt`

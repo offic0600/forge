@@ -1040,9 +1040,9 @@ curl -H "Authorization: Bearer <token>" http://localhost:9000/api/chat/skills
 2. 在编辑器中修改内容（输入任意字符）
 
 **预期**：
-- [ ] 文件 tab 上出现蓝色圆点（unsaved indicator）
-- [ ] 蓝色圆点位于文件名旁
-- [ ] 继续编辑，圆点保持显示
+- [x] 文件 tab 上出现蓝色圆点（unsaved indicator）
+- [x] 蓝色圆点位于文件名旁
+- [x] 继续编辑，圆点保持显示
 
 ### TC-E.2 Cmd+S 手动保存
 
@@ -1050,9 +1050,9 @@ curl -H "Authorization: Bearer <token>" http://localhost:9000/api/chat/skills
 1. 在有未保存标记的文件上按 Cmd+S（Mac）或 Ctrl+S（Windows/Linux）
 
 **预期**：
-- [ ] 文件保存成功（发送 API 请求）
-- [ ] 蓝色圆点消失
-- [ ] 编辑器内容与保存内容一致
+- [x] 文件保存成功（发送 API 请求）
+- [x] 蓝色圆点消失
+- [x] 编辑器内容与保存内容一致
 
 ### TC-E.3 5 秒自动保存
 
@@ -1061,9 +1061,9 @@ curl -H "Authorization: Bearer <token>" http://localhost:9000/api/chat/skills
 2. 不手动保存，等待 5 秒以上
 
 **预期**：
-- [ ] 5 秒后蓝色圆点自动消失
-- [ ] 文件自动保存成功（可通过 Network tab 观察保存请求）
-- [ ] 保存后再刷新页面，内容是最新修改后的
+- [x] 5 秒后蓝色圆点自动消失
+- [x] 文件自动保存成功（可通过 Network tab 观察保存请求）
+- [x] 保存后再刷新页面，内容是最新修改后的
 
 ---
 
@@ -1270,7 +1270,7 @@ curl -X POST http://localhost:9000/api/mcp/tools/call \
 | 场景 | 用例数 | 通过 | 失败 | 备注 |
 |------|--------|------|------|------|
 | 1. 新人入职 | 3 | 3/3 | 0/3 | ✅ Session 15 验证通过 |
-| 2. 开发日常 | 5 | /5 | /5 | |
+| 2. 开发日常 | 5 | /5 | /5 | TC-2.1 AI 写文件 ✅ (BUG-012 修复后) |
 | 3. AI 工具调用 (MCP) | 4 | /4 | /4 | |
 | 4. 代码审查 | 2 | /2 | /2 | |
 | 5. 知识库探索 | 5 | /5 | /5 | |
@@ -1289,7 +1289,7 @@ curl -X POST http://localhost:9000/api/mcp/tools/call \
 | B. AI 交付闭环 | 5 | /5 | /5 | **Phase 1.6 核心** |
 | C. Context Picker 实连 | 3 | /3 | /3 | **Phase 1.6 新增** |
 | D. FileExplorer CRUD | 4 | 4/4 | 0/4 | ✅ Session 15 验证，修复 9 个 Bug 后通过 |
-| E. 编辑器增强 | 3 | /3 | /3 | **Phase 1.6 新增** |
+| E. 编辑器增强 | 3 | 3/3 | 0/3 | ✅ Session 15 验证通过 |
 | F. 知识库内容升级 | 2 | /2 | /2 | **Phase 1.6 新增** |
 | G. API 健康度升级 | 3 | /3 | /3 | **Phase 1.6 新增** |
 | H. Header + 导航增强 | 3 | /3 | /3 | **Phase 1.6 新增** |
@@ -1387,5 +1387,6 @@ open http://localhost:8180           # Keycloak 管理后台（admin/admin）
 | 15 | BUG-009 | P2 | TC-D.2 | rebuildFileTree 只支持 2 层 |
 | 15 | BUG-010 | P2 | TC-14.1 | McpControllerTest mock 签名不匹配 |
 | 15 | BUG-011 | P2 | 构建 | handleFileSelect 声明顺序错误 |
+| 15 | BUG-012 | P0 | TC-2.1, TC-B | AI 不写文件到 workspace（WebSocket 未传 workspaceId） |
 
-**全部 11 个 Bug 已在 Session 15 修复。**
+**全部 12 个 Bug 已在 Session 15 修复。**
