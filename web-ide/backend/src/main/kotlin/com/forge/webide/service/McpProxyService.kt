@@ -96,8 +96,9 @@ class McpProxyService(
      * Workspace tools (workspace_*) require a workspaceId to operate on.
      */
     fun callTool(toolName: String, arguments: Map<String, Any?>, workspaceId: String?): McpToolCallResponse {
-        if (toolName.startsWith("workspace_") && workspaceId != null) {
-            return handleWorkspaceTool(toolName, arguments, workspaceId)
+        val resolvedWsId = workspaceId ?: arguments["workspaceId"] as? String
+        if (toolName.startsWith("workspace_") && resolvedWsId != null) {
+            return handleWorkspaceTool(toolName, arguments, resolvedWsId)
         }
         return callTool(toolName, arguments)
     }

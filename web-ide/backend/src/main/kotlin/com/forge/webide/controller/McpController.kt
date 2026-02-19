@@ -26,7 +26,8 @@ class McpController(
 
     @PostMapping("/tools/call")
     fun callTool(@RequestBody request: McpToolCallRequest): ResponseEntity<McpToolCallResponse> {
-        val result = mcpProxyService.callTool(request.name, request.arguments)
+        val workspaceId = request.arguments["workspaceId"] as? String
+        val result = mcpProxyService.callTool(request.name, request.arguments, workspaceId)
         return ResponseEntity.ok(result)
     }
 

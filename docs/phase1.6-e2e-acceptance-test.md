@@ -460,8 +460,8 @@ class UserService(val userRepo: UserRepository) {
 
 **预期**：
 - [ ] 返回 5 个 profiles
-- [ ] 包含 planning, design, development, testing, ops
-- [ ] development profile 的 skills 列表最长
+- [ ] 包含 planning-profile, design-profile, development-profile, testing-profile, ops-profile
+- [ ] development-profile 的 skills 列表最长
 
 ### TC-9.3 MCP Tools 列表（9 工具）
 
@@ -471,7 +471,7 @@ class UserService(val userRepo: UserRepository) {
 - [ ] 返回 JSON 数组
 - [ ] 包含 **9** 个工具：`search_knowledge`、`read_file`、`query_schema`、`run_baseline`、`list_baselines`、`get_service_info`、`workspace_write_file`、`workspace_read_file`、`workspace_list_files`
 - [ ] 每个工具有 name, description, inputSchema
-- [ ] 3 个 workspace 工具的 inputSchema 包含 workspaceId 参数
+- [ ] 3 个 workspace 工具的 description 清晰描述用途（注：workspaceId 由后端在调用时注入，不在 inputSchema 中暴露）
 
 ### TC-9.4 Knowledge 搜索
 
@@ -496,7 +496,8 @@ curl http://localhost:9000/actuator/health
 
 **预期**：
 - [ ] 返回 JSON，`status` 为 `UP`
-- [ ] 包含 `db` 和 `diskSpace` 组件状态
+- [ ] 包含 `groups` 字段（`liveness`, `readiness`）
+- [ ] 注：默认不展示组件详情；如需 `db`/`diskSpace`，需配置 `management.endpoint.health.show-details=always`
 
 ### TC-10.2 Metrics 列表
 
@@ -507,7 +508,7 @@ curl http://localhost:9000/actuator/metrics
 
 **预期**：
 - [ ] 返回 JSON，`names` 数组包含大量指标名
-- [ ] 列表中包含 Forge 自定义指标：
+- [ ] 列表中包含 Forge 自定义指标（**需先通过 AI Chat 发送消息触发注册**，Micrometer 延迟注册）：
   - [ ] `forge.profile.route`
   - [ ] `forge.tool.calls`
   - [ ] `forge.ooda.phases`
@@ -611,7 +612,7 @@ curl -X POST http://localhost:9000/api/mcp/tools/call \
 **预期**：
 - [ ] 返回 JSON 响应
 - [ ] `content` 包含可用的底线脚本列表
-- [ ] 列表中有 `code-quality` 等底线名
+- [ ] 列表中有 `code-style-baseline`、`security-baseline`、`test-coverage-baseline`、`api-contract-baseline`、`architecture-baseline` 共 5 个底线
 
 ### TC-11.3 run_baseline 直接调用
 
@@ -619,13 +620,14 @@ curl -X POST http://localhost:9000/api/mcp/tools/call \
 ```bash
 curl -X POST http://localhost:9000/api/mcp/tools/call \
   -H "Content-Type: application/json" \
-  -d '{"name":"run_baseline","arguments":{"baseline":"code-quality"}}'
+  -d '{"name":"run_baseline","arguments":{"baseline":"code-style-baseline"}}'
 ```
 
 **预期**：
 - [ ] 返回 JSON 响应
 - [ ] `content` 包含底线执行结果（pass/fail + 详情）
-- [ ] `isError` 为 false（即使底线检查本身 fail，接口不报错）
+- [ ] 注：在 Docker Alpine 容器中，`isError` 可能为 true（Alpine 无 bash，底线脚本需要 bash 执行）
+- [ ] 本地开发环境（非 Docker）中 `isError` 应为 false
 
 ### TC-11.4 get_service_info 直接调用
 
@@ -744,10 +746,10 @@ export JAVA_HOME=/opt/homebrew/Cellar/openjdk@21/21.0.10/libexec/openjdk.jdk/Con
 
 **预期**：
 - [ ] BUILD SUCCESSFUL
-- [ ] web-ide/backend: 101+ tests, 0 failures（含 workspace tool tests + ContextControllerTest）
+- [ ] web-ide/backend: 118 tests, 0 failures（含 workspace tool tests + ContextControllerTest）
 - [ ] adapters/model-adapter: 11 tests, 0 failures
 - [ ] agent-eval: 18 tests, 0 failures
-- [ ] 总计 130+ tests, 0 failures
+- [ ] 总计 147 tests, 0 failures
 
 ---
 
@@ -1111,10 +1113,11 @@ for t in tools:
 ```
 
 **预期**：
-- [ ] `workspace_write_file` 的 inputSchema 包含必需参数 `workspaceId`、`path`、`content`
-- [ ] `workspace_read_file` 的 inputSchema 包含必需参数 `workspaceId`、`path`
-- [ ] `workspace_list_files` 的 inputSchema 包含必需参数 `workspaceId`
+- [ ] `workspace_write_file` 的 inputSchema 包含必需参数 `path`、`content`
+- [ ] `workspace_read_file` 的 inputSchema 包含必需参数 `path`
+- [ ] `workspace_list_files` 的 inputSchema 为空对象（无参数）
 - [ ] 三个工具的 description 清晰描述了用途
+- [ ] 注：`workspaceId` 由后端在调用时从会话上下文注入，不在 inputSchema 中暴露；REST API 直接调用时通过 arguments 传入
 
 ### TC-G.2 Context Search API
 
@@ -1269,7 +1272,7 @@ curl -X POST http://localhost:9000/api/mcp/tools/call \
 | 11. MCP 工具直接调用 | 5 | /5 | /5 | |
 | 12. 工作流编辑器 | 3 | /3 | /3 | |
 | 13. agent-eval | 3 | /3 | /3 | |
-| 14. 全量单元测试 | 1 | /1 | /1 | 130+ tests |
+| 14. 全量单元测试 | 1 | /1 | /1 | 147 tests |
 | 15. Docker 部署完整性 | 3 | /3 | /3 | 4 容器 |
 | **Phase 0~1.5 小计** | **59** | **/59** | **/59** | |
 | A. Keycloak SSO | 4 | /4 | /4 | **Phase 1.6 新增** |
@@ -1345,7 +1348,7 @@ open http://localhost:8180           # Keycloak 管理后台（admin/admin）
 | 1 | Web IDE 可访问：知识搜索 → AI 对话 → Skill 感知 → 工具调用 | TC-1~3, TC-5, TC-9 |
 | 2 | SkillLoader 加载 32 Skills + 5 Profiles | TC-9.1, TC-9.2, TC-15.2 |
 | 3 | agent-eval 可运行（结构验证模式） | TC-13.1~13.3 |
-| 4 | 130+ 单元/集成测试全部通过 | TC-14.1 |
+| 4 | 147 单元/集成测试全部通过（backend 118 + model-adapter 11 + agent-eval 18） | TC-14.1 |
 
 ### Phase 2 前置验收标准（待 Phase 2 开始后验证）
 

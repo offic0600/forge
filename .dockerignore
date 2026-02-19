@@ -1,0 +1,7 @@
+.git
+.gradle
+**/build
+**/node_modules
+web-ide/frontend/.next
+docs
+*.pptx
