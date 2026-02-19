@@ -114,7 +114,12 @@ class WorkspaceService {
     }
 
     fun deleteFile(workspaceId: String, path: String) {
-        fileContents[workspaceId]?.remove(path)
+        val files = fileContents[workspaceId] ?: return
+        // Remove exact match (single file)
+        files.remove(path)
+        // Also remove all files under this path (folder deletion)
+        val prefix = "$path/"
+        files.keys.removeIf { it.startsWith(prefix) }
         rebuildFileTree(workspaceId)
     }
 
@@ -194,66 +199,61 @@ class WorkspaceService {
     private fun rebuildFileTree(workspaceId: String) {
         val files = fileContents[workspaceId] ?: return
 
-        // Build tree structure from flat paths
-        val rootNodes = mutableMapOf<String, FileNode>()
+        // Mutable intermediate node for building nested tree
+        class MutableNode(
+            val name: String,
+            val path: String,
+            var type: FileType,
+            var size: Long? = null,
+            val childMap: MutableMap<String, MutableNode> = mutableMapOf()
+        )
 
-        for (path in files.keys.sorted()) {
-            val parts = path.split("/")
-            if (parts.size == 1) {
-                rootNodes[path] = FileNode(
-                    name = parts[0],
-                    path = path,
-                    type = FileType.FILE,
-                    size = files[path]?.length?.toLong()
-                )
-            } else {
-                // Ensure parent directories exist
-                var currentPath = ""
-                for (i in 0 until parts.size - 1) {
-                    val dirName = parts[i]
-                    currentPath = if (currentPath.isEmpty()) dirName else "$currentPath/$dirName"
+        val root = MutableNode("", "", FileType.DIRECTORY)
 
-                    if (!rootNodes.containsKey(currentPath) && i == 0) {
-                        rootNodes[currentPath] = FileNode(
-                            name = dirName,
-                            path = currentPath,
-                            type = FileType.DIRECTORY,
-                            children = mutableListOf()
-                        )
+        for (filePath in files.keys.sorted()) {
+            val parts = filePath.split("/")
+            var current = root
+            for (i in parts.indices) {
+                val part = parts[i]
+                val isLast = i == parts.size - 1
+                val childPath = parts.take(i + 1).joinToString("/")
+
+                if (isLast) {
+                    // Leaf file node
+                    current.childMap[part] = MutableNode(
+                        name = part,
+                        path = childPath,
+                        type = FileType.FILE,
+                        size = files[filePath]?.length?.toLong()
+                    )
+                } else {
+                    // Intermediate directory node
+                    current = current.childMap.getOrPut(part) {
+                        MutableNode(name = part, path = childPath, type = FileType.DIRECTORY)
                     }
                 }
             }
         }
 
-        // Simplified tree: just build two levels
-        val tree = mutableListOf<FileNode>()
-        val dirMap = mutableMapOf<String, MutableList<FileNode>>()
-
-        for (path in files.keys.sorted()) {
-            val parts = path.split("/")
-            if (parts.size == 1) {
-                tree.add(FileNode(name = parts[0], path = path, type = FileType.FILE, size = files[path]?.length?.toLong()))
+        fun toFileNode(node: MutableNode): FileNode {
+            return if (node.childMap.isNotEmpty()) {
+                FileNode(
+                    name = node.name,
+                    path = node.path,
+                    type = FileType.DIRECTORY,
+                    children = node.childMap.values
+                        .map { toFileNode(it) }
+                        .sortedWith(compareBy<FileNode> { it.type != FileType.DIRECTORY }.thenBy { it.name })
+                )
+            } else if (node.type == FileType.DIRECTORY) {
+                FileNode(name = node.name, path = node.path, type = FileType.DIRECTORY, children = emptyList())
             } else {
-                val dirName = parts[0]
-                val children = dirMap.getOrPut(dirName) { mutableListOf() }
-                children.add(FileNode(
-                    name = parts.drop(1).joinToString("/"),
-                    path = path,
-                    type = FileType.FILE,
-                    size = files[path]?.length?.toLong()
-                ))
+                FileNode(name = node.name, path = node.path, type = FileType.FILE, size = node.size)
             }
         }
 
-        for ((dirName, children) in dirMap) {
-            tree.add(FileNode(
-                name = dirName,
-                path = dirName,
-                type = FileType.DIRECTORY,
-                children = children
-            ))
-        }
-
-        fileTrees[workspaceId] = tree
+        fileTrees[workspaceId] = root.childMap.values
+            .map { toFileNode(it) }
+            .sortedWith(compareBy<FileNode> { it.type != FileType.DIRECTORY }.thenBy { it.name })
     }
 }

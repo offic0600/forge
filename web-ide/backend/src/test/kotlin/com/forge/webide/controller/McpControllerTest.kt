@@ -60,7 +60,7 @@ class McpControllerTest {
 
     @Test
     fun `POST tools call invokes tool and returns result`() {
-        every { mcpProxyService.callTool("search_knowledge", any()) } returns McpToolCallResponse(
+        every { mcpProxyService.callTool("search_knowledge", any(), any()) } returns McpToolCallResponse(
             content = listOf(McpContent(type = "text", text = "Found 3 documents")),
             isError = false
         )

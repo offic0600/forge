@@ -1,5 +1,6 @@
 package com.forge.webide.model
 
+import com.fasterxml.jackson.annotation.JsonValue
 import java.time.Instant
 import java.util.UUID
 
@@ -18,7 +19,10 @@ data class Workspace(
 )
 
 enum class WorkspaceStatus {
-    CREATING, ACTIVE, SUSPENDED, ERROR
+    CREATING, ACTIVE, SUSPENDED, ERROR;
+
+    @JsonValue
+    fun toValue(): String = name.lowercase()
 }
 
 data class CreateWorkspaceRequest(
@@ -38,7 +42,10 @@ data class FileNode(
 )
 
 enum class FileType {
-    FILE, DIRECTORY
+    FILE, DIRECTORY;
+
+    @JsonValue
+    fun toValue(): String = name.lowercase()
 }
 
 data class FileContentRequest(

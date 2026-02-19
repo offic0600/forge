@@ -74,6 +74,27 @@ function getFileIcon(name: string, isDirectory: boolean, isOpen: boolean) {
   }
 }
 
+/** Check if a name already exists among siblings at the same level */
+function hasDuplicateSibling(
+  nodes: FileNode[],
+  fullPath: string
+): boolean {
+  const parts = fullPath.split("/");
+  const name = parts[parts.length - 1];
+
+  // Navigate to the parent directory level
+  let siblings = nodes;
+  for (let i = 0; i < parts.length - 1; i++) {
+    const dir = siblings.find(
+      (n) => n.name === parts[i] && n.type === "directory"
+    );
+    if (!dir?.children) return false; // Parent doesn't exist yet
+    siblings = dir.children;
+  }
+
+  return siblings.some((n) => n.name === name);
+}
+
 interface ContextMenuState {
   visible: boolean;
   x: number;
@@ -116,9 +137,10 @@ function TreeNode({
         }`}
         style={{ paddingLeft: `${depth * 12 + 8}px` }}
         onClick={handleClick}
-        onContextMenu={(e) =>
-          onContextMenu(e, node.path, node.type === "directory")
-        }
+        onContextMenu={(e) => {
+          e.stopPropagation(); // Prevent bubbling to container
+          onContextMenu(e, node.path, node.type === "directory");
+        }}
       >
         {node.type === "directory" ? (
           expanded ? (
@@ -207,21 +229,39 @@ export function FileExplorer({
     closeContextMenu();
   }, [contextMenu, onFileSelect, closeContextMenu]);
 
+  /** Get parent path for context menu actions */
+  const getParentPath = useCallback(() => {
+    if (!contextMenu.path) return undefined;
+    if (contextMenu.isDirectory) return contextMenu.path;
+    // For files, extract parent directory
+    const lastSlash = contextMenu.path.lastIndexOf("/");
+    return lastSlash > 0 ? contextMenu.path.substring(0, lastSlash) : undefined;
+  }, [contextMenu.path, contextMenu.isDirectory]);
+
   const handleNewFile = useCallback(
     async (parentPath?: string) => {
       const prefix = parentPath ? `${parentPath}/` : "";
       const fileName = window.prompt("New file name:", `${prefix}new-file.ts`);
       if (!fileName) return;
+
+      // Sibling-level duplicate check
+      if (hasDuplicateSibling(files, fileName)) {
+        const name = fileName.split("/").pop();
+        window.alert(`"${name}" already exists in this directory.`);
+        return;
+      }
+
       try {
         await workspaceApi.createFile(workspaceId, fileName, "");
         onFileTreeChanged?.();
         onFileSelect(fileName);
       } catch (err) {
         console.error("Failed to create file:", err);
+        window.alert("Failed to create file.");
       }
       closeContextMenu();
     },
-    [workspaceId, onFileTreeChanged, onFileSelect, closeContextMenu]
+    [workspaceId, files, onFileTreeChanged, onFileSelect, closeContextMenu]
   );
 
   const handleNewFolder = useCallback(
@@ -229,15 +269,24 @@ export function FileExplorer({
       const prefix = parentPath ? `${parentPath}/` : "";
       const folderName = window.prompt("New folder name:", `${prefix}new-folder`);
       if (!folderName) return;
+
+      // Sibling-level duplicate check
+      if (hasDuplicateSibling(files, folderName)) {
+        const name = folderName.split("/").pop();
+        window.alert(`"${name}" already exists in this directory.`);
+        return;
+      }
+
       try {
         await workspaceApi.createFile(workspaceId, `${folderName}/.gitkeep`, "");
         onFileTreeChanged?.();
       } catch (err) {
         console.error("Failed to create folder:", err);
+        window.alert("Failed to create folder.");
       }
       closeContextMenu();
     },
-    [workspaceId, onFileTreeChanged, closeContextMenu]
+    [workspaceId, files, onFileTreeChanged, closeContextMenu]
   );
 
   const handleRename = useCallback(
@@ -248,6 +297,14 @@ export function FileExplorer({
         closeContextMenu();
         return;
       }
+
+      // Sibling-level duplicate check
+      if (hasDuplicateSibling(files, newPath)) {
+        const name = newPath.split("/").pop();
+        window.alert(`"${name}" already exists in this directory.`);
+        return;
+      }
+
       try {
         const content = await workspaceApi.getFileContent(workspaceId, oldPath);
         await workspaceApi.createFile(workspaceId, newPath, content);
@@ -256,10 +313,11 @@ export function FileExplorer({
         onFileSelect(newPath);
       } catch (err) {
         console.error("Failed to rename file:", err);
+        window.alert("Failed to rename file.");
       }
       closeContextMenu();
     },
-    [workspaceId, contextMenu.path, onFileTreeChanged, onFileSelect, closeContextMenu]
+    [workspaceId, files, contextMenu.path, onFileTreeChanged, onFileSelect, closeContextMenu]
   );
 
   const handleDelete = useCallback(
@@ -311,10 +369,24 @@ export function FileExplorer({
       </div>
 
       {/* File Tree */}
-      <div className="py-1">
+      <div
+        className="py-1 flex-1"
+        onContextMenu={(e) => {
+          e.preventDefault();
+          setContextMenu({
+            visible: true,
+            x: e.clientX,
+            y: e.clientY,
+            path: "",
+            isDirectory: true,
+          });
+        }}
+      >
         {files.length === 0 ? (
           <div className="px-3 py-8 text-center text-xs text-muted-foreground">
-            No files in workspace
+            No files in workspace.
+            <br />
+            Right-click to create a file.
           </div>
         ) : (
           files
@@ -356,31 +428,31 @@ export function FileExplorer({
           )}
           <button
             className="flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent"
-            onClick={() =>
-              handleNewFile(contextMenu.isDirectory ? contextMenu.path : undefined)
-            }
+            onClick={() => handleNewFile(getParentPath())}
           >
             <FilePlus className="h-3.5 w-3.5" />
             New File
           </button>
-          {contextMenu.isDirectory && (
-            <button
-              className="flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent"
-              onClick={() => handleNewFolder(contextMenu.path)}
-            >
-              <FolderPlus className="h-3.5 w-3.5" />
-              New Folder
-            </button>
-          )}
-          <div className="my-1 border-t border-border" />
           <button
             className="flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent"
-            onClick={handleCopyPath}
+            onClick={() => handleNewFolder(getParentPath())}
           >
-            <Copy className="h-3.5 w-3.5" />
-            Copy Path
+            <FolderPlus className="h-3.5 w-3.5" />
+            New Folder
           </button>
-          {!contextMenu.isDirectory && (
+          {contextMenu.path && (
+            <>
+              <div className="my-1 border-t border-border" />
+              <button
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent"
+                onClick={handleCopyPath}
+              >
+                <Copy className="h-3.5 w-3.5" />
+                Copy Path
+              </button>
+            </>
+          )}
+          {!contextMenu.isDirectory && contextMenu.path && (
             <>
               <button
                 className="flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent"
@@ -398,14 +470,18 @@ export function FileExplorer({
               </button>
             </>
           )}
-          <div className="my-1 border-t border-border" />
-          <button
-            className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-destructive hover:bg-accent"
-            onClick={handleDelete}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-            Delete
-          </button>
+          {contextMenu.path && (
+            <>
+              <div className="my-1 border-t border-border" />
+              <button
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-destructive hover:bg-accent"
+                onClick={handleDelete}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Delete
+              </button>
+            </>
+          )}
         </div>
       )}
     </div>

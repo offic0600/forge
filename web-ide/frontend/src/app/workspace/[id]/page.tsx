@@ -48,6 +48,23 @@ export default function WorkspacePage() {
   const [unsavedFiles, setUnsavedFiles] = useState<Set<string>>(new Set());
   const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  const handleFileSelect = useCallback(
+    async (filePath: string) => {
+      setActiveFile(filePath);
+      if (!openFiles.includes(filePath)) {
+        setOpenFiles((prev) => [...prev, filePath]);
+      }
+      try {
+        const content = await workspaceApi.getFileContent(workspaceId, filePath);
+        setFileContent(content);
+      } catch (err) {
+        console.error("Failed to load file:", err);
+        setFileContent("// Failed to load file content");
+      }
+    },
+    [workspaceId, openFiles]
+  );
+
   // Listen for file_changed events from AI chat
   useEffect(() => {
     const handler = (e: Event) => {
@@ -66,23 +83,6 @@ export default function WorkspacePage() {
     window.addEventListener("forge:file-changed", handler);
     return () => window.removeEventListener("forge:file-changed", handler);
   }, [workspaceId, queryClient, handleFileSelect]);
-
-  const handleFileSelect = useCallback(
-    async (filePath: string) => {
-      setActiveFile(filePath);
-      if (!openFiles.includes(filePath)) {
-        setOpenFiles((prev) => [...prev, filePath]);
-      }
-      try {
-        const content = await workspaceApi.getFileContent(workspaceId, filePath);
-        setFileContent(content);
-      } catch (err) {
-        console.error("Failed to load file:", err);
-        setFileContent("// Failed to load file content");
-      }
-    },
-    [workspaceId, openFiles]
-  );
 
   const handleSave = useCallback(async () => {
     if (!activeFile) return;

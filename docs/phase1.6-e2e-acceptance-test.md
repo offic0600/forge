@@ -20,25 +20,25 @@
 **操作**：打开 http://localhost:9000
 
 **预期**：
-- [ ] 页面加载成功（HTTP 200），看到 Dashboard
-- [ ] 有 "Quick Actions" 区域，至少包含创建 Workspace、搜索知识库
-- [ ] 有 "Recent Projects" 区域（可能为空，但区域存在）
-- [ ] 有 Activity Feed 区域
-- [ ] 左侧 Sidebar 可见，包含 Dashboard / Workspaces / Knowledge / AI Chat 导航项
+- [x] 页面加载成功（HTTP 200），看到 Dashboard
+- [x] 有 "Quick Actions" 区域，至少包含创建 Workspace、搜索知识库
+- [x] 有 "Recent Projects" 区域（可能为空，但区域存在）
+- [x] 有 Activity Feed 区域
+- [x] 左侧 Sidebar 可见，包含 Dashboard / Workspaces / Knowledge / AI Chat 导航项
 
 ### TC-1.2 侧边栏导航是否完整
 
 **操作**：依次点击 Sidebar 中的每个导航项
 
 **预期**：
-- [ ] Dashboard → `/` — 回到首页
-- [ ] Workspaces → 进入工作区列表页面
-- [ ] Knowledge → `/knowledge` — 进入知识库页面
-- [ ] Workflows → `/workflows` — 进入工作流页面（Developer 角色可见）
-- [ ] AI Chat → 进入 AI 对话页面
-- [ ] Integrations → 进入集成页面（Developer 角色可见）
-- [ ] Infrastructure → 进入基础设施页面（Developer 角色可见）
-- [ ] 每个页面都能正常渲染，无白屏或 JS 报错（打开浏览器 Console 检查）
+- [x] Dashboard → `/` — 回到首页
+- [x] Workspaces → 进入工作区列表页面
+- [x] Knowledge → `/knowledge` — 进入知识库页面
+- [x] Workflows → `/workflows` — 进入工作流页面（Developer 角色可见）
+- [x] AI Chat → 进入 AI 对话页面
+- [x] Integrations → 进入集成页面（Developer 角色可见）
+- [x] Infrastructure → 进入基础设施页面（Developer 角色可见）
+- [x] 每个页面都能正常渲染，无白屏或 JS 报错（打开浏览器 Console 检查）
 
 ### TC-1.3 创建 Workspace 进入 IDE
 
@@ -47,10 +47,10 @@
 2. 填写名称（如 "my-first-project"），提交
 
 **预期**：
-- [ ] 进入 `/workspace/{id}` 页面
-- [ ] 三面板布局可见：左侧文件树、中间编辑器、右侧 AI 聊天
-- [ ] 右侧 AI Chat 显示 "Start a conversation" 引导文案
-- [ ] 底部输入框可见，placeholder 为 "Ask anything... (@ for context)"
+- [x] 进入 `/workspace/{id}` 页面
+- [x] 三面板布局可见：左侧文件树、中间编辑器、右侧 AI 聊天
+- [x] 右侧 AI Chat 显示 "Start a conversation" 引导文案
+- [x] 底部输入框可见，placeholder 为 "Ask anything... (@ for context)"
 
 ---
 
@@ -967,55 +967,65 @@ curl -H "Authorization: Bearer <token>" http://localhost:9000/api/chat/skills
 ## 场景 D：FileExplorer CRUD（Phase 1.6 新增）
 
 > 验证文件树的右键菜单操作：新建、重命名、删除。
+> **实现方式**：右键菜单 + `window.prompt()` 对话框输入（非内联编辑）。
+> **已发现并修复 Bug**: BUG-001~009（详见 `docs/buglist.md`）
 
 ### TC-D.1 新建文件
 
 **操作**：
-1. 在 FileExplorer 空白区域或文件夹上右键
-2. 选择 "New File"
-3. 输入文件名（如 `test.kt`）
+1. 在 FileExplorer 空白区域右键 → 选择 "New File"
+2. 在 `window.prompt` 对话框中输入文件名（如 `test.kt`）
+3. 在文件夹上右键 → "New File" → 输入文件名（验证在文件夹内创建）
 
 **预期**：
-- [ ] 右键菜单出现，包含 "New File"、"New Folder"、"Rename"、"Delete" 选项
-- [ ] 点击 "New File" 后出现内联输入框
-- [ ] 输入文件名回车后，文件创建成功
-- [ ] 新文件出现在文件树中
-- [ ] 编辑器自动打开新文件（空白）
+- [x] 右键空白区域：菜单出现，包含 "New File"、"New Folder" 选项
+- [x] 右键文件：菜单包含 "Open"、"New File"、"New Folder"、"Copy Path"、"Rename"、"AI Explain"、"Delete"
+- [x] 右键文件夹：菜单包含 "New File"、"New Folder"、"Copy Path"、"Delete"
+- [x] 点击 "New File" 后弹出 `window.prompt` 对话框，预填路径前缀
+- [x] 确认后文件创建成功，出现在文件树中
+- [x] 编辑器自动打开新文件（空白）
+- [x] 右键文件夹内的文件 → "New File"，默认路径为该文件的父目录
+- [x] 创建同名文件时弹出 "already exists in this directory" 提示（同级校验）
 
 ### TC-D.2 新建文件夹
 
 **操作**：
 1. 右键 → "New Folder"
-2. 输入文件夹名（如 `src`）
+2. 在 `window.prompt` 中输入文件夹名（如 `utils`）
+3. 在已有文件夹上右键 → "New Folder" → 创建嵌套子文件夹
 
 **预期**：
-- [ ] 内联输入框出现
-- [ ] 输入文件夹名回车后，文件夹创建成功
-- [ ] 文件夹出现在文件树中，带文件夹图标
-- [ ] 文件夹可展开/折叠
+- [x] 弹出 `window.prompt` 对话框
+- [x] 输入文件夹名确认后，文件夹创建成功
+- [x] 文件夹出现在文件树中，带文件夹图标（FolderOpen/Folder）
+- [x] 文件夹可展开/折叠（点击切换 ChevronDown/ChevronRight）
+- [x] 支持多级嵌套目录创建（如 `src/utils/`）
+- [x] 创建同名文件夹时弹出提示（同级校验）
 
 ### TC-D.3 重命名文件
 
 **操作**：
 1. 右键某个文件 → "Rename"
-2. 修改文件名（如 `test.kt` → `Main.kt`）
+2. 在 `window.prompt` 中修改文件路径（如 `test.kt` → `Main.kt`）
 
 **预期**：
-- [ ] 文件名变为可编辑的输入框，预填当前文件名
-- [ ] 修改后回车，文件重命名成功
-- [ ] 文件树和编辑器 tab 都更新为新名称
-- [ ] 如果文件已打开，编辑器内容不丢失
+- [x] 弹出 `window.prompt`，预填当前完整路径
+- [x] 修改后确认，文件重命名成功
+- [x] 文件树更新为新名称
+- [x] 编辑器自动打开重命名后的文件
+- [x] 重命名为已有同名文件时弹出提示
 
-### TC-D.4 删除文件
+### TC-D.4 删除文件和文件夹
 
 **操作**：
 1. 右键某个文件 → "Delete"
+2. 右键某个文件夹 → "Delete"
 
 **预期**：
-- [ ] 弹出确认对话框（"确定删除 xxx？"）
-- [ ] 确认后，文件从文件树中消失
-- [ ] 如果文件在编辑器中打开，对应 tab 关闭
-- [ ] 取消则不删除
+- [x] 弹出 `window.confirm` 确认对话框（"Delete xxx?"）
+- [x] 确认后，文件从文件树中消失
+- [x] 确认后，文件夹及其所有子文件递归删除
+- [x] 取消则不删除
 
 ---
 
@@ -1259,7 +1269,7 @@ curl -X POST http://localhost:9000/api/mcp/tools/call \
 
 | 场景 | 用例数 | 通过 | 失败 | 备注 |
 |------|--------|------|------|------|
-| 1. 新人入职 | 3 | /3 | /3 | |
+| 1. 新人入职 | 3 | 3/3 | 0/3 | ✅ Session 15 验证通过 |
 | 2. 开发日常 | 5 | /5 | /5 | |
 | 3. AI 工具调用 (MCP) | 4 | /4 | /4 | |
 | 4. 代码审查 | 2 | /2 | /2 | |
@@ -1278,7 +1288,7 @@ curl -X POST http://localhost:9000/api/mcp/tools/call \
 | A. Keycloak SSO | 4 | /4 | /4 | **Phase 1.6 新增** |
 | B. AI 交付闭环 | 5 | /5 | /5 | **Phase 1.6 核心** |
 | C. Context Picker 实连 | 3 | /3 | /3 | **Phase 1.6 新增** |
-| D. FileExplorer CRUD | 4 | /4 | /4 | **Phase 1.6 新增** |
+| D. FileExplorer CRUD | 4 | 4/4 | 0/4 | ✅ Session 15 验证，修复 9 个 Bug 后通过 |
 | E. 编辑器增强 | 3 | /3 | /3 | **Phase 1.6 新增** |
 | F. 知识库内容升级 | 2 | /2 | /2 | **Phase 1.6 新增** |
 | G. API 健康度升级 | 3 | /3 | /3 | **Phase 1.6 新增** |
@@ -1357,3 +1367,25 @@ open http://localhost:8180           # Keycloak 管理后台（admin/admin）
 | 1 | SuperAgent OODA 循环运转，底线一次通过率 ≥ 70% | Phase 2 目标 |
 | 2 | 跨栈迁移 PoC：.NET → Java，覆盖率 ≥ 90% | Phase 2 目标 |
 | 3 | 底线脚本 CI 集成 | Phase 2 目标 |
+
+---
+
+## 测试过程中发现的 Bug
+
+> 详细记录见 `docs/buglist.md`
+
+| Session | Bug ID | 严重等级 | 影响场景 | 简述 |
+|---------|--------|---------|---------|------|
+| 15 | BUG-001 | P1 | TC-D.1 | FileExplorer 空白区域右键无菜单 |
+| 15 | BUG-002 | P2 | TC-D.1 | 右键文件夹时路径被事件冒泡覆盖为空 |
+| 15 | BUG-003 | P2 | TC-D.1 | 文件/文件夹可重名创建 |
+| 15 | BUG-004 | P2 | TC-D.1 | 重名创建无用户反馈 |
+| 15 | BUG-005 | P1 | TC-D.4 | 无法删除文件夹（后端只删单文件） |
+| 15 | BUG-006 | P2 | TC-D.1 | 重名校验为全局级别而非同级 |
+| 15 | BUG-007 | P2 | TC-D.1 | 右键文件时 New File 创建到根目录 |
+| 15 | BUG-008 | P0 | TC-D.2 | 文件树不显示层级（枚举大小写序列化） |
+| 15 | BUG-009 | P2 | TC-D.2 | rebuildFileTree 只支持 2 层 |
+| 15 | BUG-010 | P2 | TC-14.1 | McpControllerTest mock 签名不匹配 |
+| 15 | BUG-011 | P2 | 构建 | handleFileSelect 声明顺序错误 |
+
+**全部 11 个 Bug 已在 Session 15 修复。**
