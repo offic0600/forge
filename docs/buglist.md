@@ -22,6 +22,7 @@
 | BUG-011 | P2 | ✅ 已修复 | handleFileSelect 声明顺序错误导致 TypeScript 编译失败 |
 | BUG-012 | P0 | ✅ 已修复 | AI 不写文件到 workspace（WebSocket 未传 workspaceId） |
 | BUG-013 | P1 | ✅ 已修复 | 刷新页面后 AI 不记得对话历史（sessionId 未持久化） |
+| BUG-014 | P2 | ✅ 已修复 | ContextPicker 抢焦点，按 `@` 后无法在主输入框继续输入 |
 | BUG-015 | P2 | ✅ 已修复 | @设计/@测试 等 Profile 标签被 ContextPicker 拦截，无法路由到后端 |
 | BUG-016 | P2 | ⏸ 挂起 | Agentic loop 8 轮耗尽后 AI 无文字输出（safety net 未生效） |
 | BUG-017 | P1 | ✅ 已修复 | Knowledge Services 页面白屏崩溃（ServiceType/ServiceStatus 枚举大小写） |
@@ -107,33 +108,6 @@
 - **修复**: 将 `handleFileSelect` 的 `useCallback` 声明移到 `useEffect` 之前
 - **文件**: `web-ide/frontend/src/app/workspace/[id]/page.tsx`
 
----
-
-## 统计
-
-- **总计**: 16 个 Bug
-- **已修复**: 15 个
-- **挂起**: 1 个 (BUG-016)
-- **P0 (阻塞)**: 2 个 (BUG-008, BUG-012)
-- **P1 (严重)**: 3 个 (BUG-001, BUG-005, BUG-013)
-- **P2 (一般)**: 10 个
-
-## 影响文件
-
-| 文件 | 涉及 Bug |
-|------|---------|
-| `web-ide/frontend/src/components/editor/FileExplorer.tsx` | BUG-001~004, 006, 007 |
-| `web-ide/backend/src/main/kotlin/com/forge/webide/service/WorkspaceService.kt` | BUG-005, 009 |
-| `web-ide/backend/src/main/kotlin/com/forge/webide/model/Models.kt` | BUG-008 |
-| `web-ide/frontend/src/app/workspace/[id]/page.tsx` | BUG-011 |
-| `web-ide/backend/src/test/kotlin/com/forge/webide/controller/McpControllerTest.kt` | BUG-010 |
-| `web-ide/backend/src/main/kotlin/com/forge/webide/websocket/ChatWebSocketHandler.kt` | BUG-012 |
-| `web-ide/frontend/src/lib/claude-client.ts` | BUG-012 |
-| `web-ide/frontend/src/components/chat/AiChatSidebar.tsx` | BUG-012, BUG-013, BUG-015 |
-| `web-ide/frontend/src/components/chat/ContextPicker.tsx` | BUG-015 |
-
----
-
 ### BUG-012: AI 不写文件到 workspace（WebSocket 未传 workspaceId）
 - **发现**: Session 15, Phase 1.6 验收测试 场景 2 / 场景 B
 - **症状**: AI 能调用 workspace_list_files、search_knowledge 等读取工具，但从不调用 workspace_write_file 写入文件。代码仅在聊天中展示，不写入 workspace
@@ -146,6 +120,26 @@
   2. `AiChatSidebar.tsx`: 调用时传入 `workspaceId`
   3. `ChatWebSocketHandler.kt`: 从 payload 中提取 `workspaceId` 并传给 `claudeAgentService.streamMessage()`
 - **文件**: `claude-client.ts`, `AiChatSidebar.tsx`, `ChatWebSocketHandler.kt`
+
+### BUG-013: 刷新页面后 AI 不记得对话历史
+- **发现**: Session 16, Phase 1.6 验收测试 TC-2.2
+- **症状**: 刷新浏览器页面后，AI 聊天侧边栏显示空白，之前的对话消息全部丢失。用户需要重新开始对话
+- **根因**: `AiChatSidebar.tsx` 每次组件挂载时调用 `createSession()` 创建新 sessionId，旧 sessionId 未持久化。刷新后新 session 无历史消息
+- **修复**:
+  1. `AiChatSidebar.tsx`: sessionId 持久化到 `localStorage`（key: `chat-session-{workspaceId}`）
+  2. 组件挂载时先检查 localStorage 是否有已有 sessionId，有则复用
+  3. 通过后端 API `/api/chat/sessions/{id}/messages` 恢复历史消息
+- **文件**: `web-ide/frontend/src/components/chat/AiChatSidebar.tsx`
+
+### BUG-014: ContextPicker 抢焦点
+- **发现**: Session 16, Phase 1.6 验收测试 TC-2.3
+- **症状**: 在聊天输入框按下 `@` 后，ContextPicker 弹出并自动获取焦点。后续输入的文字进入 ContextPicker 的搜索框而非主输入框，用户无法继续输入消息并发送
+- **根因**: `ContextPicker.tsx` 的 `useEffect` 在组件挂载时自动调用 `searchInputRef.current?.focus()`，将焦点从主输入框抢走
+- **修复**:
+  1. `ContextPicker.tsx`: 移除自动 focus 的 `useEffect`
+  2. `AiChatSidebar.tsx`: `handleContextSelect` 选中后调用 `inputRef.current?.focus()` 将焦点还给主输入框
+  3. `AiChatSidebar.tsx`: `handleSubmit` 中增加 `setShowContextPicker(false)` 确保提交时关闭 picker
+- **文件**: `ContextPicker.tsx`, `AiChatSidebar.tsx`
 
 ### BUG-015: @Profile 标签被 ContextPicker 拦截
 - **发现**: Session 16, Phase 1.6 验收测试 TC-2.3 / TC-2.4
@@ -165,3 +159,36 @@
 - **根因推测**: Claude API 在长工具链后的空工具调用可能不产生 ContentDelta；或 conversation 过长导致模型输出为空
 - **状态**: ⏸ 挂起，后续排查
 - **文件**: `ClaudeAgentService.kt`
+
+### BUG-017: Knowledge Services 页面白屏崩溃
+- **发现**: Session 16, Phase 1.6 验收测试 TC-5.4
+- **症状**: 切换到 Knowledge 页面的 Services 标签页时，页面白屏崩溃。浏览器控制台无明显报错，但 React 渲染异常
+- **根因**: 后端 `/api/knowledge/services` 返回的 JSON 中 `ServiceType` 为 `"SERVICE"`（大写）、`ServiceStatus` 为 `"HEALTHY"`（大写），前端 TypeScript 类型定义期望小写 `"service"`/`"healthy"`。类型不匹配导致条件渲染逻辑异常（与 BUG-008 为同类问题）
+- **修复**: 在 `ServiceType` 和 `ServiceStatus` 枚举上添加 `@JsonValue fun toValue() = name.lowercase()`，确保序列化为小写
+- **文件**: `web-ide/backend/src/main/kotlin/com/forge/webide/model/Models.kt`
+
+---
+
+## 统计
+
+- **总计**: 17 个 Bug
+- **已修复**: 16 个
+- **挂起**: 1 个 (BUG-016)
+- **P0 (阻塞)**: 2 个 (BUG-008, BUG-012)
+- **P1 (严重)**: 4 个 (BUG-001, BUG-005, BUG-013, BUG-017)
+- **P2 (一般)**: 11 个
+
+## 影响文件
+
+| 文件 | 涉及 Bug |
+|------|---------|
+| `web-ide/frontend/src/components/editor/FileExplorer.tsx` | BUG-001~004, 006, 007 |
+| `web-ide/backend/src/main/kotlin/com/forge/webide/service/WorkspaceService.kt` | BUG-005, 009 |
+| `web-ide/backend/src/main/kotlin/com/forge/webide/model/Models.kt` | BUG-008, 017 |
+| `web-ide/frontend/src/app/workspace/[id]/page.tsx` | BUG-011 |
+| `web-ide/backend/src/test/kotlin/com/forge/webide/controller/McpControllerTest.kt` | BUG-010 |
+| `web-ide/backend/src/main/kotlin/com/forge/webide/websocket/ChatWebSocketHandler.kt` | BUG-012 |
+| `web-ide/frontend/src/lib/claude-client.ts` | BUG-012 |
+| `web-ide/frontend/src/components/chat/AiChatSidebar.tsx` | BUG-012, 013, 014, 015 |
+| `web-ide/frontend/src/components/chat/ContextPicker.tsx` | BUG-014, 015 |
+| `web-ide/backend/src/main/kotlin/com/forge/webide/service/ClaudeAgentService.kt` | BUG-016 |
