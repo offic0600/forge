@@ -3063,7 +3063,26 @@ echo "Regression test workspace cleaned up"
 | MCP 工具 | **11 builtin**（+workspace_compile, +workspace_test）+ 外部 |
 | Docker 容器 | **6** |
 | 知识库文档 | 13 |
-| Phase 3 验收 | **24 用例（待执行）** |
+| Phase 3 验收 | **24 用例：20 通过 + 2 部分 + 2 待 UI 验证（83.3%）** |
 | **Bug 追踪** | **33 个（32 已修复，1 挂起 BUG-016）** |
-| **Phase 3 状态** | **✅ 实现完成（6 模块 16 步）** |
+| **Phase 3 状态** | **✅ 实现完成 + 验收 83.3%** |
 | baseline 版本 | **v1.7** |
+
+### 22.5 验收测试执行
+
+**执行方式**：WebSocket 脚本自动化（`ws-test-phase3.py` + `ws-hitl-approve.py`）+ curl API 验证
+
+**关键验证结果**：
+- sub_step 事件：16 条（阈值 5），含 message + timestamp 字段 ✅
+- OODA Turn 计数：Turn 1/8 → 2/8 → 3/8 递增显示 ✅
+- HITL 暂停：Planning Profile PRD 输出后触发 `hitl_checkpoint status=awaiting_approval` ✅
+- HITL 审批：发送 `hitl_response action=approve` → 后端日志 `HITL checkpoint resolved: APPROVE` ✅
+- 断线恢复：WebSocket 重连后自动重发 PENDING checkpoint ✅
+- workspace_compile / workspace_test：工具注册 + schema 正确 ✅
+- Dashboard API：3 端点全部返回 200 + 正确数据结构 ✅
+- 执行记录：2 条 DB 记录（design-profile 94s + planning-profile 158s）✅
+- 度量完整性：totalSessions=2, hitlStats.approved=2, toolCallStats 5 工具 ✅
+
+**已知阻塞项**：
+1. Development Profile rate limit（system prompt 106K → 30K token 限额），需优化 skill 按需加载
+2. ExecutionLoggerService 文件日志未集成到主流程（DB 持久化已工作）
