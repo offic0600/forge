@@ -2891,30 +2891,52 @@ echo "Regression test workspace cleaned up"
 | 指标 | 数值 |
 |------|------|
 | 总文件数 | ~345+ |
-| Git Commits | 34+ |
+| Git Commits | 35+ |
 | Sessions | 19 |
-<<<<<<< HEAD
 | 单元测试 | **164**（+17 backend，model-adapter 42） |
 | 模型提供商 | **5**（anthropic, aws-bedrock, google, dashscope, openai） |
 | 模型总数 | **16**（YAML 配置） |
 | Skills 加载 | 32 (5 profiles) |
 | MCP 工具 | 9 |
-| Docker 容器 | 4 |
+| Docker 容器 | 6（+knowledge-mcp +database-mcp） |
 | 知识库文档 | 13 |
 | E2E 验收测试 | 87 用例，80/87 通过（92.0%） |
+| E2E 测试文件 | **5 个 Playwright spec** |
 | Bug 追踪 | 20 个（19 已修复，1 挂起） |
 | Phase 0~1.6 | ✅ 完成 |
+| Sprint 2.1 | ✅ 完成（34/34 通过） |
+| Sprint 2.2 | ✅ 完成（17/24 通过） |
 | Sprint 2.3 | ✅ 多模型适配器完成 |
-=======
-| 单元测试 | **147** |
-| Skills 加载 | 32 (5 profiles, 过滤后 ~20) |
-| MCP 工具 | 9 (外部 6+3 发现) |
-| Docker 容器 | **6**（+knowledge-mcp +database-mcp） |
-| 知识库文档 | 13 |
-| E2E 测试文件 | **5 个 Playwright spec** |
-| agent-eval 评估集 | **16 个 YAML** |
-| Sprint 2.1 验收 | **34/34 通过（100%）** |
-| Sprint 2.2 验收 | **17/24 通过（71%，7 待手动）** |
-| **Bug 追踪** | **24 个（23 已修复，1 挂起 BUG-016 需极端场景验证）** |
-| Phase 2 进度 | Sprint 2.1 ✅ Sprint 2.2 进行中 |
->>>>>>> origin/main
+
+---
+
+## Session 20 — 2026-02-21：前端 CI Jest 修复
+
+### 20.1 问题描述
+
+**时间**: 2026-02-21
+
+**现象**: 前端 CI 报错 `npm test` 执行失败。
+
+**错误信息**:
+```
+SyntaxError: Cannot use import statement outside a module
+```
+
+**根因分析**:
+- CI 运行 `npm test`，但 Jest 错误地收集了 `e2e/` 目录下的 Playwright 测试文件
+- `e2e/` 文件使用 `@playwright/test` 语法（ESM），Jest 无法正确解析
+- 缺少明确的 Jest 配置来排除 E2E 目录
+
+### 20.2 修复方案
+
+| 操作 | 文件 | 说明 |
+|------|------|------|
+| 新增 | `web-ide/frontend/jest.config.js` | 配置 testPathIgnorePatterns 排除 e2e/ |
+| 新增 | `web-ide/frontend/package.json` devDependencies | 安装 jest-environment-jsdom |
+
+### 20.3 Git 提交
+
+| Commit | 说明 |
+|--------|------|
+| `a7c2dce` | fix: 修复前端 CI Jest 与 Playwright 混淆问题 |
