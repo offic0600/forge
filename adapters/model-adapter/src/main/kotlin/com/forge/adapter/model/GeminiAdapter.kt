@@ -204,7 +204,7 @@ class GeminiAdapter(
                             if (functionCall != null) {
                                 val name = functionCall.get("name")?.asString ?: ""
                                 val args = functionCall.getAsJsonObject("args")
-                                val id = "gemini_call_$toolCallIndex"
+                                val id = name
                                 emit(StreamEvent.ToolUseStart(toolCallIndex, id, name))
                                 if (args != null) {
                                     emit(StreamEvent.ToolInputDelta(gson.toJson(args)))
