@@ -61,7 +61,7 @@ class EncryptionService(
      */
     fun encrypt(plaintext: String): String {
         if (plaintext.isBlank()) return ""
-        val key = secretKey ?: return plaintext
+        val key = secretKey ?: throw IllegalStateException("Encryption key is not configured. Please set FORGE_ENCRYPTION_KEY environment variable.")
 
         val iv = ByteArray(IV_LENGTH)
         secureRandom.nextBytes(iv)
