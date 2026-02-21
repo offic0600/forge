@@ -2891,7 +2891,17 @@ echo "Regression test workspace cleaned up"
 
 | Commit | 说明 |
 |--------|------|
-| *(本次提交)* | fix: Sprint 2.2 — 5 bug fixes + MCP real services + 24/24 acceptance tests pass |
+| `a7c2dce` | fix: 修复前端 CI Jest 与 Playwright 混淆问题 |
+| `2d6750b` | chore: 同步前端 package-lock.json |
+| `407cf04` | docs: 更新开发日志 Session 20 |
+| `d591813` | fix: 前端 CI 诚实配置（无单元测试则跳过） |
+
+### 20.4 经验沉淀
+
+**第一性原理分析**：
+- CI 配置 `npm test` 运行 Jest，但前端**没有单元测试文件**
+- 诚实方案：删除无用的 Jest 配置，CI 跳过不存在的测试
+- 教训：项目初期应明确测试策略，避免配置与实际不符
 
 ### 项目统计快照（Session 20）
 
@@ -2973,7 +2983,7 @@ echo "Regression test workspace cleaned up"
 
 | Commit | 说明 |
 |--------|------|
-| *(本次提交)* | docs: Sprint 2.4 试用记录 + Phase 3 实施计划 + baseline v1.6 |
+| `8d97634` | docs: Sprint 2.4 试用记录 + Phase 3 实施计划 + baseline v1.6 |
 
 ### 项目统计快照（Session 21）
 
