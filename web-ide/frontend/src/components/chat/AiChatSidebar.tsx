@@ -12,6 +12,9 @@ import {
   Zap,
   CheckCircle2,
   Settings,
+  ChevronDown,
+  ChevronRight,
+  Activity,
 } from "lucide-react";
 import { ChatMessage, type Message } from "@/components/chat/ChatMessage";
 import {
@@ -25,6 +28,8 @@ import {
   type StreamEvent,
   type OodaPhase,
 } from "@/lib/claude-client";
+import { HitlApprovalPanel } from "@/components/chat/HitlApprovalPanel";
+import { QualityPanel } from "@/components/dashboard/QualityPanel";
 
 const OODA_PHASES: {
   key: OodaPhase;
@@ -38,6 +43,18 @@ const OODA_PHASES: {
   { key: "complete", label: "Done", icon: CheckCircle2 },
 ];
 
+interface SubStep {
+  message: string;
+  timestamp: string;
+}
+
+interface BaselineResult {
+  status: string;
+  attempt?: number;
+  summary?: string;
+  baselines?: string[];
+}
+
 interface AiChatSidebarProps {
   workspaceId: string;
   activeFile: string | null;
@@ -49,6 +66,7 @@ export function AiChatSidebar({
   activeFile,
   fileContent,
 }: AiChatSidebarProps) {
+  const [activeTab, setActiveTab] = useState<"chat" | "quality">("chat");
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
@@ -71,6 +89,19 @@ export function AiChatSidebar({
     confidence: number;
   } | null>(null);
   const [oodaPhase, setOodaPhase] = useState<OodaPhase | null>(null);
+  const [activityLog, setActivityLog] = useState<SubStep[]>([]);
+  const [showActivityLog, setShowActivityLog] = useState(false);
+  const [currentTurn, setCurrentTurn] = useState<{ turn: number; maxTurns: number } | null>(null);
+  const [oodaDetail, setOodaDetail] = useState<string>("");
+  const [baselineResult, setBaselineResult] = useState<BaselineResult | null>(null);
+  const [hitlPending, setHitlPending] = useState(false);
+  const [hitlData, setHitlData] = useState<{
+    profile: string;
+    checkpoint: string;
+    deliverables: string[];
+    baselineResults?: Array<{ name: string; status: string; output?: string }>;
+    timeoutSeconds: number;
+  } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -213,6 +244,8 @@ export function AiChatSidebar({
     setShowContextPicker(false);
     setIsStreaming(true);
     setThinkingText("");
+    setActivityLog([]);
+    setBaselineResult(null);
 
     const assistantId = `assistant-${Date.now()}`;
     let fullContent = "";
@@ -230,6 +263,43 @@ export function AiChatSidebar({
           switch (event.type) {
             case "ooda_phase":
               setOodaPhase(event.phase ?? null);
+              if (event.detail) setOodaDetail(event.detail);
+              if (event.turn && event.maxTurns) {
+                setCurrentTurn({ turn: event.turn, maxTurns: event.maxTurns });
+              }
+              break;
+            case "sub_step":
+              setActivityLog((prev) => [
+                ...prev.slice(-49),
+                { message: event.message ?? "", timestamp: event.timestamp ?? new Date().toISOString() },
+              ]);
+              break;
+            case "baseline_check":
+              setBaselineResult({
+                status: event.status ?? "running",
+                attempt: event.attempt,
+                summary: event.summary,
+                baselines: event.baselines,
+              });
+              break;
+            case "tool_use_start":
+              setOodaDetail(event.toolName ?? "");
+              break;
+            case "hitl_checkpoint":
+              if (event.status === "awaiting_approval") {
+                setHitlPending(true);
+                setHitlData({
+                  profile: event.profile ?? "",
+                  checkpoint: event.checkpoint ?? "",
+                  deliverables: event.deliverables ?? [],
+                  baselineResults: event.baselineResults,
+                  timeoutSeconds: event.timeoutSeconds ?? 300,
+                });
+              } else {
+                // approved / rejected / timeout / modified
+                setHitlPending(false);
+                setHitlData(null);
+              }
               break;
             case "profile_active":
               setActiveProfile({
@@ -354,6 +424,11 @@ export function AiChatSidebar({
       setIsStreaming(false);
       setThinkingText("");
       setOodaPhase(null);
+      setOodaDetail("");
+      setCurrentTurn(null);
+      setBaselineResult(null);
+      setHitlPending(false);
+      setHitlData(null);
       abortRef.current = null;
     }
   };
@@ -363,6 +438,11 @@ export function AiChatSidebar({
     setIsStreaming(false);
     setThinkingText("");
     setOodaPhase(null);
+    setOodaDetail("");
+    setCurrentTurn(null);
+    setBaselineResult(null);
+    setHitlPending(false);
+    setHitlData(null);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -423,9 +503,23 @@ export function AiChatSidebar({
 
   return (
     <div className="flex h-full flex-col">
-      {/* Header */}
+      {/* Header with Tabs */}
       <div className="flex items-center justify-between border-b border-border px-4 py-2">
-        <h3 className="text-sm font-semibold">AI Assistant</h3>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setActiveTab("chat")}
+            className={`text-sm font-semibold ${activeTab === "chat" ? "text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            对话
+          </button>
+          <span className="text-border">|</span>
+          <button
+            onClick={() => setActiveTab("quality")}
+            className={`text-sm font-semibold ${activeTab === "quality" ? "text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            质量面板
+          </button>
+        </div>
         <div className="flex items-center gap-1">
           <ModelSelector
             selectedModel={selectedModel}
@@ -460,8 +554,15 @@ export function AiChatSidebar({
         onClose={() => setShowModelSettings(false)}
       />
 
-      {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-auto p-4 space-y-4">
+      {/* Quality Panel Tab */}
+      {activeTab === "quality" && (
+        <div className="flex-1 overflow-hidden">
+          <QualityPanel />
+        </div>
+      )}
+
+      {/* Messages (Chat Tab) */}
+      <div ref={scrollRef} className={`flex-1 overflow-auto p-4 space-y-4 ${activeTab !== "chat" ? "hidden" : ""}`}>
         {messages.length === 0 && (
           <div className="flex h-full items-center justify-center">
             <div className="text-center text-muted-foreground">
@@ -481,7 +582,7 @@ export function AiChatSidebar({
         ))}
         {isStreaming && (activeProfile || oodaPhase) && (
           <div className="space-y-1.5 mx-1">
-            {/* OODA Phase Indicator */}
+            {/* OODA Phase Indicator — enhanced with Turn info */}
             {oodaPhase && (
               <div className="flex items-center gap-0.5">
                 {OODA_PHASES.map((p) => {
@@ -509,6 +610,18 @@ export function AiChatSidebar({
                     </div>
                   );
                 })}
+                {/* Turn counter */}
+                {currentTurn && (
+                  <span className="ml-1 text-xs text-muted-foreground">
+                    Turn {currentTurn.turn}/{currentTurn.maxTurns}
+                  </span>
+                )}
+                {/* Current tool name */}
+                {oodaDetail && oodaPhase === "act" && (
+                  <span className="ml-1 text-xs text-muted-foreground font-mono truncate max-w-[120px]">
+                    {oodaDetail}
+                  </span>
+                )}
               </div>
             )}
             {/* Profile Badge */}
@@ -545,7 +658,71 @@ export function AiChatSidebar({
                 )}
               </div>
             )}
+            {/* Baseline Result */}
+            {baselineResult && (
+              <div className={`flex items-center gap-1.5 text-xs border rounded-md px-2 py-1 ${
+                baselineResult.status === "passed" ? "border-green-500/30 bg-green-500/10 text-green-400"
+                : baselineResult.status === "failed" ? "border-red-500/30 bg-red-500/10 text-red-400"
+                : baselineResult.status === "running" ? "border-blue-500/30 bg-blue-500/10 text-blue-400"
+                : "border-yellow-500/30 bg-yellow-500/10 text-yellow-400"
+              }`}>
+                <span className="font-medium">
+                  {baselineResult.status === "passed" ? "✅ 底线通过" :
+                   baselineResult.status === "failed" ? "❌ 底线失败" :
+                   baselineResult.status === "running" ? "🔄 底线检查中..." :
+                   baselineResult.status === "exhausted" ? "⚠️ 底线重试耗尽" :
+                   `底线: ${baselineResult.status}`}
+                </span>
+                {baselineResult.attempt && (
+                  <span className="text-muted-foreground">
+                    (第 {baselineResult.attempt} 次)
+                  </span>
+                )}
+                {baselineResult.summary && (
+                  <span className="truncate max-w-[200px]">{baselineResult.summary}</span>
+                )}
+              </div>
+            )}
+            {/* Activity Log (collapsible) */}
+            {activityLog.length > 0 && (
+              <div className="border border-border rounded-md bg-muted/30">
+                <button
+                  onClick={() => setShowActivityLog(!showActivityLog)}
+                  className="flex w-full items-center gap-1 px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
+                >
+                  {showActivityLog ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                  <Activity className="h-3 w-3" />
+                  <span>活动日志 ({activityLog.length})</span>
+                </button>
+                {showActivityLog && (
+                  <div className="max-h-32 overflow-auto border-t border-border px-2 py-1 space-y-0.5">
+                    {activityLog.map((step, i) => (
+                      <div key={i} className="flex items-start gap-1 text-xs text-muted-foreground">
+                        <span className="flex-shrink-0 text-muted-foreground/60">
+                          {new Date(step.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                        </span>
+                        <span>{step.message}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
+        )}
+        {/* HITL Approval Panel */}
+        {hitlPending && hitlData && (
+          <HitlApprovalPanel
+            profile={hitlData.profile}
+            checkpoint={hitlData.checkpoint}
+            deliverables={hitlData.deliverables}
+            baselineResults={hitlData.baselineResults}
+            timeoutSeconds={hitlData.timeoutSeconds}
+            onResolved={() => {
+              setHitlPending(false);
+              setHitlData(null);
+            }}
+          />
         )}
         {thinkingText && (
           <div className="flex items-start gap-2 text-sm text-muted-foreground">
@@ -568,8 +745,8 @@ export function AiChatSidebar({
         )}
       </div>
 
-      {/* Context Chips */}
-      {selectedContexts.length > 0 && (
+      {/* Context Chips (chat tab only) */}
+      {activeTab === "chat" && selectedContexts.length > 0 && (
         <div className="flex flex-wrap gap-1 border-t border-border px-4 pt-2">
           {selectedContexts.map((ctx) => (
             <span
@@ -588,8 +765,8 @@ export function AiChatSidebar({
         </div>
       )}
 
-      {/* Context Picker */}
-      {showContextPicker && (
+      {/* Context Picker (chat tab only) */}
+      {activeTab === "chat" && showContextPicker && (
         <div className="border-t border-border">
           <ContextPicker
             workspaceId={workspaceId}
@@ -599,8 +776,8 @@ export function AiChatSidebar({
         </div>
       )}
 
-      {/* Input Area */}
-      <div className="border-t border-border p-3">
+      {/* Input Area (chat tab only) */}
+      <div className={`border-t border-border p-3 ${activeTab !== "chat" ? "hidden" : ""}`}>
         <form onSubmit={handleSubmit} className="flex items-end gap-2">
           <div className="flex-1 relative">
             <textarea

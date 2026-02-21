@@ -2,13 +2,15 @@ package com.forge.webide.service
 
 import com.forge.adapter.model.*
 import com.forge.webide.model.*
+import com.forge.webide.entity.ChatMessageEntity
+import com.forge.webide.entity.ExecutionRecordEntity
+import com.forge.webide.entity.HitlCheckpointEntity
+import com.forge.webide.entity.ToolCallEntity
 import com.forge.webide.repository.ChatMessageRepository
 import com.forge.webide.repository.ChatSessionRepository
-import com.forge.webide.entity.ChatMessageEntity
-import com.forge.webide.entity.ToolCallEntity
-import com.forge.webide.service.skill.ProfileRouter
-import com.forge.webide.service.skill.SkillLoader
-import com.forge.webide.service.skill.SystemPromptAssembler
+import com.forge.webide.repository.ExecutionRecordRepository
+import com.forge.webide.repository.HitlCheckpointRepository
+import com.forge.webide.service.skill.*
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
@@ -16,7 +18,10 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import java.time.Instant
 import java.util.UUID
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 /**
  * Integrates with the Claude API via [ClaudeAdapter] for AI-powered chat capabilities.
@@ -33,6 +38,8 @@ class ClaudeAgentService(
     private val knowledgeGapDetectorService: KnowledgeGapDetectorService,
     private val chatSessionRepository: ChatSessionRepository,
     private val chatMessageRepository: ChatMessageRepository,
+    private val hitlCheckpointRepository: HitlCheckpointRepository,
+    private val executionRecordRepository: ExecutionRecordRepository,
     private val profileRouter: ProfileRouter,
     private val skillLoader: SkillLoader,
     private val systemPromptAssembler: SystemPromptAssembler,
@@ -41,6 +48,18 @@ class ClaudeAgentService(
 ) {
     private val logger = LoggerFactory.getLogger(ClaudeAgentService::class.java)
     private val executor = Executors.newFixedThreadPool(10)
+
+    // HITL checkpoint futures: sessionId → CompletableFuture<HitlDecision>
+    private val pendingCheckpoints = ConcurrentHashMap<String, CompletableFuture<HitlDecision>>()
+
+    /** Emit a fine-grained sub_step event for execution transparency. */
+    private fun emitSubStep(onEvent: (Map<String, Any?>) -> Unit, message: String) {
+        onEvent(mapOf(
+            "type" to "sub_step",
+            "message" to message,
+            "timestamp" to Instant.now().toString()
+        ))
+    }
 
     @Value("\${forge.model.name:\${forge.claude.model:claude-sonnet-4-6}}")
     private var model: String = "claude-sonnet-4-6"
@@ -159,8 +178,10 @@ class ClaudeAgentService(
                 }
 
                 // OODA: Observe — understanding user intent
-                onEvent(mapOf("type" to "ooda_phase", "phase" to "observe"))
+                onEvent(mapOf("type" to "ooda_phase", "phase" to "observe",
+                    "detail" to "解析用户意图"))
                 metricsService.recordOodaPhase("observe")
+                emitSubStep(onEvent, "解析用户意图（${message.length} 字符）")
 
                 val promptResult = buildDynamicSystemPrompt(message)
                 logger.info("Stream profile: {}, Skills: {}", promptResult.activeProfile, promptResult.loadedSkills)
@@ -172,8 +193,10 @@ class ClaudeAgentService(
                 )
 
                 // OODA: Orient — profile routed, context analyzed
-                onEvent(mapOf("type" to "ooda_phase", "phase" to "orient"))
+                onEvent(mapOf("type" to "ooda_phase", "phase" to "orient",
+                    "detail" to "路由到 ${promptResult.activeProfile}"))
                 metricsService.recordOodaPhase("orient")
+                emitSubStep(onEvent, "路由到 ${promptResult.activeProfile}，加载 ${promptResult.loadedSkills.size} 个 Skills")
 
                 // Emit profile routing info
                 onEvent(mapOf(
@@ -188,8 +211,10 @@ class ClaudeAgentService(
                 persistMessage(sessionId, Message.Role.USER, fullMessage)
 
                 // OODA: Decide — Claude formulating response
-                onEvent(mapOf("type" to "ooda_phase", "phase" to "decide"))
+                onEvent(mapOf("type" to "ooda_phase", "phase" to "decide",
+                    "detail" to "AI 制定响应策略"))
                 metricsService.recordOodaPhase("decide")
+                emitSubStep(onEvent, "组装 system prompt: ${promptResult.systemPrompt.length} 字符")
 
                 // Run the agentic loop
                 val result = runBlocking {
@@ -218,6 +243,53 @@ class ClaudeAgentService(
                     )
                 }
 
+                // HITL checkpoint: if profile has a hitlCheckpoint defined, pause for approval
+                val activeProfileDef = skillLoader.loadProfile(promptResult.activeProfile)
+                if (activeProfileDef != null && activeProfileDef.hitlCheckpoint.isNotBlank()) {
+                    val deliverables = finalResult.toolCalls
+                        .filter { it.name == "workspace_write_file" && it.status != "error" }
+                        .mapNotNull { tc -> tc.input["path"] as? String }
+
+                    val decision = awaitHitlCheckpoint(
+                        sessionId = sessionId,
+                        profile = activeProfileDef,
+                        deliverables = deliverables,
+                        baselineResults = null,
+                        onEvent = onEvent
+                    )
+
+                    when (decision.action) {
+                        HitlAction.REJECT -> {
+                            // Terminate: send summary and return
+                            val rejectContent = finalResult.content +
+                                "\n\n---\n⛔ 用户拒绝了此阶段产出。反馈: ${decision.feedback ?: "无"}"
+                            finalResult = AgenticResult(content = rejectContent, toolCalls = finalResult.toolCalls)
+                        }
+                        HitlAction.MODIFY -> {
+                            // Re-enter agentic loop with modified prompt
+                            val modifiedMessages = (history + Message(role = Message.Role.USER, content = fullMessage)).toMutableList()
+                            modifiedMessages.add(Message(role = Message.Role.ASSISTANT, content = finalResult.content))
+                            modifiedMessages.add(Message(role = Message.Role.USER, content = decision.modifiedPrompt ?: decision.feedback ?: "请修改"))
+
+                            emitSubStep(onEvent, "根据修改指令重新执行...")
+                            onEvent(mapOf("type" to "ooda_phase", "phase" to "orient", "detail" to "根据修改指令重入"))
+
+                            finalResult = runBlocking {
+                                agenticStream(
+                                    messages = modifiedMessages,
+                                    options = options,
+                                    tools = tools,
+                                    onEvent = onEvent,
+                                    workspaceId = workspaceId
+                                )
+                            }
+                        }
+                        HitlAction.APPROVE -> {
+                            // Continue normally
+                        }
+                    }
+                }
+
                 // OODA: Complete — response delivered
                 onEvent(mapOf("type" to "ooda_phase", "phase" to "complete"))
                 metricsService.recordOodaPhase("complete")
@@ -230,6 +302,25 @@ class ClaudeAgentService(
                 persistMessage(sessionId, Message.Role.ASSISTANT, finalResult.content, finalResult.toolCalls)
 
                 knowledgeGapDetectorService.analyzeForGaps(message, finalResult.content, contexts)
+
+                // Persist execution record for quality dashboard
+                try {
+                    val gson = com.google.gson.Gson()
+                    val toolCallsSummary = finalResult.toolCalls.map { tc ->
+                        mapOf("name" to tc.name, "status" to tc.status)
+                    }
+                    executionRecordRepository.save(ExecutionRecordEntity(
+                        id = UUID.randomUUID().toString(),
+                        sessionId = sessionId,
+                        profile = promptResult.activeProfile,
+                        skillsLoaded = promptResult.loadedSkills.size,
+                        toolCalls = gson.toJson(toolCallsSummary),
+                        totalDurationMs = messageDurationMs,
+                        totalTurns = finalResult.toolCalls.size.coerceAtLeast(1)
+                    ))
+                } catch (e: Exception) {
+                    logger.warn("Failed to save execution record: {}", e.message)
+                }
 
                 val assistantMessage = ChatMessage(
                     sessionId = sessionId,
@@ -352,7 +443,9 @@ class ClaudeAgentService(
             // If tool_use stop reason, execute tools and loop
             if (stopReason == StopReason.TOOL_USE && currentToolUses.isNotEmpty()) {
                 // OODA: Act — executing tools
-                onEvent(mapOf("type" to "ooda_phase", "phase" to "act"))
+                onEvent(mapOf("type" to "ooda_phase", "phase" to "act",
+                    "detail" to "执行 ${currentToolUses.size} 个工具",
+                    "turn" to turn, "maxTurns" to MAX_AGENTIC_TURNS))
                 metricsService.recordOodaPhase("act")
 
                 // Build assistant message with tool uses
@@ -365,7 +458,8 @@ class ClaudeAgentService(
 
                 // Execute each tool and collect results
                 val toolResults = mutableListOf<ToolResult>()
-                for (toolUse in currentToolUses) {
+                for ((toolIdx, toolUse) in currentToolUses.withIndex()) {
+                    emitSubStep(onEvent, "Turn $turn/$MAX_AGENTIC_TURNS — 调用 ${toolUse.name} (${toolIdx + 1}/${currentToolUses.size})")
                     val startMs = System.currentTimeMillis()
                     val result = try {
                         val mcpResult = mcpProxyService.callTool(toolUse.name, toolUse.input, workspaceId.ifBlank { null })
@@ -375,6 +469,7 @@ class ClaudeAgentService(
 
                         metricsService.recordToolCall(toolUse.name, !mcpResult.isError)
                         metricsService.recordToolDuration(toolUse.name, durationMs)
+                        emitSubStep(onEvent, "${toolUse.name} 完成 (${durationMs}ms)${if (mcpResult.isError) " ❌" else " ✅"}")
 
                         allToolCalls.add(ToolCallRecord(
                             id = toolUse.id,
@@ -408,6 +503,7 @@ class ClaudeAgentService(
 
                         metricsService.recordToolCall(toolUse.name, false)
                         metricsService.recordToolDuration(toolUse.name, durationMs)
+                        emitSubStep(onEvent, "${toolUse.name} 失败 (${durationMs}ms): ${e.message?.take(80)}")
 
                         allToolCalls.add(ToolCallRecord(
                             id = toolUse.id,
@@ -492,6 +588,108 @@ class ClaudeAgentService(
         private const val MAX_AGENTIC_TURNS = 8
         private const val MAX_BASELINE_RETRIES = 2
         private const val BASELINE_TIMEOUT_SECONDS = 30L
+        private const val HITL_TIMEOUT_SECONDS = 300L
+    }
+
+    /**
+     * Resolve a pending HITL checkpoint (called from WebSocket handler).
+     */
+    fun resolveCheckpoint(sessionId: String, decision: HitlDecision) {
+        val future = pendingCheckpoints[sessionId]
+        if (future != null) {
+            future.complete(decision)
+            logger.info("HITL checkpoint resolved for session $sessionId: ${decision.action}")
+        } else {
+            logger.warn("No pending HITL checkpoint for session $sessionId")
+        }
+    }
+
+    /**
+     * Check if a session has a pending HITL checkpoint (for reconnection).
+     */
+    fun getPendingCheckpoint(sessionId: String): HitlCheckpointEntity? {
+        return hitlCheckpointRepository.findBySessionIdAndStatus(sessionId, "PENDING").firstOrNull()
+    }
+
+    /**
+     * Trigger HITL checkpoint: emit event, persist state, wait for approval.
+     * Returns the decision (APPROVE/REJECT/MODIFY) or TIMEOUT after 5 minutes.
+     */
+    private fun awaitHitlCheckpoint(
+        sessionId: String,
+        profile: ProfileDefinition,
+        deliverables: List<String>,
+        baselineResults: List<Map<String, String>>?,
+        onEvent: (Map<String, Any?>) -> Unit
+    ): HitlDecision {
+        val checkpointId = UUID.randomUUID().toString()
+
+        // Persist to DB
+        val entity = HitlCheckpointEntity(
+            id = checkpointId,
+            sessionId = sessionId,
+            profile = profile.name,
+            checkpoint = profile.hitlCheckpoint,
+            deliverables = com.google.gson.Gson().toJson(deliverables),
+            baselineResults = baselineResults?.let { com.google.gson.Gson().toJson(it) },
+            status = "PENDING"
+        )
+        hitlCheckpointRepository.save(entity)
+
+        // Emit checkpoint event to frontend
+        onEvent(mapOf(
+            "type" to "hitl_checkpoint",
+            "status" to "awaiting_approval",
+            "profile" to profile.name,
+            "checkpoint" to profile.hitlCheckpoint,
+            "deliverables" to deliverables,
+            "baselineResults" to (baselineResults ?: emptyList<Map<String, String>>()),
+            "timeoutSeconds" to HITL_TIMEOUT_SECONDS
+        ))
+        emitSubStep(onEvent, "等待用户审批: ${profile.hitlCheckpoint}")
+
+        // Create and register future
+        val future = CompletableFuture<HitlDecision>()
+        pendingCheckpoints[sessionId] = future
+
+        return try {
+            val decision = future.get(HITL_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+
+            // Update DB
+            entity.status = decision.action.name
+            entity.feedback = decision.feedback
+            entity.resolvedAt = Instant.now()
+            hitlCheckpointRepository.save(entity)
+
+            metricsService.recordHitlResult(profile.name, decision.action.name)
+            emitSubStep(onEvent, "审批结果: ${decision.action}${if (decision.feedback != null) " — ${decision.feedback}" else ""}")
+
+            onEvent(mapOf(
+                "type" to "hitl_checkpoint",
+                "status" to decision.action.name.lowercase(),
+                "profile" to profile.name,
+                "hitlFeedback" to (decision.feedback ?: "")
+            ))
+
+            decision
+        } catch (e: java.util.concurrent.TimeoutException) {
+            entity.status = "TIMEOUT"
+            entity.resolvedAt = Instant.now()
+            hitlCheckpointRepository.save(entity)
+
+            metricsService.recordHitlResult(profile.name, "TIMEOUT")
+            emitSubStep(onEvent, "审批超时 (${HITL_TIMEOUT_SECONDS}s)，自动继续")
+
+            onEvent(mapOf(
+                "type" to "hitl_checkpoint",
+                "status" to "timeout",
+                "profile" to profile.name
+            ))
+
+            HitlDecision(action = HitlAction.APPROVE, feedback = "Auto-approved due to timeout")
+        } finally {
+            pendingCheckpoints.remove(sessionId)
+        }
     }
 
     /**
@@ -517,6 +715,7 @@ class ClaudeAgentService(
         var currentResult = result
         for (attempt in 1..MAX_BASELINE_RETRIES) {
             logger.info("Baseline auto-check attempt {}/{}", attempt, MAX_BASELINE_RETRIES)
+            emitSubStep(onEvent, "运行底线检查 (${attempt}/$MAX_BASELINE_RETRIES): ${baselineNames.joinToString()}")
 
             onEvent(mapOf(
                 "type" to "baseline_check",
@@ -526,7 +725,11 @@ class ClaudeAgentService(
             ))
 
             val report = try {
-                baselineService.runBaselines(baselineNames)
+                baselineService.runBaselines(baselineNames).also { r ->
+                    r.results.forEach { br ->
+                        metricsService.recordBaselineResult(br.name, br.status == "PASS")
+                    }
+                }
             } catch (e: Exception) {
                 logger.warn("Baseline execution failed: {}", e.message)
                 onEvent(mapOf(
@@ -541,6 +744,7 @@ class ClaudeAgentService(
 
             if (report.allPassed) {
                 logger.info("Baselines passed on attempt {}", attempt)
+                emitSubStep(onEvent, "底线检查全部通过 ✅")
                 onEvent(mapOf(
                     "type" to "baseline_check",
                     "status" to "passed",
@@ -551,6 +755,7 @@ class ClaudeAgentService(
             }
 
             logger.info("Baselines failed on attempt {}: {}", attempt, report.summary)
+            emitSubStep(onEvent, "底线检查失败 ❌: ${report.summary.take(100)}")
             onEvent(mapOf(
                 "type" to "baseline_check",
                 "status" to "failed",

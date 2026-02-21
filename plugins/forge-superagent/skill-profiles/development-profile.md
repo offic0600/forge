@@ -205,18 +205,31 @@ Generate the code:
 3. Add feature flags if needed
 4. Update dependency injection configuration
 
-### Step 5: Verify
-1. **Compile check**: Ensure the code compiles without errors
-2. **Run all tests**: `./gradlew test` or equivalent
+### Step 5: Build & Verify (标准交付流程)
+
+执行以下完整交付流程，每步使用对应工具：
+
+1. **编码** → `workspace_write_file`（写入代码文件）
+2. **编译** → `workspace_compile`（验证编译/语法检查通过）
+3. **底线** → 自动运行 `code-style-baseline` + `security-baseline` 检查
+4. **测试** → `workspace_test`（运行测试分析）
+5. **[HITL]** → 暂停，等待用户审查代码和测试结果
+6. **总结** → 输出执行报告（文件清单 + 编译结果 + 测试结果 + 底线结果）
+
+如果编译失败，修复后重新编译。如果底线失败，修复后重新检查。循环直到全部通过或达到最大轮次。
+
+**详细验证步骤**:
+1. **Compile check**: 调用 `workspace_compile` 确保无语法错误
+2. **Run tests**: 调用 `workspace_test` 分析测试覆盖
 3. **Run baselines**:
    - `code-style-baseline.sh` — fix any style violations
    - `security-baseline.sh` — fix any security issues
    - `test-coverage-baseline.sh` — add tests if coverage is below threshold
-4. **On baseline failure**:
+4. **On failure**:
    - Read the failure details carefully
    - Loop back to Observe with failure context
    - Fix the specific issue
-   - Run baselines again
+   - Run verification again
    - Maximum 3 fix loops before escalating to human
 
 ### Step 6: Prepare PR

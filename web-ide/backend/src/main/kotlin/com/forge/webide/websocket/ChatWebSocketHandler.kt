@@ -3,6 +3,8 @@ package com.forge.webide.websocket
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.forge.webide.model.*
 import com.forge.webide.service.ClaudeAgentService
+import com.forge.webide.service.skill.HitlAction
+import com.forge.webide.service.skill.HitlDecision
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import org.springframework.web.socket.CloseStatus
@@ -45,6 +47,20 @@ class ChatWebSocketHandler(
             "type" to "connected",
             "sessionId" to chatSessionId
         ))
+
+        // Check for pending HITL checkpoint (reconnection recovery)
+        val pendingCheckpoint = claudeAgentService.getPendingCheckpoint(chatSessionId)
+        if (pendingCheckpoint != null) {
+            logger.info("Resending pending HITL checkpoint for session $chatSessionId")
+            sendMessage(session, mapOf(
+                "type" to "hitl_checkpoint",
+                "status" to "awaiting_approval",
+                "profile" to pendingCheckpoint.profile,
+                "checkpoint" to pendingCheckpoint.checkpoint,
+                "deliverables" to (try { com.google.gson.Gson().fromJson(pendingCheckpoint.deliverables, List::class.java) } catch (_: Exception) { emptyList<String>() }),
+                "timeoutSeconds" to 300
+            ))
+        }
     }
 
     override fun handleTextMessage(session: WebSocketSession, message: TextMessage) {
@@ -56,6 +72,7 @@ class ChatWebSocketHandler(
 
             when (type) {
                 "message" -> handleChatMessage(session, chatSessionId, payload)
+                "hitl_response" -> handleHitlResponse(chatSessionId, payload)
                 "ping" -> sendMessage(session, mapOf("type" to "pong"))
                 else -> {
                     logger.warn("Unknown message type: $type")
@@ -136,6 +153,27 @@ class ChatWebSocketHandler(
                 }
             }
         )
+    }
+
+    private fun handleHitlResponse(chatSessionId: String, payload: Map<*, *>) {
+        val actionStr = payload["action"] as? String ?: return
+        val feedback = payload["feedback"] as? String
+        val modifiedPrompt = payload["modifiedPrompt"] as? String
+
+        val action = try {
+            HitlAction.valueOf(actionStr.uppercase())
+        } catch (e: IllegalArgumentException) {
+            logger.warn("Invalid HITL action: $actionStr")
+            return
+        }
+
+        val decision = HitlDecision(
+            action = action,
+            feedback = feedback,
+            modifiedPrompt = modifiedPrompt
+        )
+
+        claudeAgentService.resolveCheckpoint(chatSessionId, decision)
     }
 
     private fun sendMessage(session: WebSocketSession, data: Any) {

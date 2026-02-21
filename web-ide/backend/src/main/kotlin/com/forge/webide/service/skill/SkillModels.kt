@@ -53,3 +53,15 @@ data class ProfileRoutingResult(
     val confidence: Double,
     val reason: String
 )
+
+// ---- HITL (Human-In-The-Loop) types ----
+
+enum class HitlStatus { PENDING, APPROVED, REJECTED, TIMEOUT }
+
+enum class HitlAction { APPROVE, REJECT, MODIFY }
+
+data class HitlDecision(
+    val action: HitlAction,
+    val feedback: String? = null,
+    val modifiedPrompt: String? = null
+)

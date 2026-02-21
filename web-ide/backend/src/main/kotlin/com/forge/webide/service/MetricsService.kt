@@ -53,6 +53,13 @@ class MetricsService(private val meterRegistry: MeterRegistry) {
         )
     }
 
+    fun recordHitlResult(profileName: String, result: String) {
+        meterRegistry.counter(
+            "forge.hitl.results",
+            listOf(Tag.of("profile", profileName), Tag.of("result", result.lowercase()))
+        ).increment()
+    }
+
     // --- Timers ---
 
     fun recordMessageDuration(durationMs: Long) {

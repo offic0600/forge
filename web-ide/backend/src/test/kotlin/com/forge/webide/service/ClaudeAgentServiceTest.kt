@@ -65,6 +65,7 @@ class ClaudeAgentServiceTest {
             reason = "Default fallback"
         )
         every { skillLoader.loadSkillsForProfile(any(), any()) } returns emptyList()
+        every { skillLoader.loadProfile(any()) } returns defaultProfile
         every { systemPromptAssembler.assemble(any(), any()) } returns "You are a test assistant."
         every { systemPromptAssembler.fallbackPrompt() } returns "You are a test assistant."
 
@@ -78,7 +79,9 @@ class ClaudeAgentServiceTest {
             skillLoader = skillLoader,
             systemPromptAssembler = systemPromptAssembler,
             metricsService = metricsService,
-            baselineService = baselineService
+            baselineService = baselineService,
+            hitlCheckpointRepository = mockk(relaxed = true),
+            executionRecordRepository = mockk(relaxed = true)
         )
 
         // Default: no conversation history

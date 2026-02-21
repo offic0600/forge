@@ -1,6 +1,6 @@
 # Forge — 面向 AI 时代的智能交付平台
 
-> 规划基线 v1.6 | 基线日期: 2026-02-21 | 变更: v1.5.1→v1.6 Phase 2 全部完成，Phase 3 重构为人机协作闭环（HITL + 透明度 + 管道 + 度量 + 学习循环）
+> 规划基线 v1.7 | 基线日期: 2026-02-21 | 变更: v1.6→v1.7 Phase 3 已实现（6 模块 16 步：HITL 暂停点 + 执行透明度 + 编译/测试管道 + 质量度量面板 + 学习循环集成）
 
 ---
 
@@ -143,7 +143,7 @@
 | Phase 1.5 | 设计守护 + Docker 部署 | ✅ | Docker 3 容器 + E2E 验证 + 设计基线冻结 + 设计守护底线 | Claude Code |
 | Phase 1.6 | AI 交付闭环 + SSO + UX 增强 | ✅ | AI→Workspace 写文件 + Keycloak SSO + Context Picker + CRUD + 自动保存 | Claude Code |
 | Phase 2 | 质量基础设施 + OODA 增强 + 多模型 + 内部试用 | ✅ | Sprint 2.1（CI/Playwright/Bug 修复）+ Sprint 2.2（SkillLoader/MCP 真实服务）+ Sprint 2.3（多模型适配：Bedrock/Gemini/Qwen）+ Sprint 2.4（内部试用 + 反馈） | Claude Code |
-| Phase 3 | 人机协作闭环 + 方法论平台化 | 👈 下一阶段 | HITL 全量暂停点 + 执行透明度 + 编译/测试管道 + 质量度量面板 + 学习循环集成（execution-logger / skill-feedback-analyzer Spring 化） | Claude Code |
+| Phase 3 | 人机协作闭环 + 方法论平台化 | ✅ | HITL 全量暂停点 + 执行透明度 + 编译/测试管道 + 质量度量面板 + 学习循环集成（execution-logger / skill-feedback-analyzer Spring 化） | Claude Code |
 | Phase 4 | 全面上线 + 持续进化 | ⏳ | 多 Runtime 支持 + Skill 生态 + 进化环飞轮 + 垂域模型 | 任意 Runtime |
 
 ### 3.5 跨栈迁移工作流
@@ -727,7 +727,7 @@ forge-platform/                          # Gradle Monorepo (Kotlin DSL)
 - ForgeNativeRuntime（AgentLoop.kt / HookEngine.kt / ContextBuilder.kt）→ Phase 3+
 - Domain Skills 扩展 / convention-miner 跨语言增强 → Phase 3+
 
-### Phase 3：人机协作闭环 + 方法论平台化 — 👈 下一阶段
+### Phase 3：人机协作闭环 + 方法论平台化 — ✅ 已实现
 
 > **核心理念**：Sprint 2.4 内部试用暴露了平台"AI 独舞"模式的根本问题——缺少"计划预览 → 人工审批 → 分步执行 → 结果度量"闭环。Phase 3 优先解决人机协作体验（HITL + 透明度 + 管道 + 度量），同时将 Phase 0-2 手动验证的方法论（execution-logger / skill-feedback-analyzer）Spring 化集成。
 >
@@ -847,7 +847,7 @@ forge-platform/                          # Gradle Monorepo (Kotlin DSL)
 Phase 0       Phase 1          Phase 1.5         Phase 1.6            Phase 2                         Phase 3
 骨架搭建       实连+跨栈基础      设计守护+Docker    AI交付闭环+SSO        质量+OODA+多模型+试用              人机协作闭环
 244 files     37 tests         3容器+基线冻结      4容器+9工具+147测试   6容器+13模型+Sprint2.1-2.4       HITL+管道+度量
-──── ✅ ── ── ──── ✅ ── ── ── ──── ✅ ── ── ── ──── ✅ ── ── ── ──── ✅ ── ── ── ── ── ── 👈 下一阶段
+──── ✅ ── ── ──── ✅ ── ── ── ──── ✅ ── ── ── ──── ✅ ── ── ── ──── ✅ ── ── ── ──── ✅ ── ── 👈 Phase 4
   W1-3          W4-8                                                     W9-14                          W15-20
 ```
 
@@ -865,7 +865,7 @@ Phase 0       Phase 1          Phase 1.5         Phase 1.6            Phase 2   
 | Phase 2 Sprint 2.2 OODA + MCP 真实服务 | ✅ 完成（6 容器 + SkillLoader 增强 + 底线自动检查，24/24 验收通过） |
 | Phase 2 Sprint 2.3 多模型适配 | ✅ 完成（5 Provider，13+ 模型，Bedrock/Gemini/Qwen） |
 | Phase 2 Sprint 2.4 内部试用 | ✅ 完成（试用执行 + 4 条核心反馈收集） |
-| Phase 3 人机协作闭环 | 👈 下一阶段（6 模块 16 步） |
+| Phase 3 人机协作闭环 | ✅ 完成（6 模块 16 步：HITL 暂停点 + 执行透明度 + 编译/测试管道 + 质量面板 + 学习循环，24 验收用例） |
 | Phase 4 全面上线 | ⏳ 待开始 |
 
 ### 已识别 Gap
@@ -878,12 +878,12 @@ Phase 0       Phase 1          Phase 1.5         Phase 1.6            Phase 2   
 | ~~MCP Server 真实化~~ | ~~knowledge + database 真实服务~~ | ~~Phase 2~~ | ✅ Sprint 2.2（6 容器） |
 | ~~多模型适配~~ | ~~Bedrock/Gemini/Qwen 适配器~~ | ~~Phase 2~~ | ✅ Sprint 2.3（13+ 模型） |
 | ~~内部用户试用~~ | ~~3-5 人实际使用~~ | ~~Phase 2~~ | ✅ Sprint 2.4（试用 + 4 条反馈） |
-| HITL 无运行时暂停 | 仅靠 system prompt 提示，AI 自行决定是否暂停，无强制机制 | Phase 3 | 模块 2（Step 4-7） |
-| 前端缺 4 种事件处理 | baseline_check、tool_use_start、hitl_checkpoint、sub_step 未处理 | Phase 3 | 模块 1-2（Step 2-3, 7） |
-| 无审批回传通道 | WebSocket 仅支持 message 和 ping 入站，无 hitl_response | Phase 3 | 模块 2（Step 5） |
-| 编译/测试工具不存在 | McpProxyService 无 workspace_compile / workspace_test | Phase 3 | 模块 3（Step 8-9） |
-| 度量无可视化 | Micrometer 数据仅在 JMX/Actuator，无前端面板 | Phase 3 | 模块 4（Step 12-13） |
-| Learning Loop 未集成 | 3 个组件是独立 .kt 文件，不是 Spring Service | Phase 3 | 模块 5（Step 14-15） |
+| ~~HITL 无运行时暂停~~ | ~~仅靠 system prompt 提示，AI 自行决定是否暂停~~ | ~~Phase 3~~ | ✅ 模块 2（HitlCheckpointEntity + CompletableFuture 暂停） |
+| ~~前端缺 4 种事件处理~~ | ~~baseline_check、tool_use_start、hitl_checkpoint、sub_step~~ | ~~Phase 3~~ | ✅ 模块 1-2（claude-client.ts + AiChatSidebar.tsx） |
+| ~~无审批回传通道~~ | ~~WebSocket 仅支持 message 和 ping 入站~~ | ~~Phase 3~~ | ✅ 模块 2（hitl_response 消息类型） |
+| ~~编译/测试工具不存在~~ | ~~McpProxyService 无 compile / test~~ | ~~Phase 3~~ | ✅ 模块 3（workspace_compile + workspace_test 语法分析） |
+| ~~度量无可视化~~ | ~~Micrometer 数据仅在 JMX/Actuator~~ | ~~Phase 3~~ | ✅ 模块 4（DashboardController 3 端点 + QualityPanel） |
+| ~~Learning Loop 未集成~~ | ~~3 个组件是独立 .kt 文件~~ | ~~Phase 3~~ | ✅ 模块 5（ExecutionLoggerService + SkillFeedbackService Spring 化） |
 | ForgeNativeRuntime | AgentLoop.kt / HookEngine.kt / ContextBuilder.kt 完整抽象 | Phase 3+ | 待评估 |
 | asset-extractor 自动化 | 从执行日志提取知识资产 → 自动更新 Skill / 知识库 | Phase 3+ | 待评估 |
 
@@ -1021,4 +1021,6 @@ Phase 4：飞轮效应
 | v1.5 | 2026-02-20 | Phase 2 计划纳入 + 方法论升级 + 整体审视：Phase 2 从 12 交付物重构为 Sprint 2.1/2.2/2.3；新增设计原则 13-14（场景先行验收 + 本地验证优先）；新增 §11 交付方法论（四维记忆系统 + PDCA + 经验编码管道）；度量体系加入 Phase 1.6 实际数据（E2E 92%、Bug 修复率 95%、7 个 Prometheus 指标）；更新进度基线到 Session 18（325+ 文件 / 50K+ 行 / 147 测试 / 34 commits）；Gap 清单细化到 Sprint 级别；**整体审视**：§1.1 新增目标 6（方法论内化）；§1.3 新增核心判断（手动方法论→平台能力种子）；§3.6 ForgeNativeRuntime 增加手动实践映射列；§4.6 进化环增加方法论→平台组件映射表；Phase 3 重写为「交付方法论平台化 + 进化环闭合」（Sprint 3.1/3.2/3.3）；Phase 4 重写为表格格式（含飞轮验证标准）；§11.5 新增方法论平台化路径 |
 | v1.6 | 2026-02-21 | **Phase 2 完成 + Phase 3 重构**：Phase 2 全部 4 个 Sprint 标记完成（Sprint 2.1 CI/Playwright ✅、Sprint 2.2 OODA+MCP ✅、Sprint 2.3 多模型 ✅、Sprint 2.4 内部试用 ✅）；Phase 2 验收标准全部勾选；Sprint 2.4 试用反馈（4 条核心反馈）纳入文档；**Phase 3 从「ForgeNativeRuntime + 进化环」重构为「人机协作闭环」**（6 模块 16 步：执行透明度 / HITL 全量暂停点 / 编译测试管道 / 质量度量面板 / 学习循环集成 / 文档验收）；ForgeNativeRuntime 完整体推迟至 Phase 3+；Gap 清单更新（6 个已关闭 + 8 个新增 Phase 3 Gap）；里程碑更新（Phase 2 全部 ✅，Phase 3 拆分为独立里程碑）；新增文档引用：`docs/sprint2.4-trial-discussion-record.md`、`docs/planning/phase3-implementation-plan.md` |
 
-> 基线版本: v1.6 | 基线日期: 2026-02-21 | 下次评审: Phase 3 模块 1-3 完成后
+| v1.7 | 2026-02-21 | **Phase 3 实现完成**：6 模块 16 步全部实现（模块 1 执行透明度 ✅、模块 2 HITL 暂停点 ✅、模块 3 编译/测试管道 ✅、模块 4 质量度量面板 ✅、模块 5 学习循环集成 ✅、模块 6 文档验收 ✅）；新建 12 文件（后端 7 + 前端 2 + 配置/文档 3）；修改 11 文件（后端 5 + 前端 3 + 配置/文档 3）；6 个 Phase 3 Gap 全部关闭；24 验收用例；新增文档：`docs/phase3-acceptance-test.md` |
+
+> 基线版本: v1.7 | 基线日期: 2026-02-21 | 下次评审: Phase 3 验收测试执行后

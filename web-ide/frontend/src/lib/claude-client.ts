@@ -5,12 +5,16 @@ export interface StreamEvent {
     | "thinking"
     | "content"
     | "tool_use"
+    | "tool_use_start"
     | "tool_result"
     | "error"
     | "done"
     | "profile_active"
     | "ooda_phase"
-    | "file_changed";
+    | "file_changed"
+    | "sub_step"
+    | "baseline_check"
+    | "hitl_checkpoint";
   content?: string;
   toolCallId?: string;
   toolName?: string;
@@ -22,7 +26,28 @@ export interface StreamEvent {
   phase?: OodaPhase;
   path?: string;
   action?: string;
+  // sub_step fields
+  message?: string;
+  timestamp?: string;
+  // ooda_phase enhanced fields
+  detail?: string;
+  turn?: number;
+  maxTurns?: number;
+  // baseline_check fields
+  status?: string;
+  attempt?: number;
+  baselines?: string[];
+  summary?: string;
+  // hitl_checkpoint fields
+  profile?: string;
+  checkpoint?: string;
+  deliverables?: string[];
+  baselineResults?: Array<{ name: string; status: string; output?: string }>;
+  timeoutSeconds?: number;
+  hitlFeedback?: string;
 }
+
+export type HitlAction = "approve" | "reject" | "modify";
 
 export interface ChatContext {
   type: string;
@@ -32,9 +57,26 @@ export interface ChatContext {
 
 class ClaudeClient {
   private baseUrl: string;
+  private activeWs: WebSocket | null = null;
 
   constructor(baseUrl: string = "") {
     this.baseUrl = baseUrl;
+  }
+
+  /**
+   * Send a HITL response (approve/reject/modify) via the active WebSocket.
+   */
+  sendHitlResponse(action: HitlAction, feedback?: string, modifiedPrompt?: string): void {
+    if (!this.activeWs || this.activeWs.readyState !== WebSocket.OPEN) {
+      console.error("Cannot send HITL response: WebSocket not connected");
+      return;
+    }
+    this.activeWs.send(JSON.stringify({
+      type: "hitl_response",
+      action,
+      feedback,
+      modifiedPrompt,
+    }));
   }
 
   /**
@@ -85,6 +127,7 @@ class ClaudeClient {
       }
 
       ws.onopen = () => {
+        this.activeWs = ws;
         ws.send(
           JSON.stringify({
             type: "message",
@@ -118,6 +161,7 @@ class ClaudeClient {
       };
 
       ws.onclose = (event) => {
+        this.activeWs = null;
         if (!event.wasClean) {
           // Connection closed unexpectedly
           onEvent({ type: "done" });
