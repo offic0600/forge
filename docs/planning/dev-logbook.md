@@ -2993,3 +2993,77 @@ echo "Regression test workspace cleaned up"
 | **Bug 追踪** | **30 个（29 已修复，1 挂起 BUG-016）** |
 | Phase 2 进度 | Sprint 2.1 ✅ Sprint 2.2 ✅ Sprint 2.3 ✅ Sprint 2.4 ✅ |
 | **Phase 3 状态** | **规划完成，待实施** |
+
+---
+
+## Session 22 — 2026-02-21：Phase 3 实现 — 人机协作闭环（6 模块 16 步）
+
+### 22.1 目标
+
+实现 Phase 3 全部 6 个模块 16 步：执行透明度、HITL 全量暂停点、编译/测试管道、质量度量面板、学习循环集成、文档与验收测试。
+
+### 22.2 实施内容
+
+#### 文件变更表
+
+| 操作 | 文件 | 说明 |
+|------|------|------|
+| 修改 | `ClaudeAgentService.kt` | +227 行：emitSubStep 透明度事件、HITL CompletableFuture 暂停/恢复、执行记录持久化 |
+| 修改 | `McpProxyService.kt` | +269 行：workspace_compile + workspace_test（语法分析模式） |
+| 修改 | `ChatWebSocketHandler.kt` | +38 行：hitl_response 消息类型、断线重连恢复 |
+| 修改 | `SkillModels.kt` | +12 行：HitlStatus/HitlAction 枚举、HitlDecision 数据类 |
+| 修改 | `MetricsService.kt` | +7 行：recordHitlResult 指标 |
+| 新建 | `HitlCheckpointEntity.kt` | JPA Entity：hitl_checkpoints 表 |
+| 新建 | `HitlCheckpointRepository.kt` | Spring Data JPA Repository |
+| 新建 | `ExecutionRecordEntity.kt` | JPA Entity：execution_records 表 |
+| 新建 | `ExecutionRecordRepository.kt` | Spring Data JPA Repository |
+| 新建 | `DashboardController.kt` | 3 端点：/metrics, /executions, /trends |
+| 新建 | `ExecutionLoggerService.kt` | Spring @Service：DB + 文件系统日志 |
+| 新建 | `SkillFeedbackService.kt` | Spring @Service：@Scheduled 每日分析 |
+| 修改 | `AiChatSidebar.tsx` | +199 行：活动日志、HITL 状态、Tab 切换、Turn 计数 |
+| 修改 | `claude-client.ts` | +46 行：4 种新事件类型、sendHitlResponse 方法 |
+| 新建 | `HitlApprovalPanel.tsx` | HITL 审批 UI：倒计时、批准/拒绝/修改 |
+| 新建 | `QualityPanel.tsx` | 质量面板：卡片 + 柱状图 + 趋势 + 表格 |
+| 修改 | `development-profile.md` | 标准交付流程（编码→编译→底线→测试→HITL→总结） |
+| 修改 | `ClaudeAgentServiceTest.kt` | 适配新增构造函数参数 + loadProfile mock |
+| 新建 | `phase3-acceptance-test.md` | 6 场景 24 验收用例 |
+| 修改 | `TRIAL-GUIDE.md` | 新增 4 章（HITL 审批 + 编译管道 + 质量面板 + 活动日志） |
+| 修改 | `baseline-v1.5.md` | v1.6→v1.7，Phase 3 标记已实现，6 个 Gap 关闭 |
+
+### 22.3 Bug 修复
+
+| Bug | 根因 | 修复 |
+|-----|------|------|
+| ClaudeAgentServiceTest 编译失败 | 构造函数新增 hitlCheckpointRepository + executionRecordRepository 参数，测试未传入 | 添加 `mockk(relaxed = true)` mock |
+| ClaudeAgentServiceTest streamMessage 失败 | 新增 `skillLoader.loadProfile()` 调用，测试缺少 mock | 添加 `every { skillLoader.loadProfile(any()) } returns defaultProfile` |
+| workspace_compile/test 最初设计使用 ProcessBuilder 真实编译 | WorkspaceService 是内存存储，无磁盘目录可执行编译 | 改为语法分析模式（括号匹配、JSON 校验、测试函数计数） |
+
+### 22.4 经验沉淀
+
+1. **WorkspaceService 是内存存储**：workspace 文件存储在 ConcurrentHashMap 中，不在磁盘上。compile/test 工具不能用 ProcessBuilder，必须在内存中做分析
+2. **replace_all 对 import 语句的破坏性**：`replace_all=true` 替换类型名时会意外破坏 import 语句（如 `com.forge.model.FileNode` → `FileNode` 替换后 import 变成 `import FileNode`）。对短字符串使用 replace_all 需格外小心
+3. **测试构造函数同步**：修改 Service 构造函数后必须立即更新对应 Test 的构造调用，否则 compileTestKotlin 阶段就会失败
+
+### Git 提交
+
+| Commit | 说明 |
+|--------|------|
+| `ee56428` | feat: Phase 3 — 人机协作闭环（6 模块 16 步） |
+
+### 项目统计快照（Session 22）
+
+| 指标 | 数值 |
+|------|------|
+| 总文件数 | ~375+（+21 文件变更） |
+| 代码变更 | **+2,198 行 / -46 行** |
+| Git Commits | 39+ |
+| Sessions | **22** |
+| 单元测试 | **137**（128 通过，9 pre-existing 失败） |
+| Skills 加载 | 32 (5 profiles) |
+| MCP 工具 | **11 builtin**（+workspace_compile, +workspace_test）+ 外部 |
+| Docker 容器 | **6** |
+| 知识库文档 | 13 |
+| Phase 3 验收 | **24 用例（待执行）** |
+| **Bug 追踪** | **33 个（32 已修复，1 挂起 BUG-016）** |
+| **Phase 3 状态** | **✅ 实现完成（6 模块 16 步）** |
+| baseline 版本 | **v1.7** |
