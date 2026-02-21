@@ -81,7 +81,7 @@ class ClaudeAdapter(
 
     override suspend fun complete(prompt: String, options: CompletionOptions): CompletionResult {
         validateApiKey()
-        val model = options.model ?: DEFAULT_MODEL
+        val model = options.model?.takeIf { it.isNotBlank() } ?: DEFAULT_MODEL
 
         val requestBody = buildRequestBody(prompt, options, model, stream = false)
         val request = buildHttpRequest(requestBody)
@@ -106,7 +106,7 @@ class ClaudeAdapter(
 
     override suspend fun streamComplete(prompt: String, options: CompletionOptions): Flow<String> {
         validateApiKey()
-        val model = options.model ?: DEFAULT_MODEL
+        val model = options.model?.takeIf { it.isNotBlank() } ?: DEFAULT_MODEL
 
         val requestBody = buildRequestBody(prompt, options, model, stream = true)
         val request = buildHttpRequest(requestBody)
@@ -165,7 +165,7 @@ class ClaudeAdapter(
         tools: List<ToolDefinition>
     ): Flow<StreamEvent> {
         validateApiKey()
-        val model = options.model ?: DEFAULT_MODEL
+        val model = options.model?.takeIf { it.isNotBlank() } ?: DEFAULT_MODEL
 
         val requestBody = buildMessagesRequestBody(messages, options, model, tools, stream = true)
         val request = buildHttpRequest(requestBody)
