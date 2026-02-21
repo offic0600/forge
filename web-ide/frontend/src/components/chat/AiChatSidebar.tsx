@@ -1,12 +1,36 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { Send, Paperclip, RotateCcw, StopCircle, Eye, Compass, Brain, Zap, CheckCircle2 } from "lucide-react";
+import {
+  Send,
+  Paperclip,
+  RotateCcw,
+  StopCircle,
+  Eye,
+  Compass,
+  Brain,
+  Zap,
+  CheckCircle2,
+  Settings,
+} from "lucide-react";
 import { ChatMessage, type Message } from "@/components/chat/ChatMessage";
-import { ContextPicker, type ContextItem } from "@/components/chat/ContextPicker";
-import { claudeClient, type StreamEvent, type OodaPhase } from "@/lib/claude-client";
+import {
+  ContextPicker,
+  type ContextItem,
+} from "@/components/chat/ContextPicker";
+import { ModelSelector } from "@/components/chat/ModelSelector";
+import { ModelSettingsDialog } from "@/components/chat/ModelSettingsDialog";
+import {
+  claudeClient,
+  type StreamEvent,
+  type OodaPhase,
+} from "@/lib/claude-client";
 
-const OODA_PHASES: { key: OodaPhase; label: string; icon: React.ElementType }[] = [
+const OODA_PHASES: {
+  key: OodaPhase;
+  label: string;
+  icon: React.ElementType;
+}[] = [
   { key: "observe", label: "Observe", icon: Eye },
   { key: "orient", label: "Orient", icon: Compass },
   { key: "decide", label: "Decide", icon: Brain },
@@ -28,7 +52,12 @@ export function AiChatSidebar({
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
+  const [selectedModel, setSelectedModel] = useState(() => {
+    if (typeof window === "undefined") return "claude-sonnet-4-6";
+    return localStorage.getItem("forge_selected_model") ?? "claude-sonnet-4-6";
+  });
   const [showContextPicker, setShowContextPicker] = useState(false);
+  const [showModelSettings, setShowModelSettings] = useState(false);
   const [selectedContexts, setSelectedContexts] = useState<ContextItem[]>([]);
   const [sessionId, setSessionId] = useState<string | null>(() => {
     if (typeof window === "undefined") return null;
@@ -68,10 +97,11 @@ export function AiChatSidebar({
           setMessages(
             data.map((m) => ({
               id: m.id,
-              role: m.role === "user" ? "user" as const : "assistant" as const,
+              role:
+                m.role === "user" ? ("user" as const) : ("assistant" as const),
               content: m.content,
               timestamp: m.timestamp,
-            }))
+            })),
           );
         }
       } catch {
@@ -96,7 +126,7 @@ export function AiChatSidebar({
         language: string;
       };
       setInput(
-        `Explain this ${detail.language} code from ${detail.filePath}:\n\`\`\`${detail.language}\n${detail.code}\n\`\`\``
+        `Explain this ${detail.language} code from ${detail.filePath}:\n\`\`\`${detail.language}\n${detail.code}\n\`\`\``,
       );
       inputRef.current?.focus();
     };
@@ -218,9 +248,7 @@ export function AiChatSidebar({
                 const existing = prev.find((m) => m.id === assistantId);
                 if (existing) {
                   return prev.map((m) =>
-                    m.id === assistantId
-                      ? { ...m, content: fullContent }
-                      : m
+                    m.id === assistantId ? { ...m, content: fullContent } : m,
                   );
                 }
                 return [
@@ -246,14 +274,16 @@ export function AiChatSidebar({
               });
               setMessages((prev) =>
                 prev.map((m) =>
-                  m.id === assistantId ? { ...m, toolCalls: [...toolCalls] } : m
-                )
+                  m.id === assistantId
+                    ? { ...m, toolCalls: [...toolCalls] }
+                    : m,
+                ),
               );
               break;
             case "tool_result":
               {
                 const idx = toolCalls.findIndex(
-                  (tc) => tc.id === event.toolCallId
+                  (tc) => tc.id === event.toolCallId,
                 );
                 if (idx >= 0) {
                   toolCalls[idx] = {
@@ -266,8 +296,8 @@ export function AiChatSidebar({
                   prev.map((m) =>
                     m.id === assistantId
                       ? { ...m, toolCalls: [...toolCalls] }
-                      : m
-                  )
+                      : m,
+                  ),
                 );
               }
               break;
@@ -283,8 +313,8 @@ export function AiChatSidebar({
                           (event.content ?? "Unknown error") +
                           "]",
                       }
-                    : m
-                )
+                    : m,
+                ),
               );
               break;
             case "file_changed": {
@@ -295,7 +325,7 @@ export function AiChatSidebar({
                     path: event.path ?? "",
                     action: event.action ?? "created",
                   },
-                })
+                }),
               );
               break;
             }
@@ -304,7 +334,7 @@ export function AiChatSidebar({
           }
         },
         abortController.signal,
-        workspaceId
+        workspaceId,
       );
     } catch (err) {
       if ((err as Error).name !== "AbortError") {
@@ -315,8 +345,7 @@ export function AiChatSidebar({
             id: assistantId,
             role: "assistant",
             content:
-              fullContent ||
-              "An error occurred while processing your message.",
+              fullContent || "An error occurred while processing your message.",
             timestamp: new Date().toISOString(),
           },
         ]);
@@ -342,7 +371,13 @@ export function AiChatSidebar({
     }
     // When ContextPicker is open, block printable chars from entering textarea
     // so they go to the picker's search input instead
-    if (showContextPicker && e.key.length === 1 && e.key !== "@" && !e.ctrlKey && !e.metaKey) {
+    if (
+      showContextPicker &&
+      e.key.length === 1 &&
+      e.key !== "@" &&
+      !e.ctrlKey &&
+      !e.metaKey
+    ) {
       e.preventDefault();
     }
     if (showContextPicker && e.key === "Backspace") {
@@ -391,17 +426,39 @@ export function AiChatSidebar({
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border px-4 py-2">
         <h3 className="text-sm font-semibold">AI Assistant</h3>
-        <button
-          onClick={() => {
-            setMessages([]);
-            setSessionId(null);
-          }}
-          className="rounded p-1 text-muted-foreground hover:bg-accent"
-          title="New conversation"
-        >
-          <RotateCcw className="h-3.5 w-3.5" />
-        </button>
+        <div className="flex items-center gap-1">
+          <ModelSelector
+            selectedModel={selectedModel}
+            onModelChange={(modelId) => {
+              setSelectedModel(modelId);
+              localStorage.setItem("forge_selected_model", modelId);
+            }}
+          />
+          <button
+            onClick={() => {
+              setMessages([]);
+              setSessionId(null);
+            }}
+            className="rounded p-1 text-muted-foreground hover:bg-accent"
+            title="New conversation"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+          </button>
+          <button
+            onClick={() => setShowModelSettings(true)}
+            className="rounded p-1 text-muted-foreground hover:bg-accent"
+            title="Model settings"
+          >
+            <Settings className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
+
+      {/* Model Settings Dialog */}
+      <ModelSettingsDialog
+        isOpen={showModelSettings}
+        onClose={() => setShowModelSettings(false)}
+      />
 
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-auto p-4 space-y-4">
@@ -416,7 +473,11 @@ export function AiChatSidebar({
           </div>
         )}
         {messages.map((message) => (
-          <ChatMessage key={message.id} message={message} workspaceId={workspaceId} />
+          <ChatMessage
+            key={message.id}
+            message={message}
+            workspaceId={workspaceId}
+          />
         ))}
         {isStreaming && (activeProfile || oodaPhase) && (
           <div className="space-y-1.5 mx-1">
@@ -425,8 +486,10 @@ export function AiChatSidebar({
               <div className="flex items-center gap-0.5">
                 {OODA_PHASES.map((p) => {
                   const isActive = p.key === oodaPhase;
-                  const phaseIdx = OODA_PHASES.findIndex(x => x.key === oodaPhase);
-                  const thisIdx = OODA_PHASES.findIndex(x => x.key === p.key);
+                  const phaseIdx = OODA_PHASES.findIndex(
+                    (x) => x.key === oodaPhase,
+                  );
+                  const thisIdx = OODA_PHASES.findIndex((x) => x.key === p.key);
                   const isPast = thisIdx < phaseIdx;
                   const Icon = p.icon;
                   return (
@@ -468,13 +531,16 @@ export function AiChatSidebar({
                 <span className="text-border">|</span>
                 <span className="truncate">
                   {activeProfile.skills.slice(0, 3).join(", ")}
-                  {activeProfile.skills.length > 3 && ` +${activeProfile.skills.length - 3}`}
+                  {activeProfile.skills.length > 3 &&
+                    ` +${activeProfile.skills.length - 3}`}
                 </span>
                 {/* Routing reason */}
                 {activeProfile.reason && (
                   <>
                     <span className="text-border">|</span>
-                    <span className="truncate italic">{activeProfile.reason}</span>
+                    <span className="truncate italic">
+                      {activeProfile.reason}
+                    </span>
                   </>
                 )}
               </div>
