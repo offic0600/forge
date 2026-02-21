@@ -25,7 +25,8 @@ import org.slf4j.LoggerFactory
  */
 class WikiSearchTool(
     private val wikiBaseUrl: String,
-    private val wikiApiToken: String
+    private val wikiApiToken: String,
+    private val localProvider: com.forge.mcp.knowledge.LocalKnowledgeProvider? = null
 ) : McpTool {
 
     private val logger = LoggerFactory.getLogger(WikiSearchTool::class.java)
@@ -87,6 +88,11 @@ class WikiSearchTool(
 
         val space = arguments["space"]?.jsonPrimitive?.contentOrNull
         val limit = arguments["limit"]?.jsonPrimitive?.intOrNull ?: 10
+
+        // Use local provider if available
+        if (localProvider != null) {
+            return executeLocal(query, space, limit)
+        }
 
         return try {
             val cqlParts = mutableListOf("type = page")
@@ -167,5 +173,32 @@ class WikiSearchTool(
                 isError = true
             )
         }
+    }
+
+    private fun executeLocal(query: String, category: String?, limit: Int): ToolCallResponse {
+        val results = localProvider!!.search(query, category, limit)
+        logger.info("Local knowledge search: query='{}', results={}", query, results.size)
+
+        val searchResults = results.map { doc ->
+            WikiSearchResult(
+                title = doc.title,
+                excerpt = doc.excerpt,
+                url = "local://${doc.path}",
+                space = doc.category,
+                lastModified = ""
+            )
+        }
+
+        val searchResponse = WikiSearchResponse(
+            results = searchResults,
+            totalCount = searchResults.size,
+            query = query
+        )
+
+        return ToolCallResponse(
+            content = listOf(
+                ToolContent.Json(Json.encodeToJsonElement(searchResponse))
+            )
+        )
     }
 }

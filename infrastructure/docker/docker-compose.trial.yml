@@ -22,6 +22,8 @@ services:
       dockerfile: Dockerfile
     environment:
       PORT: "8081"
+      KNOWLEDGE_MODE: "local"
+      KNOWLEDGE_BASE_PATH: "/knowledge-base"
       WIKI_BASE_URL: "http://localhost:8090"
       WIKI_API_TOKEN: ""
     volumes:
@@ -44,6 +46,7 @@ services:
       FORGE_DB_FORGE_URL: "jdbc:h2:mem:forge;DB_CLOSE_DELAY=-1"
       FORGE_DB_FORGE_USER: sa
       FORGE_DB_FORGE_PASSWORD: ""
+      FORGE_DB_DEFAULT_ACCESS_LEVEL: "FULL_READ"
     ports:
       - "8082:8082"
     healthcheck:

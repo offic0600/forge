@@ -24,7 +24,8 @@ import org.slf4j.LoggerFactory
  */
 class ApiDocSearchTool(
     private val wikiBaseUrl: String,
-    private val wikiApiToken: String
+    private val wikiApiToken: String,
+    private val localProvider: com.forge.mcp.knowledge.LocalKnowledgeProvider? = null
 ) : McpTool {
 
     private val logger = LoggerFactory.getLogger(ApiDocSearchTool::class.java)
@@ -84,6 +85,22 @@ class ApiDocSearchTool(
             ?: throw McpError.InvalidArguments("'query' is required")
 
         val service = arguments["service"]?.jsonPrimitive?.contentOrNull
+
+        if (localProvider != null) {
+            val results = localProvider.search(query, "api-docs")
+            val apiResults = results.map { doc ->
+                ApiEndpointResult(
+                    endpoint = doc.path, method = "GET", description = doc.excerpt,
+                    service = "forge", requestSchema = null, responseSchema = null,
+                    authentication = "Bearer Token", url = "local://${doc.path}"
+                )
+            }
+            return ToolCallResponse(
+                content = listOf(ToolContent.Json(Json.encodeToJsonElement(
+                    ApiDocSearchResponse(apiResults, apiResults.size, query, service)
+                )))
+            )
+        }
 
         return try {
             val cqlParts = mutableListOf(

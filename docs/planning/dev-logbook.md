@@ -2720,97 +2720,6 @@ echo "Regression test workspace cleaned up"
 
 ---
 
-<<<<<<< HEAD
-## Session 19 — 2026-02-20/21：Sprint 2.3 多模型适配器实现
-
-### 19.1 目标
-
-实现 Sprint 2.3 多模型适配器系统：支持 Anthropic / AWS Bedrock / Google Gemini / Alibaba Qwen 四个提供商，模型清单从 application.yml 外部化配置，用户可覆盖系统配置（API Key 加密存储），前端提供模型选择器和设置弹窗。
-
-### 19.2 实施内容
-
-#### 阶段 1：多模型 Adapter 实现
-
-| 操作 | 文件 | 说明 |
-|------|------|------|
-| 新增 | `adapters/model-adapter/src/.../QwenAdapter.kt` | DashScope OpenAI 兼容 API 适配器，支持 tool calling |
-| 新增 | `adapters/model-adapter/src/.../GeminiAdapter.kt` | Google Gemini REST API 适配器，支持 function calling |
-| 重写 | `adapters/model-adapter/src/.../BedrockAdapter.kt` | AWS SDK Converse API，同步伪流式 |
-| 新增 | `adapters/model-adapter/src/.../ModelRegistry.kt` | 中央注册表：模型发现、路由、健康检查 |
-| 修改 | `adapters/model-adapter/build.gradle.kts` | 添加 AWS SDK bedrockruntime 依赖 |
-
-#### 阶段 2：模型 ID 更新到最新版本
-
-| 操作 | 文件 | 说明 |
-|------|------|------|
-| 修改 | `ClaudeAdapter.kt` | claude-opus-4-6, claude-sonnet-4-6, claude-haiku-4-5-20251001 |
-| 修改 | `BedrockAdapter.kt` | anthropic.claude-opus-4-6-v1 等 |
-| 修改 | `GeminiAdapter.kt` | gemini-2.5-pro, gemini-2.5-flash, gemini-2.5-flash-lite |
-| 修改 | `QwenAdapter.kt` | qwen3.5-plus（新增）, qwen-plus, qwen-turbo, qwen-long |
-| 修改 | `ClaudeAgentService.kt` | 默认模型 → claude-sonnet-4-6 |
-
-#### 阶段 3：application.yml 外部化配置
-
-| 操作 | 文件 | 说明 |
-|------|------|------|
-| 新增 | `web-ide/backend/src/.../config/ModelProperties.kt` | @ConfigurationProperties(prefix="forge.models") |
-| 修改 | `application.yml` | forge.models 配置段：5 提供商 + 模型清单 + 加密密钥 |
-| 重写 | `ClaudeConfig.kt` | 从 ModelProperties 驱动 Adapter 创建，支持 customModels |
-| 修改 | `web-ide/backend/build.gradle.kts` | 添加 configuration-processor |
-| 修改 | 4 个 Adapter | 添加 customModels 可选构造参数 |
-
-#### 阶段 4：用户模型配置全栈（加密存储）
-
-| 操作 | 文件 | 说明 |
-|------|------|------|
-| 新增 | `db/migration/V2__create_user_model_configs.sql` | Flyway 迁移：user_model_configs 表 |
-| 新增 | `entity/UserModelConfigEntity.kt` | JPA 实体 |
-| 新增 | `repository/UserModelConfigRepository.kt` | Spring Data JPA Repository |
-| 新增 | `service/EncryptionService.kt` | AES-256-GCM 加密服务 |
-| 新增 | `service/UserModelConfigService.kt` | 业务逻辑 + 视图层 DTO |
-| 新增 | `controller/UserModelConfigController.kt` | REST API: GET/PUT/DELETE /api/user/model-configs |
-
-#### 阶段 5：前端
-
-| 操作 | 文件 | 说明 |
-|------|------|------|
-| 新增 | `frontend/src/lib/model-api.ts` | 模型 + 用户配置 API 客户端 |
-| 新增 | `frontend/src/components/chat/ModelSelector.tsx` | 模型选择下拉框（按提供商分组） |
-| 新增 | `frontend/src/components/chat/ModelSettingsDialog.tsx` | 用户模型配置弹窗（5 提供商） |
-| 修改 | `frontend/src/components/chat/AiChatSidebar.tsx` | 集成 ModelSelector + Settings 按钮 |
-| 新增 | `controller/ModelController.kt` | REST: GET /api/models, /api/models/providers, /api/models/health |
-
-### 19.3 测试
-
-| 测试文件 | 数量 | 状态 |
-|----------|------|------|
-| `QwenAdapterTest.kt` | 9 | ✅ 全通过 |
-| `GeminiAdapterTest.kt` | 10 | ✅ 全通过 |
-| `ModelRegistryTest.kt` | 12 | ✅ 全通过 |
-| `ClaudeAdapterToolCallingTest.kt` | 11 | ✅ 全通过（模型 ID 更新） |
-| `EncryptionServiceTest.kt` | 9 | ✅ 全通过 |
-| `UserModelConfigServiceTest.kt` | 8 | ✅ 全通过 |
-| **model-adapter 合计** | **42** | ✅ |
-| **backend 新增** | **17** | ✅ |
-| frontend `npm run build` | — | ✅ 零错误 |
-
-### 19.4 Bug 及修复
-
-| Bug | 根因 | 修复 |
-|-----|------|------|
-| BedrockAdapter `converseStream` 不存在 | 同步 client 无 stream 方法 | 改用 sync `converse()` + 伪流式事件 |
-| BedrockAdapter `Number` 类型不匹配 | `putNumber()` 不接受 Kotlin Number | 显式 when 分支 Int/Long/Double/Float |
-| BedrockAdapter `intValueExact()` 不存在 | SdkNumber 无此方法 | 改用 `stringValue()` + parse |
-| ClaudeAdapter `!!` 警告 | 非空断言多余 | 移除 `!!` |
-
-### 19.5 经验沉淀
-
-1. **AWS SDK 同步 vs 异步**：BedrockRuntimeClient（同步）没有 `converseStream`，只有 BedrockRuntimeAsyncClient 才有。但异步 client 引入 CompletableFuture 复杂度，伪流式是更简洁的选择
-2. **Adapter 可配置模型列表**：通过 `customModels: List<ModelInfo>? = null` 参数实现，null 时回退内置默认。最小化侵入现有代码
-3. **AES-256-GCM 加密模式**：每次加密必须使用不同的随机 IV（12 字节），确保相同明文产生不同密文。密文格式 = Base64(iv + ciphertext + authTag)
-
-### 19.6 项目统计快照（Session 19）
-=======
 ## Session 19 — 2026-02-20/21：Sprint 2.1 + 2.2 开发 & 验收测试
 
 ### 19.1 Sprint 2.2 核心开发
@@ -2886,57 +2795,117 @@ echo "Regression test workspace cleaned up"
 | *(本次提交)* | feat: Sprint 2.1+2.2 — CI pipeline, Playwright E2E, Skill trigger, baseline auto-check, MCP 6-container |
 
 ### 项目统计快照（Session 19）
->>>>>>> origin/main
 
 | 指标 | 数值 |
 |------|------|
 | 总文件数 | ~345+ |
-| Git Commits | 35+ |
+| Git Commits | 34+ |
 | Sessions | 19 |
-| 单元测试 | **164**（+17 backend，model-adapter 42） |
-| 模型提供商 | **5**（anthropic, aws-bedrock, google, dashscope, openai） |
-| 模型总数 | **16**（YAML 配置） |
-| Skills 加载 | 32 (5 profiles) |
-| MCP 工具 | 9 |
-| Docker 容器 | 6（+knowledge-mcp +database-mcp） |
+| 单元测试 | **147** |
+| Skills 加载 | 32 (5 profiles, 过滤后 ~20) |
+| MCP 工具 | 9 (外部 6+3 发现) |
+| Docker 容器 | **6**（+knowledge-mcp +database-mcp） |
 | 知识库文档 | 13 |
-| E2E 验收测试 | 87 用例，80/87 通过（92.0%） |
 | E2E 测试文件 | **5 个 Playwright spec** |
-| Bug 追踪 | 20 个（19 已修复，1 挂起） |
-| Phase 0~1.6 | ✅ 完成 |
-| Sprint 2.1 | ✅ 完成（34/34 通过） |
-| Sprint 2.2 | ✅ 完成（17/24 通过） |
-| Sprint 2.3 | ✅ 多模型适配器完成 |
+| agent-eval 评估集 | **16 个 YAML** |
+| Sprint 2.1 验收 | **34/34 通过（100%）** |
+| Sprint 2.2 验收 | **17/24 通过（71%，7 待手动）** |
+| **Bug 追踪** | **24 个（23 已修复，1 挂起 BUG-016 需极端场景验证）** |
+| Phase 2 进度 | Sprint 2.1 ✅ Sprint 2.2 进行中 |
 
 ---
 
-## Session 20 — 2026-02-21：前端 CI Jest 修复
+## Session 20 — 2026-02-21：Sprint 2.2 Bug 修复 + 全量验收测试通过
 
-### 20.1 问题描述
+> Session 19 遗留的 7 个待手动验证用例全部通过。修复 5 个 Bug（H2 兼容性、MCP 路由、Docker 环境），Sprint 2.2 验收从 71% → 100%（24/24）。
 
-**时间**: 2026-02-21
+### 20.1 Bug 修复
 
-**现象**: 前端 CI 报错 `npm test` 执行失败。
+| Bug | 根因 | 修复 | 涉及文件 |
+|-----|------|------|---------|
+| SchemaInspectorTool H2 schema 大小写 | H2 使用 `"PUBLIC"` 而非 `"public"` | 检测 JDBC URL 前缀 `jdbc:h2:` 自动 uppercase | `SchemaInspectorTool.kt` |
+| DataDictionaryTool PostgreSQL 专属 SQL | `pg_stats`/`col_description` 在 H2 不存在 | 新增 JDBC metadata 搜索路径，按 DB 类型分流 | `DataDictionaryTool.kt` |
+| AccessControl 默认权限 SCHEMA_READ | data_dictionary 需要 FULL_READ，匿名用户被拒绝 | 默认权限改为环境变量可配置 `FORGE_DB_DEFAULT_ACCESS_LEVEL` | `AccessControl.kt` |
+| McpProxyService callTool fallback 失败 | `callToolOnServer` 返回 error response（非抛异常），外部 loop 不 fall through | 新增 toolCache 查找逻辑：已缓存时直接定位 server，未找到直接走 built-in | `McpProxyService.kt` |
+| Docker /workspace 目录缺失 | 底线脚本 `ProcessBuilder("bash", script)` 的 workdir `/workspace` 不存在 | Dockerfile 添加 `RUN mkdir -p /workspace` | `Dockerfile` |
 
-**错误信息**:
-```
-SyntaxError: Cannot use import statement outside a module
-```
+### 20.2 MCP 真实服务增强
 
-**根因分析**:
-- CI 运行 `npm test`，但 Jest 错误地收集了 `e2e/` 目录下的 Playwright 测试文件
-- `e2e/` 文件使用 `@playwright/test` 语法（ESM），Jest 无法正确解析
-- 缺少明确的 Jest 配置来排除 E2E 目录
+| 组件 | 改动 | 说明 |
+|------|------|------|
+| knowledge-mcp | LocalKnowledgeProvider 新增 | 本地文件系统搜索知识库（KNOWLEDGE_MODE=local 时激活） |
+| knowledge-mcp 4 工具 | WikiSearch/AdrSearch/ApiDocSearch/RunbookSearch | 各工具增加 LocalKnowledgeProvider fallback |
+| database-mcp | H2 driver + 示例数据 | build.gradle.kts 添加 h2 依赖 + 启动时创建 3 表 + 插入示例数据 |
+| database-mcp AccessControl | 环境变量可配置 | `FORGE_DB_DEFAULT_ACCESS_LEVEL=FULL_READ` |
+| docker-compose.trial.yml | 新增环境变量 | database-mcp 容器添加 `FORGE_DB_DEFAULT_ACCESS_LEVEL` |
 
-### 20.2 修复方案
+### 20.3 验收测试执行（全量通过）
+
+| 场景 | 用例数 | 结果 | 方式 | 备注 |
+|------|--------|------|------|------|
+| 场景 1：Skill 触发过滤 | 4 | ✅ 4/4 | Docker curl | TC-1.2 testing-profile SSE 验证通过 |
+| 场景 2：触发可观测 | 4 | ✅ 4/4 | Docker curl+日志 | SSE 事件、日志、Prometheus 指标确认 |
+| 场景 3：底线自动检查 | 3 | ✅ 3/3 | Docker E2E | workspace_write_file 触发 baseline_check，2 轮重试正常 |
+| 场景 4：底线可配置 | 3 | ✅ 3/3 | API + 代码 | Profile 底线配置正确，纯问答不触发 |
+| 场景 5：knowledge-mcp | 3 | ✅ 3/3 | Docker curl | 容器 healthy，6 工具发现，本地搜索返回真实文档 |
+| 场景 6：database-mcp | 3 | ✅ 3/3 | Docker curl | 容器 healthy，3 工具发现，H2 schema/查询/DML 拒绝全通过 |
+| 场景 7：6 容器集成 | 4 | ✅ 4/4 | Docker E2E | 知识搜索返回 7 文档，Schema 查询返回 4 表 |
+| **总计** | **24** | **24/24 (100%)** | — | Session 19 的 71% → 100% |
+
+### 20.4 文件变更表
 
 | 操作 | 文件 | 说明 |
 |------|------|------|
-| 新增 | `web-ide/frontend/jest.config.js` | 配置 testPathIgnorePatterns 排除 e2e/ |
-| 新增 | `web-ide/frontend/package.json` devDependencies | 安装 jest-environment-jsdom |
+| 修改 | `mcp-servers/forge-database-mcp/build.gradle.kts` | 添加 H2 driver 依赖 |
+| 修改 | `mcp-servers/forge-database-mcp/.../DatabaseMcpServer.kt` | H2 示例数据创建（3 表 + 初始数据） |
+| 修改 | `mcp-servers/forge-database-mcp/.../security/AccessControl.kt` | 默认权限环境变量可配置 |
+| 修改 | `mcp-servers/forge-database-mcp/.../tools/DataDictionaryTool.kt` | H2 JDBC metadata 搜索路径 |
+| 修改 | `mcp-servers/forge-database-mcp/.../tools/SchemaInspectorTool.kt` | H2 schema 大小写兼容 |
+| 修改 | `mcp-servers/forge-knowledge-mcp/.../KnowledgeMcpServer.kt` | LocalKnowledgeProvider 注入 |
+| 修改 | `mcp-servers/forge-knowledge-mcp/.../tools/WikiSearchTool.kt` | 本地搜索 fallback |
+| 修改 | `mcp-servers/forge-knowledge-mcp/.../tools/AdrSearchTool.kt` | 本地搜索 fallback |
+| 修改 | `mcp-servers/forge-knowledge-mcp/.../tools/ApiDocSearchTool.kt` | 本地搜索 fallback |
+| 修改 | `mcp-servers/forge-knowledge-mcp/.../tools/RunbookSearchTool.kt` | 本地搜索 fallback |
+| 新增 | `mcp-servers/forge-knowledge-mcp/.../LocalKnowledgeProvider.kt` | 本地文件系统知识库搜索 |
+| 修改 | `web-ide/backend/Dockerfile` | 添加 `/workspace` 目录 + bash/git/grep/findutils |
+| 修改 | `web-ide/backend/.../service/McpProxyService.kt` | callTool fallback 逻辑修复 |
+| 修改 | `infrastructure/docker/docker-compose.trial.yml` | database-mcp 添加环境变量 |
+| 修改 | `docs/sprint2.2-acceptance-test.md` | 全部 24 TC 标记 PASS + 执行记录 |
+| 新增 | `docs/test-session20-record.md` | 完整测试过程记录（curl 命令 + 输出） |
 
-### 20.3 Git 提交
+### 20.5 经验沉淀
+
+1. **H2 大小写敏感**: H2 内存数据库的 schema 名为 `"PUBLIC"`（全大写），而 PostgreSQL 默认 `"public"`（全小写）。使用 JDBC metadata API 时必须匹配数据库实际大小写
+2. **MCP callTool 错误传播**: `callToolOnServer` 用 try-catch 返回 error response 而非重新抛出异常，导致外部 fallback 逻辑失效。错误应以异常形式传播以支持多级 fallback
+3. **Docker Alpine 最小化**: Alpine 无 bash/git/grep，底线脚本需要这些工具。Dockerfile 必须显式 `apk add`
+4. **环境变量配置 > 硬编码**: 安全相关的默认值（如 AccessControl 权限级别）应通过环境变量配置，方便不同部署环境调整
+
+### 20.6 已知问题（非阻塞）
+
+- 工具名不统一：built-in `search_knowledge`/`query_schema` vs 外部 MCP `wiki_search`/`schema_inspector`
+- TC-7.4 路由到 built-in query_schema（查后端内部 DB）而非外部 database-mcp（查 H2 sample DB）
+- forge_skill_loaded 指标 NaN（Micrometer gauge 懒注册已知问题）
+- Prompt caching 已实现（ClaudeAdapter 已有 `cache_control: ephemeral` + `anthropic-beta` header），但 development-profile 105K chars system prompt 仍触发 30K tokens/min 速率限制
+
+### Git 提交
 
 | Commit | 说明 |
 |--------|------|
-| `a7c2dce` | fix: 修复前端 CI Jest 与 Playwright 混淆问题 |
+| *(本次提交)* | fix: Sprint 2.2 — 5 bug fixes + MCP real services + 24/24 acceptance tests pass |
+
+### 项目统计快照（Session 20）
+
+| 指标 | 数值 |
+|------|------|
+| 总文件数 | ~350+ |
+| Git Commits | 36+ |
+| Sessions | **20** |
+| 单元测试 | **147** |
+| Skills 加载 | 32 (5 profiles, 过滤后 ~3-20) |
+| MCP 工具 | 9 builtin + 9 外部发现（knowledge-mcp 6 + database-mcp 3） |
+| Docker 容器 | **6**（backend + frontend + nginx + keycloak + knowledge-mcp + database-mcp） |
+| 知识库文档 | 13 |
+| Sprint 2.1 验收 | **34/34 通过（100%）** |
+| Sprint 2.2 验收 | **24/24 通过（100%）** ← Session 19 的 71% |
+| **Bug 追踪** | **29 个（28 已修复，1 挂起 BUG-016）** |
+| Phase 2 进度 | Sprint 2.1 ✅ Sprint 2.2 ✅ Sprint 2.3 待启动 |

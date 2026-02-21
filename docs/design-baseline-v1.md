@@ -1,10 +1,12 @@
-# Forge Web IDE — 设计基线 v5.1
+# Forge Web IDE — 设计基线 v6
 
-> 基线日期: 2026-02-20 | Phase 1.6 验收测试通过后更新（v5 → v5.1）
+> 基线日期: 2026-02-21 | Sprint 2.2 验收测试 24/24 通过后更新（v5.1 → v6）
 > 本文档冻结当前已验证的 UI/API/数据模型/架构设计细节，作为未来修改的对照基准。
 > 任何对本文档覆盖范围的修改，必须先意识到偏离、再决定是否接受。
 >
-> **v5 变更摘要**: AI → Workspace 交付闭环（3 个 workspace 工具 + file_changed 事件 + System Prompt 交付指导）、Keycloak SSO（OIDC PKCE 登录/回调/JWT/登出、4 容器部署）、代码块 Apply 按钮、Context Picker 实连（/api/context/search 4 类别）、FileExplorer CRUD（新建/重命名/删除）、未保存标记 + 5 秒自动保存、知识库 12+ 文档（+5 新增）、MCP 工具 6 → 9。
+> **v6 变更摘要**: Sprint 2.2 — Skill 条件触发过滤（Profile stage/type + 关键词匹配 → 3~20 个 Skill 动态加载）、AgentLoop 底线自动检查（Act 后自动运行 baseline，失败最多重试 2 轮）、MCP 真实服务（knowledge-mcp 本地搜索 + database-mcp H2 完整 CRUD）、Docker 4→6 容器（+knowledge-mcp:8081 +database-mcp:8082）、McpProxyService callTool fallback 修复。
+>
+> v5 变更摘要: AI → Workspace 交付闭环（3 个 workspace 工具 + file_changed 事件 + System Prompt 交付指导）、Keycloak SSO（OIDC PKCE 登录/回调/JWT/登出、4 容器部署）、代码块 Apply 按钮、Context Picker 实连（/api/context/search 4 类别）、FileExplorer CRUD（新建/重命名/删除）、未保存标记 + 5 秒自动保存、知识库 12+ 文档（+5 新增）、MCP 工具 6 → 9。
 >
 > v4 变更摘要: MCP 实连（McpProxyService → 真实 HTTP 调用 6 个 MCP 工具）、MetricsService（Micrometer 自定义指标 + Actuator/Prometheus 暴露）、agent-eval 真实模型调用（5 种断言类型）、BaselineService 底线集成、32 Skills / 5 Profiles、跨栈迁移 PoC（100% 业务规则覆盖）。
 >
@@ -588,7 +590,17 @@ chat_sessions (1) ──→ (N) chat_messages (1) ──→ (N) tool_calls
 │ JDK 21     │ │ React 19     │ │ OIDC PKCE        │
 │ H2/PG      │ │ Monaco       │ │ realm-export.json│
 │ WS + SSE   │ │ Auth Guard   │ │                  │
-└────────────┘ └──────────────┘ └──────────────────┘
+└──────┬─────┘ └──────────────┘ └──────────────────┘
+       │ HTTP (内部网络)
+       ├──────────────────────────┐
+┌──────▼─────────────┐ ┌────────▼────────────┐
+│ knowledge-mcp (v6) │ │ database-mcp (v6)   │
+│ (:8081)            │ │ (:8082)             │
+│ Ktor HTTP          │ │ Ktor HTTP           │
+│ 6 工具             │ │ 3 工具              │
+│ 本地文件搜索       │ │ H2/PostgreSQL       │
+│ wiki_search 等     │ │ schema_inspector 等 │
+└────────────────────┘ └─────────────────────┘
 ```
 
 ### 4.2 Nginx 路由规则（6 条）
@@ -620,15 +632,19 @@ cd web-ide/frontend && npm install && npm run build
 docker compose -f docker-compose.trial.yml up --build
 ```
 
-**四容器**（v5 更新：3 → 4）:
+**六容器**（v6 更新：4 → 6）:
 - `keycloak`: Keycloak 24.0, `start-dev --import-realm`, realm-export.json 自动导入（v5 新增）
-- `backend`: Spring Boot JAR on JRE Alpine, `depends_on: keycloak(healthy)`
+- `backend`: Spring Boot JAR on JRE Alpine（含 bash/git/grep/findutils），`depends_on: keycloak+knowledge-mcp+database-mcp(healthy)`
 - `frontend`: Next.js standalone on Node 20, Keycloak 环境变量注入
 - `nginx`: Alpine, 挂载 nginx-trial.conf（含 `/auth/` proxy）
+- `knowledge-mcp`: Ktor HTTP 服务 (:8081)，6 工具（wiki_search/adr_search/api_doc_search/runbook_search/tech_radar/convention_check），KNOWLEDGE_MODE=local 本地文件搜索（v6 新增）
+- `database-mcp`: Ktor HTTP 服务 (:8082)，3 工具（schema_inspector/query_executor/data_dictionary），H2 内存数据库 + 示例数据（v6 新增）
 
 **健康检查**:
 - backend: `wget --spider http://localhost:8080/api/knowledge/search` (15s 间隔, 5 次重试, 30s 启动等待)
 - keycloak: `exec 3<>/dev/tcp/localhost/8080` (10s 间隔, 15 次重试, 30s 启动等待)（v5 新增）
+- knowledge-mcp: `wget --spider http://localhost:8081/health/live` (10s 间隔, 5 次重试, 15s 启动等待)（v6 新增）
+- database-mcp: `wget --spider http://localhost:8082/health/live` (10s 间隔, 5 次重试, 15s 启动等待)（v6 新增）
 
 ### 4.4 前后端通信方式
 
@@ -656,7 +672,7 @@ docker compose -f docker-compose.trial.yml up --build
 | 组件 | 源文件 | 职责 |
 |------|--------|------|
 | `SkillModels.kt` | 35 行 | 领域模型：`SkillDefinition`, `ProfileDefinition`, `ProfileRoutingResult` |
-| `SkillLoader.kt` | 266 行 | 扫描 `plugins/` 目录，解析 YAML frontmatter (Jackson YAML)，`ConcurrentHashMap` 缓存，`@PostConstruct` 初始化 |
+| `SkillLoader.kt` | 266 行 | 扫描 `plugins/` 目录，解析 YAML frontmatter (Jackson YAML)，`ConcurrentHashMap` 缓存，`@PostConstruct` 初始化，v6: Skill trigger 条件过滤（stage/type + 关键词匹配） |
 | `ProfileRouter.kt` | 197 行 | 4 级优先路由：显式标签 → 中英文关键词 → 分支名模式 → 默认 development |
 | `SystemPromptAssembler.kt` | 238 行 | 6 段式动态 system prompt 组装 |
 
@@ -680,6 +696,8 @@ metricsService.recordProfileRoute(profile, reason)             ← v4 新增
 SkillLoader.loadSkillsForProfile(profile) → List<SkillDefinition>
     │   (展开 "foundation-skills-all" → 所有 foundation skills)
     │   (跳过 "domain-skills-contextual" → 运行时依赖)
+    │   (v6: 按 stage/type 过滤 — 仅加载匹配 Profile 阶段的 Skill)
+    │   (v6: 关键词匹配 — 消息关键词命中 Skill tags 时额外加载)
     │
     ▼
 SystemPromptAssembler.assemble(profile, skills) → String
@@ -717,33 +735,54 @@ agenticStream() — 最多 MAX_AGENTIC_TURNS(5) 轮
     └─ 如果 stop_reason == END_TURN / MAX_TOKENS:
          ├─ emit ooda_phase("complete") + metricsService.recordOodaPhase("complete")
          ├─ metricsService.recordMessageDuration(totalMs)      ← v4 新增
+         ├─ 底线自动检查（v6 新增）:
+         │    ├─ 检查本轮是否有 workspace_write_file 工具调用
+         │    ├─ 如果有 → 从 Profile 获取 baselines 列表
+         │    ├─ 运行 BaselineService.runBaseline() 逐个执行
+         │    ├─ emit baseline_check 事件（status: running/passed/failed/exhausted）
+         │    ├─ 如果失败 → 重新回到 Observe 阶段（附带失败原因）
+         │    ├─ 最多重试 MAX_BASELINE_RETRIES(2) 轮
+         │    └─ 全部通过或重试耗尽 → 继续
          ├─ 持久化消息和 tool calls
          ├─ 知识空白检测 (KnowledgeGapDetectorService)
          └─ 发送 done 事件
 ```
 
-**McpProxyService 实连架构**（v4 新增）:
+**McpProxyService 实连架构**（v4 新增，v6 更新 — callTool fallback 修复）:
 
 ```
 ClaudeAgentService
     │
     ▼
 McpProxyService.callTool(name, args, workspaceId?)
-    │   ├─ workspace_write_file → WorkspaceService.createFile()   (local, v5 新增)
-    │   ├─ workspace_read_file  → WorkspaceService.getFileContent() (local, v5 新增)
-    │   ├─ workspace_list_files → WorkspaceService.getFileTree()   (local, v5 新增)
-    │   ├─ search_knowledge → WebClient POST → knowledge-mcp:8081
-    │   ├─ read_file         → WebClient POST → knowledge-mcp:8081
-    │   ├─ query_schema      → WebClient POST → database-mcp:8082
-    │   ├─ run_baseline      → BaselineService.runBaseline(name)  (local)
-    │   ├─ list_baselines    → BaselineService.listBaselines()    (local)
-    │   └─ get_service_info  → WebClient POST → service-graph-mcp:8083
+    │
+    │ 1. Workspace 工具（local, v5 新增）
+    │   ├─ workspace_write_file → WorkspaceService.createFile()
+    │   ├─ workspace_read_file  → WorkspaceService.getFileContent()
+    │   └─ workspace_list_files → WorkspaceService.getFileTree()
+    │
+    │ 2. 外部 MCP Server 查找（v6 改进）
+    │   ├─ toolCache 查找: 哪个 server 有此工具 → 直接调用该 server
+    │   ├─ 缓存未命中且未全部缓存 → 逐 server 尝试
+    │   └─ 全部缓存且未找到 → 跳过，直接 fallback
+    │
+    │ 3. Built-in Fallback（local）
+    │   ├─ search_knowledge → 本地知识库目录搜索
+    │   ├─ read_file         → 本地知识库文件读取
+    │   ├─ query_schema      → 后端内部 DB schema 查询
+    │   ├─ run_baseline      → BaselineService.runBaseline(name)
+    │   ├─ list_baselines    → BaselineService.listBaselines()
+    │   └─ get_service_info  → 内置服务信息
     │
     ▼
 McpToolCallResponse { content: List<McpContent>, isError: Boolean }
 ```
 
-MCP Server URL 从 `application.yml` 的 `forge.mcp.*` 配置读取。
+**外部 MCP Server 发现**（v6 新增）:
+- 配置: `FORGE_MCP_SERVERS=http://knowledge-mcp:8081,http://database-mcp:8082`
+- 启动时 `GET /tools` 发现工具列表 → toolCache 缓存
+- 工具合并: 外部发现的工具 + built-in 默认工具，同名去重
+- 日志: `"Discovered {n} tools from {server}"`
 
 **MetricsService 注入点**（v4 新增）:
 
@@ -818,18 +857,18 @@ MCP Server URL 从 `application.yml` 的 `forge.mcp.*` 配置读取。
 | 指标导出 | micrometer-registry-prometheus | /actuator/prometheus 端点（v4 新增） |
 | YAML 解析 | Jackson Dataformat YAML | Skill/Profile frontmatter 解析 |
 | 序列化 | Jackson + Kotlin Module | (Spring Boot managed) |
-| 测试 | JUnit 5 + MockK 1.13 + AssertJ | 130+ tests passing |
+| 测试 | JUnit 5 + MockK 1.13 + AssertJ | 147 tests passing |
 
 ---
 
 ## 五、验证状态
 
-> Phase 1.6 全部完成后验证结果 (2026-02-19) — v5 更新
+> Sprint 2.2 全部完成后验证结果 (2026-02-21) — v6 更新
 
 | # | 验证项 | 状态 | 说明 |
 |---|--------|------|------|
-| 1 | Docker 镜像构建 | ✅ | 4 个镜像全部构建成功（v5: +keycloak） |
-| 2 | 容器启动 | ✅ | 4 容器 running, backend+keycloak healthy（v5: 3→4） |
+| 1 | Docker 镜像构建 | ✅ | 6 个镜像全部构建成功（v6: +knowledge-mcp +database-mcp） |
+| 2 | 容器启动 | ✅ | 6 容器 running, 全部 healthy（v6: 4→6） |
 | 3 | Nginx 路由 | ✅ | 前端 200, API 正常, /auth/ proxy 正常（v5: +keycloak 代理） |
 | 4 | 前端页面加载 | ✅ | `http://localhost:9000` 返回 200 |
 | 5 | 后端 API | ✅ | `/api/chat/skills`(32) + `/api/chat/profiles`(5) + `/api/mcp/tools`(9) |
@@ -841,8 +880,8 @@ MCP Server URL 从 `application.yml` 的 `forge.mcp.*` 配置读取。
 | 11 | Profile 路由（默认回退） | ✅ | 1/1 — 无关消息回退到 development |
 | 12 | Prompt Caching | ✅ | 缓存命中后 system prompt 费用降 90% |
 | 13 | Agentic Loop 多轮 Tool Calling | ✅ | Turn 1 tool_use + Turn 2 content 正常 |
-| 14 | MCP 实连 | ✅ | 9 工具注册（v5: 6→9, +3 workspace 工具） |
-| 15 | BaselineService 底线集成 | ✅ | run_baseline / list_baselines 工具可用 |
+| 14 | MCP 实连 | ✅ | 9 builtin + 9 外部发现（v6: knowledge-mcp 6 + database-mcp 3） |
+| 15 | BaselineService 底线集成 | ✅ | run_baseline / list_baselines 工具可用 + AgentLoop 自动检查（v6） |
 | 16 | MetricsService 指标采集 | ✅ | 7 个 forge.* 自定义指标注册 |
 | 17 | Actuator/Prometheus 端点 | ✅ | `/actuator/metrics/forge.*` + `/actuator/prometheus` |
 | 18 | agent-eval 真实模型调用 | ✅ | ANTHROPIC_API_KEY 有则调 Claude，无则结构验证 |
@@ -874,9 +913,20 @@ MCP Server URL 从 `application.yml` 的 `forge.mcp.*` 配置读取。
 | 12 | MCP 9 工具注册（+3 workspace） | ✅ |
 | 13 | Docker 4 容器部署健康 | ✅ |
 
+### Sprint 2.2 验收标准达成（v6 新增）
+
+| # | 标准 | 状态 |
+|---|------|------|
+| 1 | Skill 按 Profile stage/type 动态过滤加载 | ✅ 24/24 TC |
+| 2 | AgentLoop 底线自动检查，失败最多重试 2 轮 | ✅ 端到端验证 |
+| 3 | knowledge-mcp 独立容器运行，本地文件搜索 | ✅ 7 文档返回 |
+| 4 | database-mcp 独立容器运行，H2 schema/查询 | ✅ 3 表 + DML 拒绝 |
+| 5 | McpProxyService callTool fallback 正确 | ✅ toolCache 查找 |
+| 6 | Docker 6 容器全部 healthy | ✅ 一键启动 |
+
 ### 单元测试
 
-**总计**: 130+ tests, 0 failures
+**总计**: 147 tests, 0 failures
 
 | 测试文件 | 测试数 | 覆盖范围 |
 |---------|--------|---------|
@@ -894,8 +944,8 @@ MCP Server URL 从 `application.yml` 的 `forge.mcp.*` 配置读取。
 | `EvalRunnerTest.kt` | 18 | 5 断言类型 + 有/无 adapter + profile/tag 过滤 |
 | model-adapter tests | 11 | ClaudeAdapter + StreamEvent + tool calling |
 
-**Skill 加载验证**: 32 skills, 5 profiles
-**MCP 工具验证**: 9 tools（6 实连 + 3 workspace）
+**Skill 加载验证**: 32 skills, 5 profiles（v6: 条件触发过滤后 3~20 个）
+**MCP 工具验证**: 9 builtin + 9 外部发现（v6: knowledge-mcp 6 + database-mcp 3）
 
 ---
 

@@ -112,7 +112,7 @@ class McpProxyService(
     fun callTool(toolName: String, arguments: Map<String, Any?>): McpToolCallResponse {
         val servers = parseMcpServers()
 
-        // Find which server has this tool
+        // Find which server has this tool (cache-based lookup)
         for (serverUrl in servers) {
             val tools = toolCache[serverUrl]
             if (tools != null && tools.any { it.name == toolName }) {
@@ -120,12 +120,14 @@ class McpProxyService(
             }
         }
 
-        // If no server found, try all servers
-        for (serverUrl in servers) {
-            try {
-                return callToolOnServer(serverUrl, toolName, arguments)
-            } catch (e: Exception) {
-                logger.debug("Tool $toolName not found on $serverUrl")
+        // If tool cache is populated for all servers and tool not found,
+        // skip "try all servers" and go directly to built-in fallback.
+        val allCached = servers.all { toolCache.containsKey(it) }
+        if (!allCached) {
+            // Cache not fully populated yet — try each server
+            for (serverUrl in servers) {
+                val result = callToolOnServer(serverUrl, toolName, arguments)
+                if (!result.isError) return result
             }
         }
 

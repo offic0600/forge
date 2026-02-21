@@ -65,7 +65,10 @@ class AccessControl {
      * configuration store or derived from OAuth roles.
      * Format: FORGE_DB_USER_ACCESS_{USERID}=LEVEL
      */
-    private val defaultAccessLevel = AccessLevel.SCHEMA_READ
+    private val defaultAccessLevel = System.getenv("FORGE_DB_DEFAULT_ACCESS_LEVEL")
+        ?.uppercase()?.let {
+            try { AccessLevel.valueOf(it) } catch (_: Exception) { null }
+        } ?: AccessLevel.SCHEMA_READ
 
     /**
      * Validates that the given user has access to the specified database.

@@ -24,7 +24,8 @@ import org.slf4j.LoggerFactory
  */
 class AdrSearchTool(
     private val wikiBaseUrl: String,
-    private val wikiApiToken: String
+    private val wikiApiToken: String,
+    private val localProvider: com.forge.mcp.knowledge.LocalKnowledgeProvider? = null
 ) : McpTool {
 
     private val logger = LoggerFactory.getLogger(AdrSearchTool::class.java)
@@ -95,6 +96,21 @@ class AdrSearchTool(
         if (status != null && status !in validStatuses) {
             throw McpError.InvalidArguments(
                 "Invalid status '$status'. Must be one of: ${validStatuses.joinToString()}"
+            )
+        }
+
+        if (localProvider != null) {
+            val results = localProvider.search(query, "adr")
+            val adrResults = results.map { doc ->
+                AdrResult(
+                    id = doc.path, title = doc.title, status = "accepted",
+                    date = "", summary = doc.excerpt, url = "local://${doc.path}"
+                )
+            }
+            return ToolCallResponse(
+                content = listOf(ToolContent.Json(Json.encodeToJsonElement(
+                    AdrSearchResponse(adrResults, adrResults.size, query, status)
+                )))
             )
         }
 

@@ -24,7 +24,8 @@ import org.slf4j.LoggerFactory
  */
 class RunbookSearchTool(
     private val wikiBaseUrl: String,
-    private val wikiApiToken: String
+    private val wikiApiToken: String,
+    private val localProvider: com.forge.mcp.knowledge.LocalKnowledgeProvider? = null
 ) : McpTool {
 
     private val logger = LoggerFactory.getLogger(RunbookSearchTool::class.java)
@@ -82,6 +83,22 @@ class RunbookSearchTool(
             ?: throw McpError.InvalidArguments("'query' is required")
 
         val service = arguments["service"]?.jsonPrimitive?.contentOrNull
+
+        if (localProvider != null) {
+            val results = localProvider.search(query, "runbooks")
+            val runbookResults = results.map { doc ->
+                RunbookResult(
+                    title = doc.title, stepsSummary = listOf(doc.excerpt),
+                    relatedServices = emptyList(), severity = "unknown",
+                    url = "local://${doc.path}", lastUpdated = ""
+                )
+            }
+            return ToolCallResponse(
+                content = listOf(ToolContent.Json(Json.encodeToJsonElement(
+                    RunbookSearchResponse(runbookResults, runbookResults.size, query, service)
+                )))
+            )
+        }
 
         return try {
             val cqlParts = mutableListOf(

@@ -100,15 +100,19 @@ class SchemaInspectorTool(
         val database = arguments["database"]?.jsonPrimitive?.contentOrNull
             ?: throw McpError.InvalidArguments("'database' is required")
 
-        val schema = arguments["schema"]?.jsonPrimitive?.contentOrNull ?: "public"
+        val requestedSchema = arguments["schema"]?.jsonPrimitive?.contentOrNull ?: "public"
         val table = arguments["table"]?.jsonPrimitive?.contentOrNull
 
         // Validate access
         accessControl.validateAccess(database, userId, AccessControl.AccessLevel.SCHEMA_READ)
-        accessControl.validateSchema(schema)
+        accessControl.validateSchema(requestedSchema)
 
         return try {
             val dataSource = connectionManager.getDataSource(database)
+
+            // H2 uses uppercase identifiers; adjust schema name for compatibility
+            val isH2 = dataSource.jdbcUrl?.startsWith("jdbc:h2:") == true
+            val schema = if (isH2) requestedSchema.uppercase() else requestedSchema
             val tables = mutableListOf<TableInfo>()
 
             dataSource.connection.use { conn ->

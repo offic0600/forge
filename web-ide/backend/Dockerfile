@@ -1,4 +1,6 @@
 FROM eclipse-temurin:21-jre-alpine
+RUN apk add --no-cache bash git grep findutils
+RUN mkdir -p /workspace
 WORKDIR /app
 COPY build/libs/backend-0.1.0-SNAPSHOT.jar app.jar
 EXPOSE 8080

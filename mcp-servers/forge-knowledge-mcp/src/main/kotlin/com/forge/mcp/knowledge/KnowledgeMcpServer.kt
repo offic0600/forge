@@ -178,14 +178,24 @@ class KnowledgeMcpServer : McpServerBase(
     port = System.getenv("PORT")?.toIntOrNull() ?: 8081
 ) {
     override fun registerTools(): List<McpTool> {
+        val knowledgeMode = System.getenv("KNOWLEDGE_MODE") ?: "local"
+        val knowledgeBasePath = System.getenv("KNOWLEDGE_BASE_PATH") ?: "/knowledge-base"
         val wikiBaseUrl = System.getenv("WIKI_BASE_URL") ?: "http://localhost:8090"
         val wikiApiToken = System.getenv("WIKI_API_TOKEN") ?: ""
 
+        val localProvider = if (knowledgeMode == "local") {
+            logger.info("Knowledge mode: local (reading from {})", knowledgeBasePath)
+            LocalKnowledgeProvider(knowledgeBasePath)
+        } else {
+            logger.info("Knowledge mode: wiki (connecting to {})", wikiBaseUrl)
+            null
+        }
+
         return listOf(
-            WikiSearchTool(wikiBaseUrl, wikiApiToken),
-            AdrSearchTool(wikiBaseUrl, wikiApiToken),
-            RunbookSearchTool(wikiBaseUrl, wikiApiToken),
-            ApiDocSearchTool(wikiBaseUrl, wikiApiToken),
+            WikiSearchTool(wikiBaseUrl, wikiApiToken, localProvider),
+            AdrSearchTool(wikiBaseUrl, wikiApiToken, localProvider),
+            RunbookSearchTool(wikiBaseUrl, wikiApiToken, localProvider),
+            ApiDocSearchTool(wikiBaseUrl, wikiApiToken, localProvider),
             PageCreateTool(wikiBaseUrl, wikiApiToken),
             KnowledgeGapLogTool()
         )

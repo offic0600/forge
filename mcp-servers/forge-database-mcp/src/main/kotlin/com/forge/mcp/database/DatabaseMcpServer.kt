@@ -54,6 +54,8 @@ class DatabaseConnectionManager {
 
             logger.info("Creating connection pool for database '{}'", dbName)
 
+            val isH2 = url.startsWith("jdbc:h2:")
+
             val config = HikariConfig().apply {
                 jdbcUrl = url
                 username = user
@@ -63,7 +65,7 @@ class DatabaseConnectionManager {
                 connectionTimeout = 10_000
                 idleTimeout = 300_000
                 maxLifetime = 600_000
-                isReadOnly = true
+                isReadOnly = !isH2 // H2 needs write access for DDL init
                 addDataSourceProperty("ApplicationName", "forge-database-mcp")
             }
             HikariDataSource(config)
@@ -146,6 +148,8 @@ class DatabaseMcpServer {
     }
 
     fun start() {
+        initH2SampleData()
+
         val tools = registerTools()
         val toolMap = tools.associateBy { it.definition.name }
 
@@ -230,6 +234,66 @@ class DatabaseMcpServer {
                 }
             }
         }.start(wait = true)
+    }
+
+    /**
+     * Initializes H2 in-memory databases with sample schema and data
+     * so the trial environment has something to query.
+     */
+    private fun initH2SampleData() {
+        for (dbName in connectionManager.configuredDatabases()) {
+            try {
+                val ds = connectionManager.getDataSource(dbName)
+                if (!ds.jdbcUrl.startsWith("jdbc:h2:")) continue
+
+                logger.info("Initializing H2 sample data for database '{}'", dbName)
+                ds.connection.use { conn ->
+                    conn.createStatement().use { stmt ->
+                        stmt.executeUpdate("""
+                            CREATE TABLE IF NOT EXISTS services (
+                                id INT PRIMARY KEY AUTO_INCREMENT,
+                                name VARCHAR(100) NOT NULL,
+                                team VARCHAR(100),
+                                tech_stack VARCHAR(255),
+                                status VARCHAR(20) DEFAULT 'active'
+                            )
+                        """)
+                        stmt.executeUpdate("""
+                            CREATE TABLE IF NOT EXISTS api_endpoints (
+                                id INT PRIMARY KEY AUTO_INCREMENT,
+                                service_id INT,
+                                method VARCHAR(10),
+                                path VARCHAR(255),
+                                description VARCHAR(500),
+                                FOREIGN KEY (service_id) REFERENCES services(id)
+                            )
+                        """)
+                        stmt.executeUpdate("""
+                            CREATE TABLE IF NOT EXISTS incidents (
+                                id INT PRIMARY KEY AUTO_INCREMENT,
+                                service_name VARCHAR(100),
+                                severity VARCHAR(20),
+                                title VARCHAR(255),
+                                resolved BOOLEAN DEFAULT FALSE,
+                                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                            )
+                        """)
+                        // Insert sample data
+                        stmt.executeUpdate("MERGE INTO services (id, name, team, tech_stack, status) VALUES (1, 'order-service', 'Order Team', 'Kotlin,Spring Boot,PostgreSQL', 'active')")
+                        stmt.executeUpdate("MERGE INTO services (id, name, team, tech_stack, status) VALUES (2, 'payment-service', 'Payment Team', 'Kotlin,Spring Boot,Redis', 'active')")
+                        stmt.executeUpdate("MERGE INTO services (id, name, team, tech_stack, status) VALUES (3, 'inventory-service', 'Inventory Team', 'Java,Spring Boot,MySQL', 'active')")
+                        stmt.executeUpdate("MERGE INTO api_endpoints (id, service_id, method, path, description) VALUES (1, 1, 'POST', '/api/orders', 'Create a new order')")
+                        stmt.executeUpdate("MERGE INTO api_endpoints (id, service_id, method, path, description) VALUES (2, 1, 'GET', '/api/orders/{id}', 'Get order by ID')")
+                        stmt.executeUpdate("MERGE INTO api_endpoints (id, service_id, method, path, description) VALUES (3, 2, 'POST', '/api/payments', 'Process payment')")
+                        stmt.executeUpdate("MERGE INTO incidents (id, service_name, severity, title, resolved) VALUES (1, 'order-service', 'P2', 'Slow response times on /api/orders', true)")
+                        stmt.executeUpdate("MERGE INTO incidents (id, service_name, severity, title, resolved) VALUES (2, 'payment-service', 'P1', 'Payment gateway timeout', false)")
+                    }
+                }
+                logger.info("H2 sample data initialized for '{}'", dbName)
+            } catch (e: Exception) {
+                logger.warn("Failed to initialize H2 sample data for '{}': {}", dbName, e.message)
+            }
+        }
     }
 
     private fun extractUserId(token: String): String {

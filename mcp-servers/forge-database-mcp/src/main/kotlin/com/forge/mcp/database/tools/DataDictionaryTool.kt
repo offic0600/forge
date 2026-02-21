@@ -122,15 +122,78 @@ class DataDictionaryTool(
     }
 
     /**
-     * Searches the PostgreSQL system catalog for columns matching the query.
-     * Uses column names, table names, and column comments for matching.
+     * Searches the database catalog for columns matching the query.
+     * Delegates to PostgreSQL-specific or JDBC metadata-based search.
      */
     private fun searchDataDictionary(dbName: String, query: String): List<DataDictionaryEntry> {
+        val dataSource = connectionManager.getDataSource(dbName)
+        val isH2 = dataSource.jdbcUrl?.startsWith("jdbc:h2:") == true
+
+        return if (isH2) {
+            searchDataDictionaryJdbc(dbName, query)
+        } else {
+            searchDataDictionaryPostgres(dbName, query)
+        }
+    }
+
+    /**
+     * JDBC metadata-based search — works with H2 and other databases.
+     */
+    private fun searchDataDictionaryJdbc(dbName: String, query: String): List<DataDictionaryEntry> {
+        val dataSource = connectionManager.getDataSource(dbName)
+        val entries = mutableListOf<DataDictionaryEntry>()
+        val queryLower = query.lowercase()
+
+        dataSource.connection.use { conn ->
+            val metadata = conn.metaData
+            val tableRs = metadata.getTables(null, "PUBLIC", "%", arrayOf("TABLE"))
+            val tableNames = mutableListOf<String>()
+            while (tableRs.next()) {
+                tableNames.add(tableRs.getString("TABLE_NAME"))
+            }
+            tableRs.close()
+
+            for (tableName in tableNames) {
+                val colRs = metadata.getColumns(null, "PUBLIC", tableName, "%")
+                while (colRs.next()) {
+                    val columnName = colRs.getString("COLUMN_NAME")
+                    val dataType = colRs.getString("TYPE_NAME")
+                    val remarks = colRs.getString("REMARKS")?.takeIf { it.isNotBlank() }
+
+                    // Match against query
+                    val matchText = "$columnName $tableName ${remarks ?: ""}".lowercase()
+                    if (queryLower.split(" ").any { it in matchText }) {
+                        entries.add(
+                            DataDictionaryEntry(
+                                database = dbName,
+                                schema = "PUBLIC",
+                                table = tableName,
+                                column = columnName,
+                                dataType = dataType,
+                                description = remarks,
+                                businessMeaning = remarks,
+                                exampleValues = emptyList(),
+                                nullablePercentage = null,
+                                distinctCountEstimate = null
+                            )
+                        )
+                    }
+                }
+                colRs.close()
+            }
+        }
+
+        return entries.take(100)
+    }
+
+    /**
+     * PostgreSQL-specific search using system catalog and pg_stats.
+     */
+    private fun searchDataDictionaryPostgres(dbName: String, query: String): List<DataDictionaryEntry> {
         val dataSource = connectionManager.getDataSource(dbName)
         val entries = mutableListOf<DataDictionaryEntry>()
 
         dataSource.connection.use { conn ->
-            // Search columns using PostgreSQL information_schema and comments
             val sql = """
                 SELECT
                     c.table_schema,
@@ -195,8 +258,8 @@ class DataDictionaryTool(
                             column = columnName,
                             dataType = dataType,
                             description = columnComment,
-                            businessMeaning = columnComment, // In production, mapped from a separate business glossary
-                            exampleValues = emptyList(), // Would be populated from pg_stats.most_common_vals
+                            businessMeaning = columnComment,
+                            exampleValues = emptyList(),
                             nullablePercentage = if (!rs.wasNull()) (nullFrac * 100) else null,
                             distinctCountEstimate = if (!rs.wasNull() && nDistinct > 0) nDistinct.toLong() else null
                         )
