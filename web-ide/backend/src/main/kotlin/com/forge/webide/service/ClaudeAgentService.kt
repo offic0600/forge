@@ -41,8 +41,8 @@ class ClaudeAgentService(
     private val logger = LoggerFactory.getLogger(ClaudeAgentService::class.java)
     private val executor = Executors.newFixedThreadPool(10)
 
-    @Value("\${forge.model.name:\${forge.claude.model:claude-sonnet-4-20250514}}")
-    private var model: String = "claude-sonnet-4-20250514"
+    @Value("\${forge.model.name:\${forge.claude.model:claude-sonnet-4-6}}")
+    private var model: String = "claude-sonnet-4-6"
 
     companion object {
         private const val MAX_AGENTIC_TURNS = 8
