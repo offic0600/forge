@@ -10,7 +10,14 @@ import com.forge.webide.repository.ChatMessageRepository
 import com.forge.webide.repository.ChatSessionRepository
 import com.forge.webide.repository.ExecutionRecordRepository
 import com.forge.webide.repository.HitlCheckpointRepository
+import com.forge.webide.service.memory.MemoryContext
+import com.forge.webide.service.memory.MemoryContextLoader
+import com.forge.webide.service.memory.MessageCompressor
+import com.forge.webide.service.memory.SessionSummaryService
+import com.forge.webide.service.memory.TokenEstimator
 import com.forge.webide.service.skill.*
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
@@ -44,7 +51,11 @@ class ClaudeAgentService(
     private val skillLoader: SkillLoader,
     private val systemPromptAssembler: SystemPromptAssembler,
     private val metricsService: MetricsService,
-    private val baselineService: BaselineService
+    private val baselineService: BaselineService,
+    private val sessionSummaryService: SessionSummaryService,
+    private val memoryContextLoader: MemoryContextLoader,
+    private val messageCompressor: MessageCompressor,
+    private val tokenEstimator: TokenEstimator
 ) {
     private val logger = LoggerFactory.getLogger(ClaudeAgentService::class.java)
     private val executor = Executors.newFixedThreadPool(10)
@@ -66,13 +77,25 @@ class ClaudeAgentService(
 
     /**
      * Build a dynamic system prompt based on the user's message.
+     * Injects 3-layer memory context for cross-session continuity.
      * Falls back to a static prompt if skill loading fails.
      */
-    private fun buildDynamicSystemPrompt(message: String): DynamicPromptResult {
+    private fun buildDynamicSystemPrompt(message: String, workspaceId: String = ""): DynamicPromptResult {
         return try {
             val routing = profileRouter.route(message)
+            // Load memory context for cross-session continuity
+            val memoryContext = if (workspaceId.isNotBlank()) {
+                try {
+                    memoryContextLoader.loadMemoryContext(workspaceId, routing.profile.name)
+                } catch (e: Exception) {
+                    logger.debug("Failed to load memory context: {}", e.message)
+                    MemoryContext()
+                }
+            } else {
+                MemoryContext()
+            }
             val skills = skillLoader.loadSkillsForProfile(routing.profile, message)
-            val systemPrompt = systemPromptAssembler.assemble(routing.profile, skills)
+            val systemPrompt = systemPromptAssembler.assemble(routing.profile, skills, memoryContext)
             metricsService.recordProfileRoute(routing.profile.name, routing.reason)
             metricsService.recordSkillLoaded(routing.profile.name, skills.size)
             DynamicPromptResult(
@@ -117,7 +140,7 @@ class ClaudeAgentService(
         }
 
         return try {
-            val promptResult = buildDynamicSystemPrompt(message)
+            val promptResult = buildDynamicSystemPrompt(message, workspaceId)
             logger.info("Profile: {}, Skills: {}", promptResult.activeProfile, promptResult.loadedSkills)
 
             val options = CompletionOptions(
@@ -126,9 +149,9 @@ class ClaudeAgentService(
                 systemPrompt = promptResult.systemPrompt
             )
 
-            // Run single-turn completion
+            // Run single-turn completion with rate limit retry
             val result = runBlocking {
-                val events = claudeAdapter.streamWithTools(messages, options, tools).toList()
+                val events = streamWithRetry { claudeAdapter.streamWithTools(messages, options, tools) }.toList()
                 collectStreamResult(events)
             }
 
@@ -183,7 +206,7 @@ class ClaudeAgentService(
                 metricsService.recordOodaPhase("observe")
                 emitSubStep(onEvent, "解析用户意图（${message.length} 字符）")
 
-                val promptResult = buildDynamicSystemPrompt(message)
+                val promptResult = buildDynamicSystemPrompt(message, workspaceId)
                 logger.info("Stream profile: {}, Skills: {}", promptResult.activeProfile, promptResult.loadedSkills)
 
                 val options = CompletionOptions(
@@ -342,6 +365,30 @@ class ClaudeAgentService(
                     logger.warn("Failed to save execution record: {}", e.message)
                 }
 
+                // Generate session summary and update memory layers asynchronously (non-blocking)
+                executor.submit {
+                    try {
+                        sessionSummaryService.generateAndSave(
+                            sessionId = sessionId,
+                            workspaceId = workspaceId,
+                            profile = promptResult.activeProfile,
+                            conversationHistory = history + listOf(
+                                Message(role = Message.Role.USER, content = fullMessage),
+                                Message(role = Message.Role.ASSISTANT, content = finalResult.content)
+                            ),
+                            toolCalls = finalResult.toolCalls
+                        )
+                        // Update Stage Memory and Workspace Memory from the generated summary
+                        memoryContextLoader.updateFromSessionSummary(
+                            workspaceId = workspaceId,
+                            profile = promptResult.activeProfile,
+                            sessionId = sessionId
+                        )
+                    } catch (e: Exception) {
+                        logger.warn("Failed to generate session summary: {}", e.message)
+                    }
+                }
+
                 val assistantMessage = ChatMessage(
                     sessionId = sessionId,
                     role = MessageRole.ASSISTANT,
@@ -383,6 +430,19 @@ class ClaudeAgentService(
             lastTurn = turn
             logger.debug("Agentic turn $turn / $MAX_AGENTIC_TURNS")
 
+            // Compress messages if context is getting large
+            val compressed = messageCompressor.compressIfNeeded(currentMessages)
+            if (compressed.phase > 0) {
+                currentMessages = compressed.messages.toMutableList()
+                logger.info("Context compressed: phase={}, tokens={}", compressed.phase, compressed.tokenCount)
+                onEvent(mapOf(
+                    "type" to "context_usage",
+                    "tokensUsed" to compressed.tokenCount,
+                    "tokenBudget" to MessageCompressor.MAX_CONVERSATION_TOKENS,
+                    "compressionPhase" to compressed.phase
+                ))
+            }
+
             // Accumulate events from this turn
             var turnText = StringBuilder()
             var currentToolUses = mutableListOf<PendingToolUse>()
@@ -393,8 +453,8 @@ class ClaudeAgentService(
             var firstEventReceived = false
             val turnStartMs = System.currentTimeMillis()
 
-            // Stream and emit events in real-time
-            claudeAdapter.streamWithTools(currentMessages, options, tools).collect { event ->
+            // Stream and emit events in real-time (with rate limit retry)
+            streamWithRetry { claudeAdapter.streamWithTools(currentMessages, options, tools) }.collect { event ->
                 if (!firstEventReceived) {
                     firstEventReceived = true
                     logger.debug("First event received for turn $turn in ${System.currentTimeMillis() - turnStartMs}ms: ${event::class.simpleName}")
@@ -985,6 +1045,30 @@ $failureContext
         }
 
         return AgenticResult(content = text.toString(), toolCalls = toolCalls)
+    }
+
+    // ---- Rate limit retry ----
+
+    /**
+     * Wrap a streaming API call with exponential backoff retry on rate limit (429).
+     * Retries up to [maxRetries] times with delays of 1s, 2s, 4s... (max 30s).
+     */
+    private suspend fun streamWithRetry(
+        maxRetries: Int = 3,
+        block: suspend () -> Flow<StreamEvent>
+    ): Flow<StreamEvent> {
+        var lastException: Exception? = null
+        for (attempt in 0 until maxRetries) {
+            try {
+                return block()
+            } catch (e: RateLimitException) {
+                lastException = e
+                val delayMs = (1000L * (1 shl attempt)).coerceAtMost(30_000L)
+                logger.warn("Rate limited, retrying in ${delayMs}ms (attempt ${attempt + 1}/$maxRetries)")
+                delay(delayMs)
+            }
+        }
+        throw lastException!!
     }
 }
 

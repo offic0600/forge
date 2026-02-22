@@ -41,7 +41,7 @@ class McpProxyServiceTest {
 
     @BeforeEach
     fun setup() {
-        service = McpProxyService(baselineService, dataSource, workspaceService, skillLoader, skillUsageRepository)
+        service = McpProxyService(baselineService, dataSource, workspaceService, skillLoader, skillUsageRepository, mockk(relaxed = true), mockk(relaxed = true))
     }
 
     // --- Default Tool Tests ---
@@ -50,7 +50,7 @@ class McpProxyServiceTest {
     fun `listTools returns default tools when no servers configured`() {
         val tools = service.listTools()
 
-        assertThat(tools).hasSizeGreaterThanOrEqualTo(12) // 9 original + 3 new skill tools
+        assertThat(tools).hasSizeGreaterThanOrEqualTo(14) // 9 original + 3 skill tools + 2 memory tools
         assertThat(tools.map { it.name }).contains(
             "search_knowledge",
             "read_file",

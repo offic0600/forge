@@ -7,6 +7,8 @@ import com.forge.webide.model.McpContent
 import com.forge.webide.model.McpTool
 import com.forge.webide.model.McpToolCallResponse
 import com.forge.webide.repository.SkillUsageRepository
+import com.forge.webide.service.memory.SessionSummaryService
+import com.forge.webide.service.memory.WorkspaceMemoryService
 import com.forge.webide.service.skill.SkillCategory
 import com.forge.webide.service.skill.SkillLoader
 import com.forge.webide.service.skill.SkillScope
@@ -39,7 +41,9 @@ class McpProxyService(
     private val dataSource: DataSource,
     private val workspaceService: WorkspaceService,
     private val skillLoader: SkillLoader,
-    private val skillUsageRepository: SkillUsageRepository
+    private val skillUsageRepository: SkillUsageRepository,
+    private val workspaceMemoryService: WorkspaceMemoryService,
+    private val sessionSummaryService: SessionSummaryService
 ) {
 
     private val logger = LoggerFactory.getLogger(McpProxyService::class.java)
@@ -249,6 +253,8 @@ class McpProxyService(
                 }
                 "workspace_compile" -> handleWorkspaceCompile(workspaceId, args)
                 "workspace_test" -> handleWorkspaceTest(workspaceId, args)
+                "update_workspace_memory" -> handleUpdateWorkspaceMemory(args, workspaceId)
+                "get_session_history" -> handleGetSessionHistory(args, workspaceId)
                 else -> errorResponse("Unknown workspace tool: $toolName")
             }
         } catch (e: Exception) {
@@ -563,10 +569,12 @@ class McpProxyService(
                 "read_skill" -> handleReadSkill(arguments)
                 "run_skill_script" -> handleRunSkillScript(arguments)
                 "list_skills" -> handleListSkills(arguments)
+                "update_workspace_memory" -> handleUpdateWorkspaceMemory(arguments)
+                "get_session_history" -> handleGetSessionHistory(arguments)
                 else -> McpToolCallResponse(
                     content = listOf(McpContent(
                         type = "text",
-                        text = "Unknown tool: $toolName. Available tools: search_knowledge, read_file, get_service_info, run_baseline, query_schema, list_baselines, read_skill, run_skill_script, list_skills"
+                        text = "Unknown tool: $toolName. Available tools: search_knowledge, read_file, get_service_info, run_baseline, query_schema, list_baselines, read_skill, run_skill_script, list_skills, update_workspace_memory, get_session_history"
                     )),
                     isError = true
                 )
@@ -1123,6 +1131,71 @@ class McpProxyService(
         )
     }
 
+    // ---- Memory tool implementations ----
+
+    /**
+     * Update workspace memory content (workspace-scoped version).
+     */
+    private fun handleUpdateWorkspaceMemory(args: Map<String, Any?>, workspaceId: String): McpToolCallResponse {
+        val content = args["content"] as? String
+            ?: return errorResponse("'content' parameter is required")
+        workspaceMemoryService.updateMemory(workspaceId, content)
+        return McpToolCallResponse(
+            content = listOf(McpContent(type = "text", text = "Workspace memory updated (${content.length} chars)")),
+            isError = false
+        )
+    }
+
+    /**
+     * Update workspace memory content (built-in tool version, needs workspaceId in args).
+     */
+    private fun handleUpdateWorkspaceMemory(args: Map<String, Any?>): McpToolCallResponse {
+        val workspaceId = args["workspaceId"] as? String
+            ?: return errorResponse("'workspaceId' parameter is required")
+        val content = args["content"] as? String
+            ?: return errorResponse("'content' parameter is required")
+        workspaceMemoryService.updateMemory(workspaceId, content)
+        return McpToolCallResponse(
+            content = listOf(McpContent(type = "text", text = "Workspace memory updated (${content.length} chars)")),
+            isError = false
+        )
+    }
+
+    /**
+     * Get session history summaries (workspace-scoped version).
+     */
+    private fun handleGetSessionHistory(args: Map<String, Any?>, workspaceId: String): McpToolCallResponse {
+        val limit = (args["limit"] as? Number)?.toInt() ?: 5
+        val summaries = sessionSummaryService.getRecentSummaries(workspaceId, limit)
+        if (summaries.isEmpty()) {
+            return McpToolCallResponse(
+                content = listOf(McpContent(type = "text", text = "No session history found for this workspace.")),
+                isError = false
+            )
+        }
+        val text = buildString {
+            appendLine("Session History (${summaries.size} sessions):")
+            appendLine()
+            for (s in summaries) {
+                appendLine(sessionSummaryService.formatSummaryForPrompt(s))
+                appendLine()
+            }
+        }
+        return McpToolCallResponse(
+            content = listOf(McpContent(type = "text", text = text)),
+            isError = false
+        )
+    }
+
+    /**
+     * Get session history summaries (built-in tool version, needs workspaceId in args).
+     */
+    private fun handleGetSessionHistory(args: Map<String, Any?>): McpToolCallResponse {
+        val workspaceId = args["workspaceId"] as? String
+            ?: return errorResponse("'workspaceId' parameter is required")
+        return handleGetSessionHistory(args, workspaceId)
+    }
+
     // ---- Tool definitions ----
 
     private fun getDefaultTools(): List<McpTool> {
@@ -1259,6 +1332,27 @@ class McpProxyService(
                         "profile" to mapOf("type" to "string", "description" to "Filter by profile name (e.g. 'development-profile')"),
                         "category" to mapOf("type" to "string", "description" to "Filter by category", "enum" to listOf("SYSTEM", "FOUNDATION", "DELIVERY", "KNOWLEDGE", "CUSTOM")),
                         "scope" to mapOf("type" to "string", "description" to "Filter by scope (ownership)", "enum" to listOf("PLATFORM", "WORKSPACE", "CUSTOM"))
+                    )
+                )
+            ),
+            McpTool(
+                name = "update_workspace_memory",
+                description = "Update the workspace-level persistent memory. Use this to save key project facts, tech stack, constraints, decisions, and current progress. This memory persists across sessions and is automatically injected into every future session's system prompt. Keep content concise (max 4000 chars) and focused on durable facts.",
+                inputSchema = mapOf(
+                    "type" to "object",
+                    "properties" to mapOf(
+                        "content" to mapOf("type" to "string", "description" to "Markdown content for workspace memory. Should include: project overview, tech stack, key decisions, current stage, and important constraints.")
+                    ),
+                    "required" to listOf("content")
+                )
+            ),
+            McpTool(
+                name = "get_session_history",
+                description = "Retrieve structured summaries of recent sessions in the current workspace. Use this to understand what has been accomplished in previous sessions, what decisions were made, and what issues remain unresolved.",
+                inputSchema = mapOf(
+                    "type" to "object",
+                    "properties" to mapOf(
+                        "limit" to mapOf("type" to "integer", "description" to "Number of recent sessions to retrieve (default: 5)")
                     )
                 )
             ),

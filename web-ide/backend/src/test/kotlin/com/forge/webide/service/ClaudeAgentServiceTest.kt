@@ -5,6 +5,7 @@ import com.forge.webide.entity.ChatMessageEntity
 import com.forge.webide.model.*
 import com.forge.webide.repository.ChatMessageRepository
 import com.forge.webide.repository.ChatSessionRepository
+import com.forge.webide.service.memory.*
 import com.forge.webide.service.skill.*
 import io.mockk.*
 import kotlinx.coroutines.flow.flow
@@ -81,7 +82,11 @@ class ClaudeAgentServiceTest {
             metricsService = metricsService,
             baselineService = baselineService,
             hitlCheckpointRepository = mockk(relaxed = true),
-            executionRecordRepository = mockk(relaxed = true)
+            executionRecordRepository = mockk(relaxed = true),
+            sessionSummaryService = mockk(relaxed = true),
+            memoryContextLoader = mockk(relaxed = true),
+            messageCompressor = mockk(relaxed = true),
+            tokenEstimator = mockk(relaxed = true)
         )
 
         // Default: no conversation history

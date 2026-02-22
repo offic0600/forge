@@ -30,6 +30,8 @@ import {
 } from "@/lib/claude-client";
 import { HitlApprovalPanel } from "@/components/chat/HitlApprovalPanel";
 import { QualityPanel } from "@/components/dashboard/QualityPanel";
+import { MemoryPanel } from "@/components/memory/MemoryPanel";
+import { WorkspaceSkillPanel } from "@/components/skills/WorkspaceSkillPanel";
 
 const OODA_PHASES: {
   key: OodaPhase;
@@ -66,7 +68,7 @@ export function AiChatSidebar({
   activeFile,
   fileContent,
 }: AiChatSidebarProps) {
-  const [activeTab, setActiveTab] = useState<"chat" | "quality">("chat");
+  const [activeTab, setActiveTab] = useState<"chat" | "quality" | "skills" | "memory">("chat");
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
@@ -92,6 +94,7 @@ export function AiChatSidebar({
   const [activityLog, setActivityLog] = useState<SubStep[]>([]);
   const [showActivityLog, setShowActivityLog] = useState(false);
   const [currentTurn, setCurrentTurn] = useState<{ turn: number; maxTurns: number } | null>(null);
+  const [contextUsage, setContextUsage] = useState<{ tokensUsed: number; tokenBudget: number; compressionPhase: number } | null>(null);
   const [oodaDetail, setOodaDetail] = useState<string>("");
   const [baselineResult, setBaselineResult] = useState<BaselineResult | null>(null);
   const [hitlPending, setHitlPending] = useState(false);
@@ -282,6 +285,13 @@ export function AiChatSidebar({
                 baselines: event.baselines,
               });
               break;
+            case "context_usage":
+              setContextUsage({
+                tokensUsed: event.tokensUsed ?? 0,
+                tokenBudget: event.tokenBudget ?? 25000,
+                compressionPhase: event.compressionPhase ?? 0,
+              });
+              break;
             case "tool_use_start":
               setOodaDetail(event.toolName ?? "");
               break;
@@ -427,6 +437,7 @@ export function AiChatSidebar({
       setOodaDetail("");
       setCurrentTurn(null);
       setBaselineResult(null);
+      setContextUsage(null);
       setHitlPending(false);
       setHitlData(null);
       abortRef.current = null;
@@ -441,6 +452,7 @@ export function AiChatSidebar({
     setOodaDetail("");
     setCurrentTurn(null);
     setBaselineResult(null);
+    setContextUsage(null);
     setHitlPending(false);
     setHitlData(null);
   };
@@ -504,23 +516,30 @@ export function AiChatSidebar({
   return (
     <div className="flex h-full flex-col">
       {/* Header with Tabs */}
-      <div className="flex items-center justify-between border-b border-border px-4 py-2">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setActiveTab("chat")}
-            className={`text-sm font-semibold ${activeTab === "chat" ? "text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-          >
-            对话
-          </button>
-          <span className="text-border">|</span>
-          <button
-            onClick={() => setActiveTab("quality")}
-            className={`text-sm font-semibold ${activeTab === "quality" ? "text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-          >
-            质量面板
-          </button>
+      <div className="border-b border-border">
+        {/* Row 1: Tab buttons */}
+        <div className="flex items-center gap-0 px-2 pt-1.5">
+          {([
+            { key: "chat" as const, label: "对话" },
+            { key: "quality" as const, label: "质量" },
+            { key: "skills" as const, label: "Skills" },
+            { key: "memory" as const, label: "记忆" },
+          ]).map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                activeTab === tab.key
+                  ? "border-b-2 border-primary text-foreground"
+                  : "border-b-2 border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
-        <div className="flex items-center gap-1">
+        {/* Row 2: Model selector and action buttons */}
+        <div className="flex items-center justify-between px-3 py-1.5">
           <ModelSelector
             selectedModel={selectedModel}
             onModelChange={(modelId) => {
@@ -528,23 +547,25 @@ export function AiChatSidebar({
               localStorage.setItem("forge_selected_model", modelId);
             }}
           />
-          <button
-            onClick={() => {
-              setMessages([]);
-              setSessionId(null);
-            }}
-            className="rounded p-1 text-muted-foreground hover:bg-accent"
-            title="New conversation"
-          >
-            <RotateCcw className="h-3.5 w-3.5" />
-          </button>
-          <button
-            onClick={() => setShowModelSettings(true)}
-            className="rounded p-1 text-muted-foreground hover:bg-accent"
-            title="Model settings"
-          >
-            <Settings className="h-3.5 w-3.5" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => {
+                setMessages([]);
+                setSessionId(null);
+              }}
+              className="rounded p-1 text-muted-foreground hover:bg-accent"
+              title="New conversation"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={() => setShowModelSettings(true)}
+              className="rounded p-1 text-muted-foreground hover:bg-accent"
+              title="Model settings"
+            >
+              <Settings className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -558,6 +579,20 @@ export function AiChatSidebar({
       {activeTab === "quality" && (
         <div className="flex-1 overflow-hidden">
           <QualityPanel />
+        </div>
+      )}
+
+      {/* Skills Tab */}
+      {activeTab === "skills" && (
+        <div className="flex-1 overflow-hidden">
+          <WorkspaceSkillPanel workspaceId={workspaceId} />
+        </div>
+      )}
+
+      {/* Memory Tab */}
+      {activeTab === "memory" && (
+        <div className="flex-1 overflow-hidden">
+          <MemoryPanel workspaceId={workspaceId} />
         </div>
       )}
 
@@ -681,6 +716,28 @@ export function AiChatSidebar({
                 {baselineResult.summary && (
                   <span className="truncate max-w-[200px]">{baselineResult.summary}</span>
                 )}
+              </div>
+            )}
+            {/* Context Usage Indicator */}
+            {contextUsage && isStreaming && (
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground border border-border rounded-md px-2 py-1">
+                <span>Context:</span>
+                <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${
+                      contextUsage.tokensUsed / contextUsage.tokenBudget > 0.8
+                        ? "bg-red-400"
+                        : contextUsage.tokensUsed / contextUsage.tokenBudget > 0.5
+                          ? "bg-yellow-400"
+                          : "bg-green-400"
+                    }`}
+                    style={{ width: `${Math.min(100, (contextUsage.tokensUsed / contextUsage.tokenBudget) * 100)}%` }}
+                  />
+                </div>
+                <span className="text-[10px]">
+                  {Math.round((contextUsage.tokensUsed / contextUsage.tokenBudget) * 100)}%
+                  {contextUsage.compressionPhase > 0 && ` (P${contextUsage.compressionPhase})`}
+                </span>
               </div>
             )}
             {/* Activity Log (collapsible) */}

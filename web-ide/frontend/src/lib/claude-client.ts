@@ -14,7 +14,8 @@ export interface StreamEvent {
     | "file_changed"
     | "sub_step"
     | "baseline_check"
-    | "hitl_checkpoint";
+    | "hitl_checkpoint"
+    | "context_usage";
   content?: string;
   toolCallId?: string;
   toolName?: string;
@@ -45,6 +46,10 @@ export interface StreamEvent {
   baselineResults?: Array<{ name: string; status: string; output?: string }>;
   timeoutSeconds?: number;
   hitlFeedback?: string;
+  // context_usage fields
+  tokensUsed?: number;
+  tokenBudget?: number;
+  compressionPhase?: number;
 }
 
 export type HitlAction = "approve" | "reject" | "modify";

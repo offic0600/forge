@@ -1,6 +1,7 @@
 package com.forge.webide.service.skill
 
 import com.forge.webide.service.McpProxyService
+import com.forge.webide.service.memory.MemoryContext
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 
@@ -52,6 +53,18 @@ Always be concise but thorough in your responses."""
      * Assemble a complete system prompt for the given profile and skills.
      */
     fun assemble(profile: ProfileDefinition, skills: List<SkillDefinition>): String {
+        return assemble(profile, skills, MemoryContext())
+    }
+
+    /**
+     * Assemble a complete system prompt with memory context injection.
+     * Memory layers are inserted between the SuperAgent role and the active profile.
+     */
+    fun assemble(
+        profile: ProfileDefinition,
+        skills: List<SkillDefinition>,
+        memoryContext: MemoryContext
+    ): String {
         val sections = mutableListOf<String>()
 
         // [1] SuperAgent role definition
@@ -60,26 +73,49 @@ Always be concise but thorough in your responses."""
             sections.add(superAgentIntro)
         }
 
-        // [2] Active profile context
+        // [2] Workspace Memory (Layer 1) — always injected
+        if (memoryContext.workspaceMemory.isNotBlank()) {
+            sections.add("## 工作区记忆\n\n${memoryContext.workspaceMemory}")
+        }
+
+        // [3] Stage Memory (Layer 2) — Profile-scoped
+        if (memoryContext.stageMemory.isNotBlank()) {
+            sections.add("## 当前阶段上下文\n\n${memoryContext.stageMemory}")
+        }
+
+        // [4] Recent Session Summaries (Layer 3)
+        if (memoryContext.recentSessions.isNotEmpty()) {
+            val sessionsSection = buildString {
+                appendLine("## 近期会话摘要")
+                appendLine()
+                for (s in memoryContext.recentSessions) {
+                    appendLine(s)
+                    appendLine()
+                }
+            }
+            sections.add(sessionsSection.trim())
+        }
+
+        // [5] Active profile context
         sections.add(buildProfileSection(profile))
 
-        // [3] Available Skills — Level 1 metadata only
+        // [6] Available Skills — Level 1 metadata only
         val skillsSection = buildSkillsSections(skills)
         if (skillsSection.isNotBlank()) {
             sections.add(skillsSection)
         }
 
-        // [4] Baseline rules
+        // [7] Baseline rules
         if (profile.baselines.isNotEmpty()) {
             sections.add(buildBaselineSection(profile))
         }
 
-        // [5] HITL checkpoint
+        // [8] HITL checkpoint
         if (profile.hitlCheckpoint.isNotBlank()) {
             sections.add(buildHitlSection(profile))
         }
 
-        // [6] Available MCP tools + progressive loading protocol
+        // [9] Available MCP tools + progressive loading protocol
         val toolsSection = buildToolsSection()
         if (toolsSection.isNotBlank()) {
             sections.add(toolsSection)
@@ -97,8 +133,10 @@ Always be concise but thorough in your responses."""
         }
 
         logger.debug(
-            "Assembled system prompt: {} chars, profile={}, skills={}",
-            assembled.length, profile.name, skills.map { it.name }
+            "Assembled system prompt: {} chars, profile={}, skills={}, memory={}c+{}c+{}sessions",
+            assembled.length, profile.name, skills.map { it.name },
+            memoryContext.workspaceMemory.length, memoryContext.stageMemory.length,
+            memoryContext.recentSessions.size
         )
 
         return assembled
@@ -274,6 +312,19 @@ Always be concise but thorough in your responses."""
                 sb.appendLine("5. Only present the final result to the user after all baselines pass")
                 sb.appendLine()
                 sb.appendLine("Use `list_baselines` to see all available baseline scripts.")
+            }
+
+            // Add memory management guidance
+            val hasMemoryTools = tools.any { it.name == "update_workspace_memory" }
+            if (hasMemoryTools) {
+                sb.appendLine()
+                sb.appendLine("### 记忆管理协议")
+                sb.appendLine()
+                sb.appendLine("1. 在每次会话接近结束时，主动使用 `update_workspace_memory` 更新关键发现")
+                sb.appendLine("2. 内容应为：项目事实、技术决策、约束条件、当前进度")
+                sb.appendLine("3. 限制在 4000 字符以内，保持精简")
+                sb.appendLine("4. 不要存储临时性内容（调试日志、中间状态）")
+                sb.appendLine("5. 使用 `get_session_history` 回顾之前的工作成果")
             }
 
             // Add knowledge search guidance
