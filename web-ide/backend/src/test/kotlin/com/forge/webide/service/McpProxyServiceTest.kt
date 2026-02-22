@@ -1,7 +1,9 @@
 package com.forge.webide.service
 
+import com.forge.webide.entity.WorkspaceEntity
 import com.forge.webide.model.McpContent
 import com.forge.webide.model.McpToolCallResponse
+import com.forge.webide.repository.WorkspaceRepository
 import com.forge.webide.service.skill.SkillCategory
 import com.forge.webide.service.skill.SkillDefinition
 import com.forge.webide.service.skill.SkillLoader
@@ -9,8 +11,11 @@ import com.forge.webide.service.skill.SkillScript
 import com.forge.webide.service.skill.SkillSubFile
 import com.forge.webide.service.skill.SkillContentType
 import com.forge.webide.repository.SkillUsageRepository
+import com.forge.webide.service.memory.SessionSummaryService
+import com.forge.webide.service.memory.WorkspaceMemoryService
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
@@ -18,6 +23,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.Optional
 import javax.sql.DataSource
 
 /**
@@ -30,18 +36,49 @@ class McpProxyServiceTest {
 
     private val baselineService = mockk<BaselineService>(relaxed = true)
     private val dataSource = mockk<DataSource>(relaxed = true)
-    private val workspaceService = WorkspaceService()
     private val skillLoader = mockk<SkillLoader>(relaxed = true)
     private val skillUsageRepository = mockk<SkillUsageRepository>(relaxed = true)
+    private val workspaceRepository = mockk<WorkspaceRepository>(relaxed = true)
+    private val gitService = mockk<GitService>(relaxed = true)
+    private val workspaceMemoryService = mockk<WorkspaceMemoryService>(relaxed = true)
+    private val sessionSummaryService = mockk<SessionSummaryService>(relaxed = true)
 
+    private lateinit var workspaceService: WorkspaceService
     private lateinit var service: McpProxyService
 
     @TempDir
     lateinit var tempDir: Path
 
+    // In-memory store for mocked repository
+    private val entityStore = mutableMapOf<String, WorkspaceEntity>()
+
     @BeforeEach
     fun setup() {
-        service = McpProxyService(baselineService, dataSource, workspaceService, skillLoader, skillUsageRepository, mockk(relaxed = true), mockk(relaxed = true))
+        entityStore.clear()
+
+        // Mock repository save: capture and store entity
+        val entitySlot = slot<WorkspaceEntity>()
+        every { workspaceRepository.save(capture(entitySlot)) } answers {
+            val entity = entitySlot.captured
+            entityStore[entity.id] = entity
+            entity
+        }
+        every { workspaceRepository.findById(any()) } answers {
+            val id = firstArg<String>()
+            Optional.ofNullable(entityStore[id])
+        }
+        every { workspaceRepository.count() } answers { entityStore.size.toLong() }
+
+        workspaceService = WorkspaceService(workspaceRepository, gitService, tempDir.toString())
+        workspaceService.init()
+
+        // Build handler beans
+        val builtinToolHandler = BuiltinToolHandler(baselineService, dataSource)
+        val workspaceToolHandler = WorkspaceToolHandler(workspaceService)
+        val skillToolHandler = SkillToolHandler(skillLoader, skillUsageRepository)
+        val memoryToolHandler = MemoryToolHandler(workspaceMemoryService, sessionSummaryService, workspaceService)
+
+        service = McpProxyService(builtinToolHandler, workspaceToolHandler, skillToolHandler, memoryToolHandler)
     }
 
     // --- Default Tool Tests ---
@@ -392,7 +429,7 @@ class McpProxyServiceTest {
 
         @Test
         fun `list_skills returns all skills metadata`() {
-            every { skillLoader.loadSkillMetadataCatalog(null, null) } returns listOf(
+            every { skillLoader.loadSkillMetadataCatalog(null, null, null) } returns listOf(
                 SkillDefinition(
                     name = "kotlin-conventions",
                     description = "Kotlin conventions",
@@ -423,7 +460,7 @@ class McpProxyServiceTest {
 
         @Test
         fun `list_skills filters by category`() {
-            every { skillLoader.loadSkillMetadataCatalog(null, SkillCategory.FOUNDATION) } returns listOf(
+            every { skillLoader.loadSkillMetadataCatalog(null, SkillCategory.FOUNDATION, null) } returns listOf(
                 SkillDefinition(
                     name = "kotlin-conventions",
                     description = "Kotlin conventions",

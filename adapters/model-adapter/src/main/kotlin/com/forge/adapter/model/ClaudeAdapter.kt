@@ -80,11 +80,11 @@ class ClaudeAdapter(
     }
 
     override suspend fun complete(prompt: String, options: CompletionOptions): CompletionResult {
-        validateApiKey()
+        val effectiveKey = resolveApiKey(options)
         val model = options.model?.takeIf { it.isNotBlank() } ?: DEFAULT_MODEL
 
         val requestBody = buildRequestBody(prompt, options, model, stream = false)
-        val request = buildHttpRequest(requestBody)
+        val request = buildHttpRequest(requestBody, effectiveKey)
 
         val startTime = System.currentTimeMillis()
 
@@ -105,11 +105,11 @@ class ClaudeAdapter(
     }
 
     override suspend fun streamComplete(prompt: String, options: CompletionOptions): Flow<String> {
-        validateApiKey()
+        val effectiveKey = resolveApiKey(options)
         val model = options.model?.takeIf { it.isNotBlank() } ?: DEFAULT_MODEL
 
         val requestBody = buildRequestBody(prompt, options, model, stream = true)
-        val request = buildHttpRequest(requestBody)
+        val request = buildHttpRequest(requestBody, effectiveKey)
 
         return flow {
             val response = client.newCall(request).execute()
@@ -164,11 +164,11 @@ class ClaudeAdapter(
         options: CompletionOptions,
         tools: List<ToolDefinition>
     ): Flow<StreamEvent> {
-        validateApiKey()
+        val effectiveKey = resolveApiKey(options)
         val model = options.model?.takeIf { it.isNotBlank() } ?: DEFAULT_MODEL
 
         val requestBody = buildMessagesRequestBody(messages, options, model, tools, stream = true)
-        val request = buildHttpRequest(requestBody)
+        val request = buildHttpRequest(requestBody, effectiveKey)
 
         return flow {
             logger.debug("Calling Claude API: model=$model, messages=${messages.size}, tools=${tools.size}")
@@ -295,12 +295,17 @@ class ClaudeAdapter(
 
     // ---- Internal helpers ----
 
-    private fun validateApiKey() {
-        if (apiKey.isBlank()) {
+    /**
+     * Resolve the effective API key: per-request override takes precedence over the adapter's default.
+     */
+    private fun resolveApiKey(options: CompletionOptions): String {
+        val key = options.apiKeyOverride?.takeIf { it.isNotBlank() } ?: apiKey
+        if (key.isBlank()) {
             throw AuthenticationException(
-                "Anthropic API key not set. Set ANTHROPIC_API_KEY environment variable or pass it to ClaudeAdapter."
+                "Anthropic API key not set. Set ANTHROPIC_API_KEY environment variable, pass it to ClaudeAdapter, or configure a user API key."
             )
         }
+        return key
     }
 
     /**
@@ -498,10 +503,10 @@ class ClaudeAdapter(
         return gson.toJson(body)
     }
 
-    private fun buildHttpRequest(jsonBody: String): Request {
+    private fun buildHttpRequest(jsonBody: String, effectiveKey: String = apiKey): Request {
         return Request.Builder()
             .url("$baseUrl$MESSAGES_PATH")
-            .addHeader("x-api-key", apiKey)
+            .addHeader("x-api-key", effectiveKey)
             .addHeader("anthropic-version", API_VERSION)
             .addHeader("anthropic-beta", "prompt-caching-2024-07-31")
             .addHeader("content-type", "application/json")

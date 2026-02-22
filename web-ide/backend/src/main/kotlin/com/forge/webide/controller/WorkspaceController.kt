@@ -1,6 +1,7 @@
 package com.forge.webide.controller
 
 import com.forge.webide.model.*
+import com.forge.webide.service.GitStatus
 import com.forge.webide.service.WorkspaceService
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -113,5 +114,25 @@ class WorkspaceController(
     ): ResponseEntity<Void> {
         workspaceService.deleteFile(id, path)
         return ResponseEntity.noContent().build()
+    }
+
+    // =========================================================================
+    // Git operations
+    // =========================================================================
+
+    @PostMapping("/{id}/git/pull")
+    fun pullWorkspace(
+        @PathVariable id: String
+    ): ResponseEntity<Map<String, String>> {
+        val result = workspaceService.pullWorkspace(id)
+        return ResponseEntity.ok(mapOf("output" to result))
+    }
+
+    @GetMapping("/{id}/git/status")
+    fun getGitStatus(
+        @PathVariable id: String
+    ): ResponseEntity<GitStatus> {
+        val status = workspaceService.getGitStatus(id)
+        return ResponseEntity.ok(status)
     }
 }

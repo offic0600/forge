@@ -48,7 +48,54 @@ Automatically scan and profile existing codebases to generate structured knowled
 - Document async vs sync communication patterns
 - Generate sequence diagrams for key flows
 
-## Output Format
+## Quick Analysis (analyze_codebase tool)
+
+Use the `analyze_codebase` MCP tool to get a structured JSON summary of the project:
+- Project type, languages, framework detection
+- File/LOC/test statistics
+- Entity, Controller, Service class inventory
+- Dependency list and configuration files
+
+This provides deterministic data for the Agent to consume before producing knowledge docs.
+
+## Output Format — Design Baseline
+
+When producing a project design baseline, follow this structure:
+
+### §1 UI/UX Structure
+- Frontend routes and page components
+- Layout hierarchy and navigation flow
+
+### §2 API Contract
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| GET | /api/... | ... | ... |
+
+### §3 Data Model
+| Entity | Key Fields | Relationships |
+|--------|-----------|---------------|
+| ... | ... | ... |
+
+### §4 Architecture Patterns
+- Layering (Controller → Service → Repository)
+- Dependency direction and module boundaries
+- Communication patterns (sync/async)
+
+### §5 Tech Stack Summary
+| Layer | Technology | Version |
+|-------|-----------|---------|
+| ... | ... | ... |
+
+### §6 Key Metrics
+| Metric | Value |
+|--------|-------|
+| Total files | N |
+| Source LOC | N |
+| Test files | N |
+| API endpoints | N |
+| Entities | N |
+
+## Legacy Output Format
 Save to `knowledge-base/profiles/{system-name}/`:
 - `overview.md` — System summary
 - `modules.md` — Module dependency graph

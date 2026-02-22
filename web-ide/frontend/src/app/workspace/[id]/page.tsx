@@ -160,8 +160,15 @@ export default function WorkspacePage() {
               const form = e.target as HTMLFormElement;
               const name = (form.elements.namedItem("name") as HTMLInputElement).value;
               const desc = (form.elements.namedItem("description") as HTMLInputElement).value;
+              const repo = (form.elements.namedItem("repository") as HTMLInputElement).value;
+              const branch = (form.elements.namedItem("branch") as HTMLInputElement).value;
               try {
-                const ws = await workspaceApi.createWorkspace({ name, description: desc });
+                const ws = await workspaceApi.createWorkspace({
+                  name,
+                  description: desc,
+                  repository: repo || undefined,
+                  branch: branch || undefined,
+                });
                 window.location.href = `/workspace/${ws.id}`;
               } catch (err) {
                 console.error("Failed to create workspace:", err);
@@ -190,6 +197,33 @@ export default function WorkspacePage() {
                 className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 placeholder="A brief description"
               />
+            </div>
+            <div className="rounded-md border border-border p-3 space-y-3">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                Import from Git (optional)
+              </p>
+              <div>
+                <label className="block text-sm font-medium" htmlFor="repository">
+                  Git Repository URL
+                </label>
+                <input
+                  id="repository"
+                  name="repository"
+                  className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  placeholder="https://github.com/user/repo.git"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium" htmlFor="branch">
+                  Branch
+                </label>
+                <input
+                  id="branch"
+                  name="branch"
+                  className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  placeholder="main"
+                />
+              </div>
             </div>
             <button
               type="submit"

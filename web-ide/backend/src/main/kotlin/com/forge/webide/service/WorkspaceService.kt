@@ -1,132 +1,266 @@
 package com.forge.webide.service
 
+import com.forge.webide.entity.WorkspaceEntity
 import com.forge.webide.model.*
+import com.forge.webide.repository.WorkspaceRepository
+import jakarta.annotation.PostConstruct
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
+import java.nio.file.*
+import java.nio.file.attribute.BasicFileAttributes
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Manages workspace lifecycle including creation, activation (starting
- * code-server pods), suspension, and deletion.
+ * Manages workspace lifecycle with DB persistence (metadata) and disk storage (files).
  *
- * In a production deployment, this service would interact with Kubernetes
- * to manage workspace pods. For now, it uses in-memory storage.
+ * - Workspace metadata → H2/PostgreSQL via WorkspaceEntity
+ * - Workspace files → disk at {dataDir}/workspaces/{workspaceId}/
+ * - File tree → rebuilt from disk on demand, cached in memory
  */
 @Service
-class WorkspaceService {
+class WorkspaceService(
+    private val workspaceRepository: WorkspaceRepository,
+    private val gitService: GitService,
+    @Value("\${forge.workspaces.data-dir:./data/workspaces}") private val dataDir: String
+) {
 
     private val logger = LoggerFactory.getLogger(WorkspaceService::class.java)
 
-    private val workspaces = ConcurrentHashMap<String, Workspace>()
-    private val fileTrees = ConcurrentHashMap<String, List<FileNode>>()
-    private val fileContents = ConcurrentHashMap<String, MutableMap<String, String>>()
+    // Hot cache for file trees (rebuilt from disk, invalidated on writes)
+    private val fileTreeCache = ConcurrentHashMap<String, List<FileNode>>()
+
+    private val basePath: Path by lazy { Paths.get(dataDir).toAbsolutePath() }
+
+    @PostConstruct
+    fun init() {
+        Files.createDirectories(basePath)
+        val count = workspaceRepository.count()
+        logger.info("Workspace service initialized. dataDir={}, existingWorkspaces={}", basePath, count)
+    }
+
+    // =========================================================================
+    // Workspace CRUD
+    // =========================================================================
 
     fun createWorkspace(request: CreateWorkspaceRequest, userId: String): Workspace {
-        val workspace = Workspace(
+        val entity = WorkspaceEntity(
             name = request.name,
             description = request.description ?: "",
             status = WorkspaceStatus.ACTIVE,
             owner = userId,
             repository = request.repository,
-            branch = request.branch ?: "main"
+            branch = request.branch ?: if (!request.repository.isNullOrBlank()) "main" else null
         )
 
-        workspaces[workspace.id] = workspace
-        initializeDefaultFiles(workspace.id)
+        val wsDir = basePath.resolve(entity.id)
+        Files.createDirectories(wsDir)
+        entity.localPath = wsDir.toString()
 
-        logger.info("Created workspace '${workspace.name}' (${workspace.id}) for user $userId")
-        return workspace
+        if (!request.repository.isNullOrBlank()) {
+            // Git clone into workspace directory
+            try {
+                gitService.cloneRepository(request.repository, entity.branch, wsDir)
+            } catch (e: GitOperationException) {
+                logger.error("Failed to clone repository: {}", e.message)
+                // Clean up the empty dir, mark workspace as error
+                entity.status = WorkspaceStatus.ERROR
+                workspaceRepository.save(entity)
+                throw RuntimeException("Git clone failed: ${e.message}", e)
+            }
+        } else {
+            // Empty workspace — create default files
+            initializeDefaultFiles(wsDir)
+        }
+
+        workspaceRepository.save(entity)
+        logger.info("Created workspace '{}' ({}) for user {}", entity.name, entity.id, userId)
+        return entity.toModel()
     }
 
     fun listWorkspaces(userId: String): List<Workspace> {
-        return workspaces.values
-            .filter { it.owner == userId || it.owner.isEmpty() || it.owner == "anonymous" }
+        val entities = workspaceRepository.findByOwnerOrOwnerIn(userId, listOf("", "anonymous"))
+        return entities
+            .map { it.toModel() }
             .sortedByDescending { it.updatedAt }
     }
 
     fun getWorkspace(id: String): Workspace? {
-        return workspaces[id]
+        return workspaceRepository.findById(id).orElse(null)?.toModel()
     }
 
     fun deleteWorkspace(id: String, userId: String) {
-        val workspace = workspaces[id] ?: return
-        if (workspace.owner != userId && workspace.owner.isNotEmpty() && workspace.owner != "anonymous") {
+        val entity = workspaceRepository.findById(id).orElse(null) ?: return
+        if (entity.owner != userId && entity.owner.isNotEmpty() && entity.owner != "anonymous") {
             throw IllegalAccessException("User $userId cannot delete workspace $id")
         }
 
-        // In production: tear down K8s pod
-        workspaces.remove(id)
-        fileTrees.remove(id)
-        fileContents.remove(id)
+        // Remove files from disk
+        val wsDir = getWorkspaceDir(id)
+        if (Files.exists(wsDir)) {
+            deleteDirectoryRecursively(wsDir)
+        }
 
-        logger.info("Deleted workspace $id")
+        // Remove from DB
+        workspaceRepository.deleteById(id)
+        fileTreeCache.remove(id)
+
+        logger.info("Deleted workspace {}", id)
     }
 
     fun activateWorkspace(id: String): Workspace? {
-        val workspace = workspaces[id] ?: return null
-
-        // In production: create/start K8s pod for code-server
-        val activated = workspace.copy(
-            status = WorkspaceStatus.ACTIVE,
-            updatedAt = Instant.now()
-        )
-        workspaces[id] = activated
-
-        logger.info("Activated workspace $id")
-        return activated
+        val entity = workspaceRepository.findById(id).orElse(null) ?: return null
+        entity.status = WorkspaceStatus.ACTIVE
+        entity.updatedAt = Instant.now()
+        workspaceRepository.save(entity)
+        logger.info("Activated workspace {}", id)
+        return entity.toModel()
     }
 
     fun suspendWorkspace(id: String): Workspace? {
-        val workspace = workspaces[id] ?: return null
-
-        // In production: scale down K8s pod
-        val suspended = workspace.copy(
-            status = WorkspaceStatus.SUSPENDED,
-            updatedAt = Instant.now()
-        )
-        workspaces[id] = suspended
-
-        logger.info("Suspended workspace $id")
-        return suspended
+        val entity = workspaceRepository.findById(id).orElse(null) ?: return null
+        entity.status = WorkspaceStatus.SUSPENDED
+        entity.updatedAt = Instant.now()
+        workspaceRepository.save(entity)
+        logger.info("Suspended workspace {}", id)
+        return entity.toModel()
     }
+
+    // =========================================================================
+    // File Operations (disk-based)
+    // =========================================================================
 
     fun getFileTree(workspaceId: String): List<FileNode> {
-        return fileTrees[workspaceId] ?: emptyList()
-    }
-
-    fun getFileContent(workspaceId: String, path: String): String? {
-        return fileContents[workspaceId]?.get(path)
-    }
-
-    fun saveFileContent(workspaceId: String, path: String, content: String) {
-        fileContents.getOrPut(workspaceId) { mutableMapOf() }[path] = content
-
-        // Update the workspace timestamp
-        workspaces[workspaceId]?.let {
-            workspaces[workspaceId] = it.copy(updatedAt = Instant.now())
+        return fileTreeCache.getOrPut(workspaceId) {
+            buildFileTreeFromDisk(workspaceId)
         }
     }
 
+    fun getFileContent(workspaceId: String, path: String): String? {
+        validatePath(path)
+        val filePath = getWorkspaceDir(workspaceId).resolve(path)
+        if (!Files.exists(filePath) || !Files.isRegularFile(filePath)) return null
+        return Files.readString(filePath)
+    }
+
+    fun saveFileContent(workspaceId: String, path: String, content: String) {
+        validatePath(path)
+        val filePath = getWorkspaceDir(workspaceId).resolve(path)
+        if (!Files.exists(filePath)) {
+            // Create parent dirs if they don't exist, then create file
+            Files.createDirectories(filePath.parent)
+        }
+        Files.writeString(filePath, content)
+        touchWorkspace(workspaceId)
+        // File tree may not change (existing file), but invalidate cache to be safe
+        fileTreeCache.remove(workspaceId)
+    }
+
     fun createFile(workspaceId: String, path: String, content: String) {
-        fileContents.getOrPut(workspaceId) { mutableMapOf() }[path] = content
-        rebuildFileTree(workspaceId)
+        validatePath(path)
+        val filePath = getWorkspaceDir(workspaceId).resolve(path)
+        Files.createDirectories(filePath.parent)
+        Files.writeString(filePath, content)
+        fileTreeCache.remove(workspaceId)
+        touchWorkspace(workspaceId)
     }
 
     fun deleteFile(workspaceId: String, path: String) {
-        val files = fileContents[workspaceId] ?: return
-        // Remove exact match (single file)
-        files.remove(path)
-        // Also remove all files under this path (folder deletion)
-        val prefix = "$path/"
-        files.keys.removeIf { it.startsWith(prefix) }
-        rebuildFileTree(workspaceId)
+        validatePath(path)
+        val filePath = getWorkspaceDir(workspaceId).resolve(path)
+        if (Files.isDirectory(filePath)) {
+            deleteDirectoryRecursively(filePath)
+        } else if (Files.exists(filePath)) {
+            Files.delete(filePath)
+        }
+        fileTreeCache.remove(workspaceId)
+        touchWorkspace(workspaceId)
     }
 
-    private fun initializeDefaultFiles(workspaceId: String) {
-        val files = mutableMapOf<String, String>()
+    // =========================================================================
+    // Git operations
+    // =========================================================================
 
-        files["src/index.ts"] = """
+    fun pullWorkspace(workspaceId: String): String {
+        val wsDir = getWorkspaceDir(workspaceId)
+        val result = gitService.pull(wsDir)
+        fileTreeCache.remove(workspaceId)
+        touchWorkspace(workspaceId)
+        return result
+    }
+
+    fun getGitStatus(workspaceId: String): GitStatus {
+        return gitService.status(getWorkspaceDir(workspaceId))
+    }
+
+    // =========================================================================
+    // Internal helpers
+    // =========================================================================
+
+    private fun getWorkspaceDir(workspaceId: String): Path {
+        return basePath.resolve(workspaceId)
+    }
+
+    private fun validatePath(path: String) {
+        if (path.contains("..")) {
+            throw IllegalArgumentException("Path traversal not allowed: $path")
+        }
+    }
+
+    private fun touchWorkspace(workspaceId: String) {
+        workspaceRepository.findById(workspaceId).ifPresent { entity ->
+            entity.updatedAt = Instant.now()
+            workspaceRepository.save(entity)
+        }
+    }
+
+    private fun buildFileTreeFromDisk(workspaceId: String): List<FileNode> {
+        val wsDir = getWorkspaceDir(workspaceId)
+        if (!Files.exists(wsDir)) return emptyList()
+        return buildTreeRecursive(wsDir, wsDir)
+    }
+
+    private fun buildTreeRecursive(root: Path, current: Path): List<FileNode> {
+        val entries = try {
+            Files.list(current).use { stream ->
+                stream.sorted(compareBy<Path> { !Files.isDirectory(it) }.thenBy { it.fileName.toString() })
+                    .toList()
+            }
+        } catch (e: Exception) {
+            return emptyList()
+        }
+
+        return entries
+            .filter { !isHiddenOrIgnored(it) }
+            .map { entry ->
+                val relativePath = root.relativize(entry).toString().replace("\\", "/")
+                if (Files.isDirectory(entry)) {
+                    FileNode(
+                        name = entry.fileName.toString(),
+                        path = relativePath,
+                        type = FileType.DIRECTORY,
+                        children = buildTreeRecursive(root, entry)
+                    )
+                } else {
+                    FileNode(
+                        name = entry.fileName.toString(),
+                        path = relativePath,
+                        type = FileType.FILE,
+                        size = try { Files.size(entry) } catch (_: Exception) { null }
+                    )
+                }
+            }
+    }
+
+    private fun isHiddenOrIgnored(path: Path): Boolean {
+        val name = path.fileName.toString()
+        // Hide .git directory but show other dotfiles (like .gitignore)
+        return name == ".git" || name == "node_modules" || name == ".DS_Store"
+    }
+
+    private fun initializeDefaultFiles(wsDir: Path) {
+        writeDefaultFile(wsDir, "src/index.ts", """
             |// Forge Workspace - Entry Point
             |
             |import { Application } from './app';
@@ -138,9 +272,9 @@ class WorkspaceService {
             |}
             |
             |main().catch(console.error);
-        """.trimMargin()
+        """.trimMargin())
 
-        files["src/app.ts"] = """
+        writeDefaultFile(wsDir, "src/app.ts", """
             |export class Application {
             |    private name: string;
             |
@@ -152,9 +286,9 @@ class WorkspaceService {
             |        console.log(`Starting ${'$'}{this.name}...`);
             |    }
             |}
-        """.trimMargin()
+        """.trimMargin())
 
-        files["package.json"] = """
+        writeDefaultFile(wsDir, "package.json", """
             |{
             |    "name": "forge-workspace",
             |    "version": "1.0.0",
@@ -165,9 +299,9 @@ class WorkspaceService {
             |        "dev": "ts-node src/index.ts"
             |    }
             |}
-        """.trimMargin()
+        """.trimMargin())
 
-        files["tsconfig.json"] = """
+        writeDefaultFile(wsDir, "tsconfig.json", """
             |{
             |    "compilerOptions": {
             |        "target": "ES2022",
@@ -177,9 +311,9 @@ class WorkspaceService {
             |    },
             |    "include": ["src/**/*"]
             |}
-        """.trimMargin()
+        """.trimMargin())
 
-        files["README.md"] = """
+        writeDefaultFile(wsDir, "README.md", """
             |# Forge Workspace
             |
             |This is a new Forge workspace.
@@ -190,70 +324,42 @@ class WorkspaceService {
             |npm install
             |npm run dev
             |```
-        """.trimMargin()
-
-        fileContents[workspaceId] = files
-        rebuildFileTree(workspaceId)
+        """.trimMargin())
     }
 
-    private fun rebuildFileTree(workspaceId: String) {
-        val files = fileContents[workspaceId] ?: return
-
-        // Mutable intermediate node for building nested tree
-        class MutableNode(
-            val name: String,
-            val path: String,
-            var type: FileType,
-            var size: Long? = null,
-            val childMap: MutableMap<String, MutableNode> = mutableMapOf()
-        )
-
-        val root = MutableNode("", "", FileType.DIRECTORY)
-
-        for (filePath in files.keys.sorted()) {
-            val parts = filePath.split("/")
-            var current = root
-            for (i in parts.indices) {
-                val part = parts[i]
-                val isLast = i == parts.size - 1
-                val childPath = parts.take(i + 1).joinToString("/")
-
-                if (isLast) {
-                    // Leaf file node
-                    current.childMap[part] = MutableNode(
-                        name = part,
-                        path = childPath,
-                        type = FileType.FILE,
-                        size = files[filePath]?.length?.toLong()
-                    )
-                } else {
-                    // Intermediate directory node
-                    current = current.childMap.getOrPut(part) {
-                        MutableNode(name = part, path = childPath, type = FileType.DIRECTORY)
-                    }
-                }
-            }
-        }
-
-        fun toFileNode(node: MutableNode): FileNode {
-            return if (node.childMap.isNotEmpty()) {
-                FileNode(
-                    name = node.name,
-                    path = node.path,
-                    type = FileType.DIRECTORY,
-                    children = node.childMap.values
-                        .map { toFileNode(it) }
-                        .sortedWith(compareBy<FileNode> { it.type != FileType.DIRECTORY }.thenBy { it.name })
-                )
-            } else if (node.type == FileType.DIRECTORY) {
-                FileNode(name = node.name, path = node.path, type = FileType.DIRECTORY, children = emptyList())
-            } else {
-                FileNode(name = node.name, path = node.path, type = FileType.FILE, size = node.size)
-            }
-        }
-
-        fileTrees[workspaceId] = root.childMap.values
-            .map { toFileNode(it) }
-            .sortedWith(compareBy<FileNode> { it.type != FileType.DIRECTORY }.thenBy { it.name })
+    private fun writeDefaultFile(wsDir: Path, relativePath: String, content: String) {
+        val filePath = wsDir.resolve(relativePath)
+        Files.createDirectories(filePath.parent)
+        Files.writeString(filePath, content)
     }
+
+    private fun deleteDirectoryRecursively(dir: Path) {
+        if (!Files.exists(dir)) return
+        Files.walkFileTree(dir, object : SimpleFileVisitor<Path>() {
+            override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
+                Files.delete(file)
+                return FileVisitResult.CONTINUE
+            }
+            override fun postVisitDirectory(dir: Path, exc: java.io.IOException?): FileVisitResult {
+                Files.delete(dir)
+                return FileVisitResult.CONTINUE
+            }
+        })
+    }
+
+    // =========================================================================
+    // Entity → Model mapping
+    // =========================================================================
+
+    private fun WorkspaceEntity.toModel() = Workspace(
+        id = id,
+        name = name,
+        description = description,
+        status = status,
+        owner = owner,
+        repository = repository,
+        branch = branch,
+        createdAt = createdAt,
+        updatedAt = updatedAt
+    )
 }

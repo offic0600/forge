@@ -693,6 +693,42 @@ export function AiChatSidebar({
                 )}
               </div>
             )}
+            {/* Delivery Stage Indicator */}
+            {activeProfile && (
+              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                {["Planning", "Design", "Development", "Testing", "Ops"].map((stage) => {
+                  const profileName = activeProfile.name.toLowerCase();
+                  const stageMap: Record<string, string> = {
+                    "requirement-engineering-profile": "Planning",
+                    "architecture-design-profile": "Design",
+                    "detailed-design-profile": "Design",
+                    "development-profile": "Development",
+                    "code-generation-profile": "Development",
+                    "test-case-writing-profile": "Testing",
+                    "deployment-ops-profile": "Ops",
+                  };
+                  const currentStage = stageMap[profileName] || "Development";
+                  const isActive = stage === currentStage;
+                  const stageIdx = ["Planning", "Design", "Development", "Testing", "Ops"].indexOf(stage);
+                  const currentIdx = ["Planning", "Design", "Development", "Testing", "Ops"].indexOf(currentStage);
+                  const isPast = stageIdx < currentIdx;
+                  return (
+                    <span
+                      key={stage}
+                      className={`px-1.5 py-0.5 rounded text-[10px] ${
+                        isActive
+                          ? "bg-primary/15 text-primary font-medium"
+                          : isPast
+                            ? "text-green-400/70"
+                            : "text-muted-foreground/30"
+                      }`}
+                    >
+                      {stage}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
             {/* Baseline Result */}
             {baselineResult && isStreaming && (
               <div className={`flex items-center gap-1.5 text-xs border rounded-md px-2 py-1 ${

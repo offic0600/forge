@@ -29,7 +29,10 @@ data class CompletionOptions(
     val timeoutMs: Long = 120_000,
 
     /** Additional provider-specific parameters */
-    val extras: Map<String, Any> = emptyMap()
+    val extras: Map<String, Any> = emptyMap(),
+
+    /** Per-request API key override. When set, takes precedence over the adapter's default key. */
+    val apiKeyOverride: String? = null
 )
 
 /**

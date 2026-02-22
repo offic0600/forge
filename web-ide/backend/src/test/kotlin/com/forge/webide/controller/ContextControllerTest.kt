@@ -1,25 +1,56 @@
 package com.forge.webide.controller
 
+import com.forge.webide.entity.WorkspaceEntity
 import com.forge.webide.model.CreateWorkspaceRequest
 import com.forge.webide.model.McpContent
 import com.forge.webide.model.McpToolCallResponse
+import com.forge.webide.repository.WorkspaceRepository
+import com.forge.webide.service.GitService
 import com.forge.webide.service.McpProxyService
 import com.forge.webide.service.WorkspaceService
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
+import java.nio.file.Path
+import java.util.Optional
 
 class ContextControllerTest {
 
-    private val workspaceService = WorkspaceService()
+    private val workspaceRepository = mockk<WorkspaceRepository>(relaxed = true)
+    private val gitService = mockk<GitService>(relaxed = true)
     private val mcpProxyService = mockk<McpProxyService>(relaxed = true)
 
+    private lateinit var workspaceService: WorkspaceService
     private lateinit var controller: ContextController
+
+    @TempDir
+    lateinit var tempDir: Path
+
+    private val entityStore = mutableMapOf<String, WorkspaceEntity>()
 
     @BeforeEach
     fun setup() {
+        entityStore.clear()
+
+        val entitySlot = slot<WorkspaceEntity>()
+        every { workspaceRepository.save(capture(entitySlot)) } answers {
+            val entity = entitySlot.captured
+            entityStore[entity.id] = entity
+            entity
+        }
+        every { workspaceRepository.findById(any()) } answers {
+            val id = firstArg<String>()
+            Optional.ofNullable(entityStore[id])
+        }
+        every { workspaceRepository.count() } answers { entityStore.size.toLong() }
+
+        workspaceService = WorkspaceService(workspaceRepository, gitService, tempDir.toString())
+        workspaceService.init()
+
         controller = ContextController(workspaceService, mcpProxyService)
     }
 

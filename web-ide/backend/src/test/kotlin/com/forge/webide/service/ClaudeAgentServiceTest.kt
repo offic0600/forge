@@ -8,7 +8,6 @@ import com.forge.webide.repository.ChatSessionRepository
 import com.forge.webide.service.memory.*
 import com.forge.webide.service.skill.*
 import io.mockk.*
-import kotlinx.coroutines.flow.flow
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -19,8 +18,10 @@ import java.util.concurrent.CopyOnWriteArrayList
 /**
  * Tests for ClaudeAgentService.
  *
- * Focuses on the agentic loop behavior, tool calling flow,
- * and message persistence.
+ * After the Sprint 6.4 refactoring, the agentic loop logic lives in
+ * AgenticLoopOrchestrator. These tests verify ClaudeAgentService's own
+ * responsibilities: persistence, system prompt building, error handling,
+ * and correct delegation to the orchestrator.
  */
 class ClaudeAgentServiceTest {
 
@@ -33,7 +34,9 @@ class ClaudeAgentServiceTest {
     private lateinit var skillLoader: SkillLoader
     private lateinit var systemPromptAssembler: SystemPromptAssembler
     private lateinit var metricsService: MetricsService
-    private lateinit var baselineService: BaselineService
+    private lateinit var agenticLoopOrchestrator: AgenticLoopOrchestrator
+    private lateinit var hitlCheckpointManager: HitlCheckpointManager
+    private lateinit var baselineAutoChecker: BaselineAutoChecker
     private lateinit var service: ClaudeAgentService
 
     private val defaultProfile = ProfileDefinition(
@@ -57,7 +60,9 @@ class ClaudeAgentServiceTest {
         skillLoader = mockk()
         systemPromptAssembler = mockk()
         metricsService = mockk(relaxed = true)
-        baselineService = mockk(relaxed = true)
+        agenticLoopOrchestrator = mockk(relaxed = true)
+        hitlCheckpointManager = mockk(relaxed = true)
+        baselineAutoChecker = mockk(relaxed = true)
 
         // Default routing: always route to development profile
         every { profileRouter.route(any(), any()) } returns ProfileRoutingResult(
@@ -68,6 +73,7 @@ class ClaudeAgentServiceTest {
         every { skillLoader.loadSkillsForProfile(any(), any()) } returns emptyList()
         every { skillLoader.loadProfile(any()) } returns defaultProfile
         every { systemPromptAssembler.assemble(any(), any()) } returns "You are a test assistant."
+        every { systemPromptAssembler.assemble(any(), any(), any()) } returns "You are a test assistant."
         every { systemPromptAssembler.fallbackPrompt() } returns "You are a test assistant."
 
         service = ClaudeAgentService(
@@ -76,17 +82,17 @@ class ClaudeAgentServiceTest {
             knowledgeGapDetectorService = knowledgeGapDetectorService,
             chatSessionRepository = chatSessionRepository,
             chatMessageRepository = chatMessageRepository,
+            executionRecordRepository = mockk(relaxed = true),
             profileRouter = profileRouter,
             skillLoader = skillLoader,
             systemPromptAssembler = systemPromptAssembler,
             metricsService = metricsService,
-            baselineService = baselineService,
-            hitlCheckpointRepository = mockk(relaxed = true),
-            executionRecordRepository = mockk(relaxed = true),
             sessionSummaryService = mockk(relaxed = true),
             memoryContextLoader = mockk(relaxed = true),
-            messageCompressor = mockk(relaxed = true),
-            tokenEstimator = mockk(relaxed = true)
+            userModelConfigService = mockk(relaxed = true),
+            agenticLoopOrchestrator = agenticLoopOrchestrator,
+            hitlCheckpointManager = hitlCheckpointManager,
+            baselineAutoChecker = baselineAutoChecker
         )
 
         // Default: no conversation history
@@ -98,19 +104,14 @@ class ClaudeAgentServiceTest {
 
     @Test
     fun `sendMessage returns response from Claude`() {
-        // Setup: Claude returns simple text
-        val events = flow<StreamEvent> {
-            emit(StreamEvent.MessageStart("msg_1", "claude-sonnet-4-20250514"))
-            emit(StreamEvent.ContentDelta("Hello, "))
-            emit(StreamEvent.ContentDelta("how can I help?"))
-            emit(StreamEvent.MessageDelta(StopReason.END_TURN))
-            emit(StreamEvent.MessageStop)
-        }
-
         every { mcpProxyService.listTools() } returns listOf(
             McpTool("search_knowledge", "Search docs", emptyMap())
         )
-        coEvery { claudeAdapter.streamWithTools(any(), any(), any()) } returns events
+        // Mock the orchestrator to return expected content
+        every { agenticLoopOrchestrator.collectStreamResult(any()) } returns AgenticResult(
+            content = "Hello, how can I help?",
+            toolCalls = emptyList()
+        )
 
         val result = service.sendMessage("session-1", "Hi", emptyList(), "workspace-1")
 
@@ -120,14 +121,11 @@ class ClaudeAgentServiceTest {
 
     @Test
     fun `sendMessage persists user and assistant messages`() {
-        val events = flow<StreamEvent> {
-            emit(StreamEvent.ContentDelta("Response"))
-            emit(StreamEvent.MessageDelta(StopReason.END_TURN))
-            emit(StreamEvent.MessageStop)
-        }
-
         every { mcpProxyService.listTools() } returns emptyList()
-        coEvery { claudeAdapter.streamWithTools(any(), any(), any()) } returns events
+        every { agenticLoopOrchestrator.collectStreamResult(any()) } returns AgenticResult(
+            content = "Response",
+            toolCalls = emptyList()
+        )
 
         service.sendMessage("session-1", "Hello", emptyList(), "workspace-1")
 
@@ -138,7 +136,8 @@ class ClaudeAgentServiceTest {
     @Test
     fun `sendMessage returns fallback on Claude API failure`() {
         every { mcpProxyService.listTools() } returns emptyList()
-        coEvery { claudeAdapter.streamWithTools(any(), any(), any()) } throws RuntimeException("API down")
+        // Make collectStreamResult throw to simulate API failure
+        every { agenticLoopOrchestrator.collectStreamResult(any()) } throws RuntimeException("API down")
 
         val result = service.sendMessage("session-1", "Hello", emptyList(), "workspace-1")
 
@@ -147,16 +146,15 @@ class ClaudeAgentServiceTest {
 
     @Test
     fun `streamMessage emits content events`() {
-        val events = flow<StreamEvent> {
-            emit(StreamEvent.MessageStart("msg_1", "claude-sonnet-4-20250514"))
-            emit(StreamEvent.ContentDelta("Hello"))
-            emit(StreamEvent.ContentDelta(" there"))
-            emit(StreamEvent.MessageDelta(StopReason.END_TURN))
-            emit(StreamEvent.MessageStop)
-        }
-
         every { mcpProxyService.listTools() } returns emptyList()
-        coEvery { claudeAdapter.streamWithTools(any(), any(), any()) } returns events
+        // Mock agenticStream to emit content events via callback and return result
+        coEvery { agenticLoopOrchestrator.agenticStream(any(), any(), any(), any(), any()) } coAnswers {
+            @Suppress("UNCHECKED_CAST")
+            val onEvent = args[3] as (Map<String, Any?>) -> Unit
+            onEvent(mapOf("type" to "content", "content" to "Hello"))
+            onEvent(mapOf("type" to "content", "content" to " there"))
+            AgenticResult(content = "Hello there", toolCalls = emptyList())
+        }
 
         val receivedEvents = CopyOnWriteArrayList<Map<String, Any?>>()
         val latch = CountDownLatch(1)
@@ -188,39 +186,31 @@ class ClaudeAgentServiceTest {
 
     @Test
     fun `streamMessage executes tool calling agentic loop`() {
-        // Turn 1: Claude requests a tool
-        val turn1Events = flow<StreamEvent> {
-            emit(StreamEvent.MessageStart("msg_1", "claude-sonnet-4-20250514"))
-            emit(StreamEvent.ContentDelta("Let me search."))
-            emit(StreamEvent.ToolUseStart(1, "toolu_001", "search_knowledge"))
-            emit(StreamEvent.ToolInputDelta("""{"query":"spring"}"""))
-            emit(StreamEvent.ToolUseEnd(1))
-            emit(StreamEvent.MessageDelta(StopReason.TOOL_USE))
-            emit(StreamEvent.MessageStop)
-        }
-
-        // Turn 2: Claude responds with the tool result
-        val turn2Events = flow<StreamEvent> {
-            emit(StreamEvent.MessageStart("msg_2", "claude-sonnet-4-20250514"))
-            emit(StreamEvent.ContentDelta("Based on the search results, here's what I found."))
-            emit(StreamEvent.MessageDelta(StopReason.END_TURN))
-            emit(StreamEvent.MessageStop)
-        }
-
         every { mcpProxyService.listTools() } returns listOf(
             McpTool("search_knowledge", "Search docs", mapOf(
                 "type" to "object",
                 "properties" to mapOf("query" to mapOf("type" to "string"))
             ))
         )
-
-        // Return different flows for sequential calls
-        coEvery { claudeAdapter.streamWithTools(any(), any(), any()) } returnsMany listOf(turn1Events, turn2Events)
-
-        every { mcpProxyService.callTool("search_knowledge", any(), any()) } returns McpToolCallResponse(
-            content = listOf(McpContent(type = "text", text = "Spring Boot docs found")),
-            isError = false
-        )
+        // Mock agenticStream to simulate tool calling flow
+        coEvery { agenticLoopOrchestrator.agenticStream(any(), any(), any(), any(), any()) } coAnswers {
+            @Suppress("UNCHECKED_CAST")
+            val onEvent = args[3] as (Map<String, Any?>) -> Unit
+            onEvent(mapOf("type" to "tool_use_start", "toolCallId" to "toolu_001", "toolName" to "search_knowledge"))
+            onEvent(mapOf("type" to "tool_result", "toolCallId" to "toolu_001",
+                "content" to "Spring Boot docs found", "durationMs" to 100L))
+            onEvent(mapOf("type" to "content", "content" to "Based on the search results, here's what I found."))
+            AgenticResult(
+                content = "Based on the search results, here's what I found.",
+                toolCalls = listOf(ToolCallRecord(
+                    id = "toolu_001",
+                    name = "search_knowledge",
+                    input = mapOf("query" to "spring"),
+                    output = "Spring Boot docs found",
+                    status = "complete"
+                ))
+            )
+        }
 
         val receivedEvents = CopyOnWriteArrayList<Map<String, Any?>>()
         val latch = CountDownLatch(1)
@@ -241,7 +231,7 @@ class ClaudeAgentServiceTest {
 
         assertThat(latch.await(10, TimeUnit.SECONDS)).isTrue()
 
-        // Verify tool_use events were emitted
+        // Verify tool_use events were emitted by the orchestrator
         val toolUseStartEvents = receivedEvents.filter { it["type"] == "tool_use_start" }
         assertThat(toolUseStartEvents).hasSize(1)
         assertThat(toolUseStartEvents[0]["toolName"]).isEqualTo("search_knowledge")
@@ -250,34 +240,36 @@ class ClaudeAgentServiceTest {
         val toolResultEvents = receivedEvents.filter { it["type"] == "tool_result" }
         assertThat(toolResultEvents).hasSize(1)
 
-        // Verify the adapter was called twice (2 turns)
-        coVerify(exactly = 2) { claudeAdapter.streamWithTools(any(), any(), any()) }
-
-        // Verify tool was called
-        verify(exactly = 1) { mcpProxyService.callTool("search_knowledge", any(), any()) }
+        // Verify completed message includes tool calls
+        assertThat(completedMessage).isNotNull
+        assertThat(completedMessage!!.toolCalls!!).hasSize(1)
+        assertThat(completedMessage!!.toolCalls!![0].name).isEqualTo("search_knowledge")
     }
 
     @Test
     fun `streamMessage handles tool execution failure gracefully`() {
-        val turn1Events = flow<StreamEvent> {
-            emit(StreamEvent.ToolUseStart(0, "toolu_001", "search_knowledge"))
-            emit(StreamEvent.ToolInputDelta("""{"query":"test"}"""))
-            emit(StreamEvent.ToolUseEnd(0))
-            emit(StreamEvent.MessageDelta(StopReason.TOOL_USE))
-            emit(StreamEvent.MessageStop)
-        }
-
-        val turn2Events = flow<StreamEvent> {
-            emit(StreamEvent.ContentDelta("Sorry, the tool failed."))
-            emit(StreamEvent.MessageDelta(StopReason.END_TURN))
-            emit(StreamEvent.MessageStop)
-        }
-
         every { mcpProxyService.listTools() } returns listOf(
             McpTool("search_knowledge", "Search", emptyMap())
         )
-        coEvery { claudeAdapter.streamWithTools(any(), any(), any()) } returnsMany listOf(turn1Events, turn2Events)
-        every { mcpProxyService.callTool(any(), any(), any()) } throws RuntimeException("MCP server down")
+        // Mock agenticStream to simulate tool execution error
+        coEvery { agenticLoopOrchestrator.agenticStream(any(), any(), any(), any(), any()) } coAnswers {
+            @Suppress("UNCHECKED_CAST")
+            val onEvent = args[3] as (Map<String, Any?>) -> Unit
+            onEvent(mapOf("type" to "tool_use_start", "toolCallId" to "toolu_001", "toolName" to "search_knowledge"))
+            onEvent(mapOf("type" to "tool_result", "toolCallId" to "toolu_001",
+                "content" to "Error executing tool: MCP server down", "durationMs" to 50L))
+            onEvent(mapOf("type" to "content", "content" to "Sorry, the tool failed."))
+            AgenticResult(
+                content = "Sorry, the tool failed.",
+                toolCalls = listOf(ToolCallRecord(
+                    id = "toolu_001",
+                    name = "search_knowledge",
+                    input = mapOf("query" to "test"),
+                    output = "Error executing tool: MCP server down",
+                    status = "error"
+                ))
+            )
+        }
 
         val receivedEvents = CopyOnWriteArrayList<Map<String, Any?>>()
         val latch = CountDownLatch(1)
@@ -302,32 +294,26 @@ class ClaudeAgentServiceTest {
 
     @Test
     fun `sendMessage includes context in the message`() {
-        val events = flow<StreamEvent> {
-            emit(StreamEvent.ContentDelta("I see the file."))
-            emit(StreamEvent.MessageDelta(StopReason.END_TURN))
-            emit(StreamEvent.MessageStop)
-        }
-
         every { mcpProxyService.listTools() } returns emptyList()
-        coEvery { claudeAdapter.streamWithTools(any(), any(), any()) } returns events
+        every { agenticLoopOrchestrator.collectStreamResult(any()) } returns AgenticResult(
+            content = "I see the file.",
+            toolCalls = emptyList()
+        )
 
         val contexts = listOf(
             ContextReference(type = "file", id = "App.kt", content = "fun main() {}")
         )
 
+        // Capture persisted messages to verify context inclusion
+        val savedEntities = mutableListOf<ChatMessageEntity>()
+        every { chatMessageRepository.save(capture(savedEntities)) } answers { firstArg() }
+
         service.sendMessage("session-1", "Explain this", contexts, "workspace-1")
 
-        // Verify the message sent to Claude includes context
-        coVerify {
-            claudeAdapter.streamWithTools(
-                match { messages ->
-                    val lastMsg = messages.last()
-                    lastMsg.content.contains("App.kt") && lastMsg.content.contains("Explain this")
-                },
-                any(),
-                any()
-            )
-        }
+        // Verify the persisted user message includes the context
+        val userMsg = savedEntities.first { it.role == "user" }
+        assertThat(userMsg.content).contains("App.kt")
+        assertThat(userMsg.content).contains("Explain this")
     }
 
     @Test
@@ -347,24 +333,17 @@ class ClaudeAgentServiceTest {
             )
         )
 
-        val events = flow<StreamEvent> {
-            emit(StreamEvent.ContentDelta("Follow-up answer"))
-            emit(StreamEvent.MessageDelta(StopReason.END_TURN))
-            emit(StreamEvent.MessageStop)
-        }
-
         every { mcpProxyService.listTools() } returns emptyList()
-        coEvery { claudeAdapter.streamWithTools(any(), any(), any()) } returns events
+        every { agenticLoopOrchestrator.collectStreamResult(any()) } returns AgenticResult(
+            content = "Follow-up answer",
+            toolCalls = emptyList()
+        )
 
-        service.sendMessage("session-1", "Follow-up", emptyList(), "workspace-1")
+        val result = service.sendMessage("session-1", "Follow-up", emptyList(), "workspace-1")
 
-        // Verify history is included: 2 history + 1 new = 3 messages
-        coVerify {
-            claudeAdapter.streamWithTools(
-                match { messages -> messages.size == 3 },
-                any(),
-                any()
-            )
-        }
+        // Verify history was loaded from database
+        verify { chatMessageRepository.findBySessionIdOrderByCreatedAt("session-1") }
+        // Verify the response content
+        assertThat(result.content).isEqualTo("Follow-up answer")
     }
 }
