@@ -285,7 +285,27 @@ class ClaudeAgentService(
                             }
                         }
                         HitlAction.APPROVE -> {
-                            // Continue normally
+                            // Re-enter agentic loop to continue execution after approval
+                            emitSubStep(onEvent, "用户已批准「${activeProfileDef.hitlCheckpoint}」，继续执行...")
+                            onEvent(mapOf("type" to "ooda_phase", "phase" to "orient", "detail" to "审批通过，继续执行"))
+
+                            val continueMessages = (history + Message(role = Message.Role.USER, content = fullMessage)).toMutableList()
+                            continueMessages.add(Message(role = Message.Role.ASSISTANT, content = finalResult.content))
+                            continueMessages.add(Message(role = Message.Role.USER, content =
+                                "用户已审批通过「${activeProfileDef.hitlCheckpoint}」。" +
+                                (if (decision.feedback.isNullOrBlank()) "" else "用户反馈: ${decision.feedback}。") +
+                                "请输出本阶段的完整总结报告，包括：1) 已完成的工作 2) 产出物清单 3) 关键决策 4) 建议的下一步。"
+                            ))
+
+                            finalResult = runBlocking {
+                                agenticStream(
+                                    messages = continueMessages,
+                                    options = options,
+                                    tools = tools,
+                                    onEvent = onEvent,
+                                    workspaceId = workspaceId
+                                )
+                            }
                         }
                     }
                 }
@@ -798,7 +818,8 @@ $failureContext
 请分析失败原因，修改相关文件使底线检查通过。修改完成后不要再调用底线检查工具。"""
             ))
 
-            // Run another agentic loop to fix
+            // Run another agentic loop to fix (with rate-limit protection)
+            try {
             currentResult = runBlocking {
                 agenticStream(
                     messages = fixMessages,
@@ -807,6 +828,17 @@ $failureContext
                     onEvent = onEvent,
                     workspaceId = workspaceId
                 )
+            }
+            } catch (e: Exception) {
+                // Rate limit or other API error during baseline fix — skip fix, return what we have
+                logger.warn("Baseline fix loop aborted ({}): {}", e.javaClass.simpleName, e.message?.take(100))
+                emitSubStep(onEvent, "底线修复跳过（API 限制），返回当前结果")
+                onEvent(mapOf(
+                    "type" to "baseline_check",
+                    "status" to "exhausted",
+                    "summary" to "Baseline fix skipped due to: ${e.message?.take(80)}"
+                ))
+                return currentResult
             }
         }
 

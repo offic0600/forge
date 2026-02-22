@@ -3096,3 +3096,280 @@ echo "Regression test workspace cleaned up"
 **已知阻塞项**：
 1. Development Profile rate limit（system prompt 106K → 30K token 限额），需优化 skill 按需加载
 2. ExecutionLoggerService 文件日志未集成到主流程（DB 持久化已工作）
+
+---
+
+## Session 23 — 2026-02-22：Phase 3 验收体验 + Bug 修复
+
+### 23.1 环境准备
+
+- 拉取远端新提交 `ba1ba18 fix: 补充缺失的 Flyway migration 脚本`（V3 + V4 迁移脚本）
+- 重建后端容器，6 容器全部 healthy，H2 数据库从零开始
+
+### 23.2 Bug #1：HITL Approve 后无反馈
+
+**发现方式**：用户在浏览器发送 `@规划 写PRD`，AI 完成输出 → HITL 暂停 → 点击「批准」→ 审批面板消失但之后没有任何响应
+
+**日志时间线**：
+```
+22:22:33 Turn 4 完成 (stopReason=MAX_TOKENS) → HITL 暂停
+22:23:59.841 用户 Approve → HITL resolved: APPROVE
+22:23:59.876 WebSocket 断开（35ms 后）
+```
+
+**根因分析**：
+- `ClaudeAgentService.kt:287-289` — APPROVE 分支为空（`// Continue normally`），没有给前端发任何内容消息
+- 对比 REJECT 有终止消息、MODIFY 有重入循环，唯独 APPROVE 什么都不做
+- 后端直接跳到 `ooda_phase=complete` → `done` → WebSocket 关闭
+- 前端收到 `done` 后进入 `finally` 清理所有状态，用户看到的就是"没反应"
+
+**修复**：APPROVE 分支发送确认内容消息
+```kotlin
+HitlAction.APPROVE -> {
+    val approveContent = "\n\n---\n✅ 已批准。${activeProfileDef.hitlCheckpoint} 通过审核。"
+    onEvent(mapOf("type" to "content", "content" to approveContent))
+    finalResult = AgenticResult(
+        content = finalResult.content + approveContent,
+        toolCalls = finalResult.toolCalls
+    )
+}
+```
+
+**文件变更**：
+
+| 操作 | 文件 | 说明 |
+|------|------|------|
+| 修改 | `web-ide/backend/.../service/ClaudeAgentService.kt` | APPROVE 分支增加确认消息 |
+
+**经验**：每个用户操作（approve/reject/modify）都必须有明确的 UI 反馈，空分支是 UX 反模式。
+
+### 23.3 验收体验全流程
+
+**测试场景**：创建 workspace「印章管理系统」，依次执行规划→设计→开发全流程
+
+#### 规划阶段（`@规划 写一个印章管理系统的 PRD`）
+- Planning profile 路由成功（34K chars prompt, 2 skills）
+- Turn 1-3：搜索知识库 → 生成完整 PRD
+- **HITL 暂停触发** ✅ → 用户点击批准
+- **BUG-022 修复验证** ✅：approve 后 AI 重入 agentic loop，输出 2269 字阶段总结
+- **BUG-023 修复验证** ✅：流程结束后活动日志仍可查看
+
+#### 设计阶段（`@设计 基于 PRD 设计印章管理系统架构`）
+- Design profile 路由成功（50K chars prompt, 4 skills）
+- Turn 1-5：搜索 wiki/adr/api_doc → 产出设计
+- **HITL 暂停触发** ✅ → 用户点击批准
+- Approve 后继续工作（Turn 1-8），写入 6 个文件：
+  - `docs/adr/ADR-001-jwt-vs-session-authentication.md` (1.8KB)
+  - `docs/adr/ADR-002-password-hashing-algorithm.md` (1.8KB)
+  - `docs/adr/ADR-003-email-sending-strategy.md` (1.6KB)
+  - `docs/design/architecture.md` (10.2KB)
+  - `docs/design/openapi.yaml` (9.4KB)
+  - `docs/design/database-schema.sql` (4.8KB)
+- Turn 8 耗尽 → 强制最终总结
+
+#### 开发阶段（`@开发 基于设计文档实现用户注册`）
+- **BUG-024 触发** ❌：Development profile 106K chars prompt（20 skills）→ Turn 1 成功，Turn 2 rate limit 30K token/min
+- 错误：`RateLimitException: This request would exceed your organization's rate limit of 30,000 input tokens per minute`
+
+### 23.4 Bug 修复
+
+#### BUG-021 → BUG-022：HITL Approve 后无反馈 → 未继续执行
+
+**第一轮修复**（BUG-021）：APPROVE 分支加确认消息 → 用户反馈：有确认但没继续执行
+**第二轮修复**（BUG-022）：APPROVE 后重入 agentic loop，要求 AI 输出阶段总结 + 继续工作
+```kotlin
+HitlAction.APPROVE -> {
+    emitSubStep(onEvent, "用户已批准「${checkpoint}」，继续执行...")
+    // 重入 agentic loop with continuation message
+    finalResult = runBlocking { agenticStream(continueMessages, ...) }
+}
+```
+**验证**：规划/设计两阶段 approve 后均继续执行，产出实质性内容 ✅
+
+#### BUG-023：活动日志流程结束后消失
+
+**修复**：活动日志显示条件从 `isStreaming` 改为 `activityLog.length > 0`
+**验证**：流程结束后活动日志保留可查 ✅
+
+#### BUG-024：Development Profile rate limit
+
+**根因**：`foundation-skills-all` 加载全部 foundation skills（20 个），system prompt 膨胀到 106K chars
+**修复**：`SkillLoader.loadSkillsForProfile()` 增加 60K chars 上限裁剪
+- Profile-specific skills 优先保留
+- Foundation skills 按消息关键词相关度排序
+- 超出预算的 foundation skills 被裁剪
+**待验证**
+
+#### BUG-025：OODA 指示器未显示
+
+**根因**：开发模式 rate limit 快速失败（Turn 1 后立即报错），OODA 指示器来不及显示
+**修复**：依赖 BUG-024 修复（rate limit 解决后 OODA 有足够时间显示）
+
+### 23.5 文件变更表
+
+| 操作 | 文件 | 说明 |
+|------|------|------|
+| 修改 | `web-ide/backend/.../service/ClaudeAgentService.kt` | APPROVE 重入 agentic loop |
+| 修改 | `web-ide/frontend/src/components/chat/AiChatSidebar.tsx` | 活动日志不随流结束消失 |
+| 修改 | `web-ide/backend/.../service/skill/SkillLoader.kt` | 60K chars skill 裁剪上限 |
+| 更新 | `docs/buglist.md` | 新增 BUG-021~025 |
+| 更新 | `docs/planning/dev-logbook.md` | Session 23 测试记录 |
+
+### 23.7 Skill 架构评审 — 渐进式披露差距分析
+
+**参考**：[Anthropic Skill Authoring Best Practices](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices)
+
+**核心原则**：
+1. **SKILL.md < 500 行** — 正文精简，只写 Claude 不知道的
+2. **3 级渐进式披露** — metadata（触发发现）→ SKILL.md（核心指南）→ 子文件（详细参考）
+3. **按需加载** — Claude 通过文件系统读取，不是全量注入 system prompt
+
+**我们的差距**：
+- 所有 skill 内容直接拼入 system prompt，无按需加载（架构缺陷）
+- 大量 Claude 本身就知道的内容（如 Kotlin data class 用法、Spring Boot 分层架构）
+- 无子文件拆分，所有内容堆在 SKILL.md 里
+
+**短期修复**（Session 23 已做）：
+- Development profile 从 `foundation-skills-all`（20 skills, 106K）改为精确指定 7 个核心 skills（~68K）
+- SkillLoader 增加 60K chars 裁剪 safety net
+
+**Phase 4 方向**：
+- 重构 skill 加载为渐进式披露架构
+- Skill 内容精简（删除 Claude 已知内容，只保留项目特有约定）
+- 引入 SKILL.md → 子文件的二级加载机制
+- 考虑 skill 内容通过 MCP tool 按需查询，而非注入 system prompt
+
+### 23.6 开发阶段验证（第二轮）
+
+**BUG-024 + BUG-026 修复后重测 `@开发`**
+
+**环境**：新 workspace「印章管理系统」，development-profile 精确加载 7 skills
+
+**日志时间线**：
+```
+23:28:33 路由到 development-profile via '@开发'
+23:28:33 Loaded 7 skills (filtered from 32)
+23:28:33 System prompt: 74,973 chars
+23:28:33-23:29:15 Turn 1-8 全部成功（无 rate limit！）
+23:29:15 Workspace file written: src/errors/app.error.ts (1545B)
+23:29:15 Forcing final summary turn (turns exhausted)
+23:30:06 Summary: 10,907 chars
+23:30:06 Baseline auto-check: code-style ✅ / security ✅ / test-coverage ❌
+23:30:07 Baseline fix loop Turn 1-8
+23:30:50 Fix loop writes: package.json, user.entity.ts, user.dto.ts, user.repository.ts
+23:30:51 Rate limit caught by BUG-026 fix → 跳过修复，返回当前结果
+23:31:23 HITL checkpoint → 用户 APPROVE
+23:31:23-23:32:06 Continuation Turn 1: 4,320 chars 总结 (stopReason=END_TURN)
+23:32:06 WebSocket 正常断开 (code=1000)
+```
+
+**验证结果**：
+- ✅ **BUG-024 已验证**：7 skills / 75K chars prompt → 8 轮无 rate limit
+- ✅ **BUG-025 已验证**：Turn 1-8 正常执行，OODA 事件正常发送
+- ✅ **BUG-026 已验证**：rate limit 在 baseline fix loop 被 try-catch 优雅捕获
+- ✅ **HITL 审批面板** 出现且响应正常
+- ✅ **Approve 后继续执行** 产出 4,320 chars 总结
+- ❌ **BUG-027 发现**：test-coverage-baseline 对 TypeScript workspace 报 FAIL（无 Gradle/Maven），导致无意义修复循环
+
+### 23.8 文件变更表（完整）
+
+| 操作 | 文件 | 说明 |
+|------|------|------|
+| 修改 | `web-ide/backend/.../service/ClaudeAgentService.kt` | APPROVE 重入 + baseline fix rate limit 保护 |
+| 修改 | `web-ide/frontend/src/components/chat/AiChatSidebar.tsx` | 活动日志不随流结束消失 |
+| 修改 | `web-ide/backend/.../service/skill/SkillLoader.kt` | 60K chars skill 裁剪上限 |
+| 修改 | `plugins/forge-superagent/skill-profiles/development-profile.md` | 7 精确 skills 替代 foundation-skills-all |
+| 更新 | `docs/buglist.md` | 新增 BUG-021~027 |
+| 更新 | `docs/planning/dev-logbook.md` | Session 23 测试记录 |
+
+### 23.9 统计快照
+
+- Bug 总数：27（26 已修复 / 1 OPEN BUG-027 / 1 挂起 BUG-016）
+- Phase 3 新增 Bug：BUG-021~027（7 个，6 已修复）
+- Skills 优化：development profile 从 20 skills/106K → 7 skills/75K chars
+- 容器：6 个（backend + frontend + nginx + keycloak + knowledge-mcp + database-mcp）
+- 全流程验证：规划→设计→开发 三阶段 HITL 审批闭环打通
+- 已验证 Profile：planning ✅ design ✅ development ✅
+
+---
+
+## Session 24 — 2026-02-22：Phase 3 全流程验收（续）+ BUG-027/028 修复
+
+### 24.1 BUG-027 修复：移除 test-coverage-baseline
+
+**问题**：test-coverage-baseline 对非 Java/Kotlin workspace 永远报 FAIL（无 Gradle/Maven），导致无意义修复循环。
+**修复**：从所有 profile 中移除 test-coverage-baseline，只保留 code-style + security。
+
+**变更文件**：
+| 操作 | 文件 | 说明 |
+|------|------|------|
+| 修改 | `plugins/forge-superagent/skill-profiles/development-profile.md` | baselines 从 3→2，移除 test-coverage |
+| 修改 | `plugins/forge-superagent/skill-profiles/testing-profile.md` | baselines 改为 code-style + security |
+| 修改 | `plugins/forge-superagent/baselines/baseline-runner.kt` | 示例代码移除 test-coverage |
+
+### 24.2 全流程验收（Workspace「离职系统重构」）
+
+新建 workspace 从头走完整流程：规划→设计→开发。
+
+#### 规划阶段（`@规划`）
+```
+00:11:00  planning-profile (2 skills / 34K chars)
+00:11:00  Turn 1-4: wiki_search + adr_search + knowledge_gap_log
+00:12:05  Turn 4 END_TURN → HITL 暂停 → APPROVE
+00:12:05  续接 Turn 1: 总结报告 → 正常结束
+```
+✅ HITL 闭环正常
+
+#### 设计阶段（`@设计` 多轮）
+```
+00:13:05  design-profile (3 skills / 48K chars)
+00:14:26  Turn 4 MAX_TOKENS → HITL → APPROVE
+00:15:44  续接 Turn 3 END_TURN (6,103 chars) → 正常结束
+```
+✅ 第一轮 HITL + 续接正常
+
+```
+00:17:15  设计续写（写文件）
+00:18:23  写入 docs/prd/offboarding-prd.md (4.6KB)
+00:18:54  写入 docs/adr/ADR-001-workflow-engine.md (1.9KB)
+00:19:24  写入 docs/adr/ADR-002-notification-channel.md (2.2KB)
+00:20:01  写入 docs/adr/ADR-003-data-archival-strategy.md (2.5KB)
+00:22:06  Summary 8,525 chars
+00:22:06  Baseline: architecture ✅ / api-contract ✅（2 passed, 0 failed）
+```
+✅ Baseline 全通过（首次无修复循环！）
+
+**设计阶段产出 4 个文件**，baseline 双通过。但 HITL 审批面板未在前端出现（日志卡在 baselines passed 后无后续），需后续排查。
+
+### 24.3 BUG-028 修复：WebSocket 消息体过大
+
+**发现**：规划+设计多轮对话后，发送 `@开发` 时 WebSocket 立即断连，错误码 1009。
+**根因**：`WebSocketConfig.kt` 未配置 `maxTextMessageBufferSize`，Tomcat 默认 8KB。
+**修复**：新增 `ServletServerContainerFactoryBean`，设置 512KB 缓冲区。
+
+**变更文件**：
+| 操作 | 文件 | 说明 |
+|------|------|------|
+| 修改 | `web-ide/backend/.../config/WebSocketConfig.kt` | maxTextMessageBufferSize 8KB→512KB |
+
+**验证**：修复后多轮对话不再触发 1009 断连 ✅
+
+### 24.4 文件变更表（完整）
+
+| 操作 | 文件 | 说明 |
+|------|------|------|
+| 修改 | `plugins/forge-superagent/skill-profiles/development-profile.md` | 移除 test-coverage-baseline |
+| 修改 | `plugins/forge-superagent/skill-profiles/testing-profile.md` | 移除 test-coverage-baseline |
+| 修改 | `plugins/forge-superagent/baselines/baseline-runner.kt` | 移除 test-coverage 引用 |
+| 修改 | `web-ide/backend/.../config/WebSocketConfig.kt` | WebSocket 512KB 缓冲区 |
+| 更新 | `docs/buglist.md` | BUG-027/028 修复记录 |
+| 更新 | `docs/planning/dev-logbook.md` | Session 24 |
+
+### 24.5 统计快照
+
+- Bug 总数：28（27 已修复 / 1 挂起 BUG-016）
+- Session 24 新增 Bug：BUG-028（已修复）
+- Session 24 修复 Bug：BUG-027 + BUG-028
+- 全流程验证：规划 ✅ → 设计 ✅（baseline 双通过）→ 开发（待继续）
+- 设计阶段首次 baseline 全通过（architecture + api-contract）
+- 遗留问题：设计阶段 baseline 通过后 HITL 未触发，需排查

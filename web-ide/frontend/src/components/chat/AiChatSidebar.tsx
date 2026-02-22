@@ -580,10 +580,10 @@ export function AiChatSidebar({
             workspaceId={workspaceId}
           />
         ))}
-        {isStreaming && (activeProfile || oodaPhase) && (
+        {(isStreaming || activityLog.length > 0) && (activeProfile || oodaPhase || activityLog.length > 0) && (
           <div className="space-y-1.5 mx-1">
             {/* OODA Phase Indicator — enhanced with Turn info */}
-            {oodaPhase && (
+            {oodaPhase && isStreaming && (
               <div className="flex items-center gap-0.5">
                 {OODA_PHASES.map((p) => {
                   const isActive = p.key === oodaPhase;
@@ -625,7 +625,7 @@ export function AiChatSidebar({
               </div>
             )}
             {/* Profile Badge */}
-            {activeProfile && (
+            {activeProfile && isStreaming && (
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground border border-border rounded-md px-2 py-1 bg-muted/50">
                 {/* Confidence dot */}
                 <span
@@ -659,7 +659,7 @@ export function AiChatSidebar({
               </div>
             )}
             {/* Baseline Result */}
-            {baselineResult && (
+            {baselineResult && isStreaming && (
               <div className={`flex items-center gap-1.5 text-xs border rounded-md px-2 py-1 ${
                 baselineResult.status === "passed" ? "border-green-500/30 bg-green-500/10 text-green-400"
                 : baselineResult.status === "failed" ? "border-red-500/30 bg-red-500/10 text-red-400"

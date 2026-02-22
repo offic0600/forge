@@ -29,6 +29,14 @@
 | BUG-018 | P2 | ✅ 已修复 | Context Picker Knowledge tab 无内容（空字符串未 fallback 到通配搜索） |
 | BUG-019 | P2 | ✅ 已修复 | 代码块 Apply/Copy 按钮不可见（CSS opacity-0 隐藏） |
 | BUG-020 | P2 | ✅ 已修复 | Context Picker 搜索过滤无反应（焦点留在主输入框，键入未转发到搜索框） |
+| BUG-021 | P1 | ✅ 已修复 | HITL Approve 后无任何反馈（APPROVE 分支为空，无确认消息） |
+| BUG-022 | P1 | ✅ 已修复 | HITL Approve 后未继续执行（HITL 在 agentic loop 外，approve 后无后续执行路径） |
+| BUG-023 | P2 | ✅ 已修复 | 活动日志在流程结束后消失（finally 块清理所有状态，isStreaming=false 隐藏面板） |
+| BUG-024 | P0 | ✅ 已修复 | Development Profile rate limit — system prompt 106K→75K chars，7 skills 替代 20 skills |
+| BUG-025 | P2 | ✅ 已修复 | OODA 指示器未显示 — BUG-024 修复后 rate limit 不再触发，OODA 正常显示 |
+| BUG-026 | P1 | ✅ 已修复 | Baseline 修复循环触发 rate limit — 主循环 8 轮 + baseline 修复循环无 token 预算感知 |
+| BUG-027 | P2 | ✅ 已修复 | test-coverage-baseline 对非 Java/Kotlin workspace 报失败 — 已从所有 profile 移除 |
+| BUG-028 | P1 | ✅ 已修复 | WebSocket 消息体过大导致断连 — 多轮对话后 history 超出默认 8KB 缓冲区 |
 
 ---
 
@@ -197,16 +205,95 @@
   2. `AiChatSidebar.tsx`: 当 `showContextPicker` 为 true 时，`handleKeyDown` 中 `preventDefault()` 阻止可打印字符和 Backspace 进入 textarea
 - **文件**: `ContextPicker.tsx`, `AiChatSidebar.tsx`
 
+### BUG-021: HITL Approve 后无任何反馈
+- **发现**: Session 23, Phase 3 验收体验
+- **症状**: `@规划 写PRD` → HITL 暂停 → 点击「批准」→ 审批面板消失，之后完全没有反应
+- **根因**: `ClaudeAgentService.kt` APPROVE 分支为空（`// Continue normally`），没有发送任何内容消息。后端直接跳到 `done` 事件关闭 WebSocket
+- **修复**: APPROVE 分支增加确认消息 `✅ 已批准。{checkpoint} 通过审核。`
+- **文件**: `web-ide/backend/src/main/kotlin/com/forge/webide/service/ClaudeAgentService.kt`
+
+### BUG-022: HITL Approve 后未继续执行
+- **发现**: Session 23, Phase 3 验收体验（BUG-021 修复后复测）
+- **症状**: HITL 审批通过后，AI 只回复"已批准"就结束了，没有继续执行后续工作
+- **根因**: HITL checkpoint 位于 agentic loop 结束之后（`streamMessage()` 第 246-291 行）。agentic loop 已跑完所有轮次才触发 HITL，APPROVE 后没有后续执行路径
+- **期望**: APPROVE 后 AI 应继续执行（补充输出、进入下一阶段、或输出完整阶段总结报告）
+- **修复方向**:
+  - 方案 A：HITL checkpoint 移到 agentic loop 内部，在关键节点暂停，approve 后继续循环
+  - 方案 B：APPROVE 后重入 agentic loop，以"用户已审批通过，请继续"作为新消息继续执行
+  - 方案 C：APPROVE 后发送完整阶段总结报告（文件清单 + 执行统计 + 下一步建议）
+- **状态**: ✅ 已修复 — APPROVE 后重入 agentic loop，要求 AI 输出阶段总结并继续工作
+- **验证**: 规划阶段 approve 后输出 2269 字总结；设计阶段 approve 后继续写了 6 个文件（ADR + 架构 + API + DB schema）
+- **文件**: `web-ide/backend/src/main/kotlin/com/forge/webide/service/ClaudeAgentService.kt`
+
+### BUG-023: 活动日志在流程结束后消失
+- **发现**: Session 23, Phase 3 验收体验
+- **症状**: AI 执行过程中活动日志面板实时显示 sub_step 条目，但流程结束后日志消失
+- **根因**: `AiChatSidebar.tsx` `finally` 块（第 424-432 行）清理所有状态。活动日志面板的显示条件绑定 `isStreaming`，流结束后 `isStreaming=false` 导致面板隐藏
+- **修复方向**: 活动日志显示条件不应绑定 `isStreaming`，而是始终可见（只要有日志条目）。`finally` 块不应清理 `activityLog` 状态
+- **状态**: ✅ 已修复 — 活动日志显示条件改为 `activityLog.length > 0`，不再绑定 `isStreaming`
+- **验证**: 流程结束后活动日志仍可查看
+- **文件**: `web-ide/frontend/src/components/chat/AiChatSidebar.tsx`
+
 ---
 
 ## 统计
 
-- **总计**: 20 个 Bug
-- **已修复**: 19 个
+### BUG-024: Development Profile rate limit
+- **发现**: Session 23, `@开发` 实现用户注册
+- **症状**: Turn 1 成功但 Turn 2 立即报错 `RateLimitException: 30,000 input tokens per minute`
+- **根因**: `foundation-skills-all` 加载全部 20 个 foundation skills，system prompt 膨胀到 106,277 chars（约 35K tokens），超过 API 30K token/min 限额
+- **修复**: 双重修复：(1) `development-profile.md` 从 `foundation-skills-all` 改为 7 个精确 skills，(2) `SkillLoader.loadSkillsForProfile()` 增加 60K chars safety net
+- **验证**: 7 skills / 74,973 chars prompt → Turn 1-8 全部成功，无 rate limit ✅
+- **状态**: ✅ 已修复已验证
+- **文件**: `SkillLoader.kt`, `development-profile.md`
+
+### BUG-025: OODA 指示器未显示
+- **发现**: Session 23, `@开发` rate limit 快速失败时
+- **症状**: 开发模式下 OODA 指示器未出现
+- **根因**: Rate limit 在 Turn 2 立即触发，OODA 指示器来不及渲染。依赖 BUG-024 修复
+- **验证**: BUG-024 修复后 Turn 1-8 正常执行，OODA 事件正常发送 ✅
+- **状态**: ✅ 已修复已验证
+- **文件**: `web-ide/frontend/src/components/chat/AiChatSidebar.tsx`
+
+---
+
+## 统计
+
+### BUG-026: Baseline 修复循环触发 rate limit
+- **发现**: Session 23, `@开发` 实现用户注册
+- **症状**: Turn 8 耗尽 → 强制总结 → baseline 1/3 失败 → 修复循环 Turn 1-4 → rate limit，前端看到一直转圈最后报错
+- **根因**: 主循环 8 轮 + 强制总结 1 轮 + baseline 修复循环（最多 8 轮），1 分钟内 13+ 轮 API 调用累积超 30K token/min
+- **修复**: baseline 修复循环用 try-catch 捕获异常（RateLimitException 等），遇到限制时跳过修复直接返回当前结果
+- **状态**: ✅ 已修复
+- **文件**: `web-ide/backend/src/main/kotlin/com/forge/webide/service/ClaudeAgentService.kt`
+
+### BUG-027: test-coverage-baseline 对非 Java/Kotlin workspace 报失败而非跳过
+- **发现**: Session 23, `@开发` 第二轮验证
+- **症状**: AI 在 workspace 生成 TypeScript 代码，baseline 检查时 `test-coverage-baseline` 报 FAIL：`No recognized build tool found (Gradle or Maven). Cannot run tests.`
+- **根因**: `test-coverage-baseline.sh` 硬编码检测 Gradle/Maven，非 Java/Kotlin 项目无构建工具时报 FAIL 而非 SKIP
+- **影响**: baseline 修复循环被无意义触发，AI 浪费 8 轮 API 调用尝试"修复"不存在的问题
+- **修复**: 从 development-profile 和 testing-profile 的 baselines 列表中移除 test-coverage-baseline，只保留 code-style + security
+- **状态**: ✅ 已修复
+- **文件**: `development-profile.md`, `testing-profile.md`, `baseline-runner.kt`
+
+### BUG-028: WebSocket 消息体过大导致断连 (code=1009)
+- **发现**: Session 24, 全流程验证（规划→设计→开发）
+- **症状**: 经过规划+设计多轮对话后，发送新消息时 WebSocket 立即断连，错误码 1009："The decoded text message was too big for the output buffer"
+- **根因**: `WebSocketConfig.kt` 未设置 `maxTextMessageBufferSize`，使用 Tomcat 默认值 8KB。多轮对话后消息历史累积超过 8KB
+- **修复**: 新增 `ServletServerContainerFactoryBean` Bean，设置 `maxTextMessageBufferSize = 512KB`
+- **状态**: ✅ 已修复
+- **文件**: `web-ide/backend/src/main/kotlin/com/forge/webide/config/WebSocketConfig.kt`
+
+---
+
+## 统计
+
+- **总计**: 28 个 Bug
+- **已修复**: 27 个
 - **挂起**: 1 个 (BUG-016)
-- **P0 (阻塞)**: 2 个 (BUG-008, BUG-012)
-- **P1 (严重)**: 4 个 (BUG-001, BUG-005, BUG-013, BUG-017)
-- **P2 (一般)**: 14 个
+- **P0 (阻塞)**: 2 个 (BUG-008, BUG-012) — 均已修复
+- **P1 (严重)**: 8 个 (BUG-001, BUG-005, BUG-013, BUG-017, BUG-021, BUG-022, BUG-026, BUG-028) — 均已修复
+- **P2 (一般)**: 16 个
 
 ## 影响文件
 
@@ -219,8 +306,12 @@
 | `web-ide/backend/src/test/kotlin/com/forge/webide/controller/McpControllerTest.kt` | BUG-010 |
 | `web-ide/backend/src/main/kotlin/com/forge/webide/websocket/ChatWebSocketHandler.kt` | BUG-012 |
 | `web-ide/frontend/src/lib/claude-client.ts` | BUG-012 |
-| `web-ide/frontend/src/components/chat/AiChatSidebar.tsx` | BUG-012, 013, 014, 015, 020 |
+| `web-ide/frontend/src/components/chat/AiChatSidebar.tsx` | BUG-012, 013, 014, 015, 020, 023 |
 | `web-ide/frontend/src/components/chat/ContextPicker.tsx` | BUG-014, 015, 020 |
-| `web-ide/backend/src/main/kotlin/com/forge/webide/service/ClaudeAgentService.kt` | BUG-016 |
+| `web-ide/backend/src/main/kotlin/com/forge/webide/service/ClaudeAgentService.kt` | BUG-016, 021, 022, 026 |
 | `web-ide/backend/src/main/kotlin/com/forge/webide/controller/ContextController.kt` | BUG-018 |
 | `web-ide/frontend/src/components/chat/ChatMessage.tsx` | BUG-019 |
+| `web-ide/backend/src/main/kotlin/com/forge/webide/service/skill/SkillLoader.kt` | BUG-024 |
+| `plugins/forge-superagent/skill-profiles/development-profile.md` | BUG-024, 027 |
+| `plugins/forge-superagent/skill-profiles/testing-profile.md` | BUG-027 |
+| `web-ide/backend/src/main/kotlin/com/forge/webide/config/WebSocketConfig.kt` | BUG-028 |

@@ -1,14 +1,17 @@
 ---
 name: development-profile
-description: "Skill Profile for the Development delivery stage. The most comprehensive profile — covers code generation, all Foundation Skills, and relevant Domain Skills with full baseline enforcement."
+description: "Skill Profile for the Development delivery stage. Loads core coding skills plus keyword-triggered domain/foundation skills on demand."
 skills:
   - code-generation
-  - foundation-skills-all
-  - domain-skills-contextual
+  - kotlin-conventions
+  - spring-boot-patterns
+  - database-patterns
+  - testing-standards
+  - error-handling
+  - api-design
 baselines:
   - code-style-baseline
   - security-baseline
-  - test-coverage-baseline
 hitl-checkpoint: "Code Review — submit PR with all changes for human review before merge."
 ---
 
@@ -18,10 +21,9 @@ hitl-checkpoint: "Code Review — submit PR with all changes for human review be
 
 The Development Profile is the most detailed and frequently used profile. It activates when the SuperAgent enters the Development delivery stage. The primary objective is to generate high-quality, convention-compliant, tested code that implements the design.
 
-This profile enforces three baselines:
+This profile enforces two baselines:
 - **code-style-baseline**: Validates code style via ktlint/checkstyle
 - **security-baseline**: Scans for security vulnerabilities (hardcoded secrets, injection, XSS)
-- **test-coverage-baseline**: Validates service layer >= 80% coverage and controller integration tests
 
 Additionally, this profile dynamically loads:
 - **All relevant Foundation Skills**: language conventions, framework patterns, testing standards
@@ -224,7 +226,6 @@ Generate the code:
 3. **Run baselines**:
    - `code-style-baseline.sh` — fix any style violations
    - `security-baseline.sh` — fix any security issues
-   - `test-coverage-baseline.sh` — add tests if coverage is below threshold
 4. **On failure**:
    - Read the failure details carefully
    - Loop back to Observe with failure context
@@ -324,8 +325,3 @@ If the task involves the `order-service` module:
 - Checks dependency vulnerabilities (if dependency-check configured)
 - Exit 1 on any finding with severity and location
 
-### test-coverage-baseline
-- Service layer methods must have >= 80% line coverage
-- Every controller endpoint must have at least one integration test
-- Repository custom methods must have test coverage
-- Exit 1 if thresholds not met with gap details

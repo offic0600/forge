@@ -98,6 +98,41 @@ class SkillLoader(
         logger.info("Filtering skills for profile: {}", profile.name)
         logger.info("Loaded {} skills (filtered from {})", filtered.size, totalSkillCount)
 
+        // Guard: cap total skill content to avoid rate limit (30K tokens ≈ 80K chars)
+        // Profile-specific skills are kept first, foundation skills are pruned if over budget
+        val maxContentChars = 60_000
+        val totalChars = filtered.sumOf { it.content.length }
+        if (totalChars > maxContentChars) {
+            logger.warn("Skill content {} chars exceeds {}. Pruning foundation skills.", totalChars, maxContentChars)
+            // Partition: profile-specific skills first, foundation skills second
+            val profileSkills = filtered.filter { !it.sourcePath.contains("forge-foundation") }
+            val foundationSkills = filtered.filter { it.sourcePath.contains("forge-foundation") }
+                .sortedByDescending { skill ->
+                    // Prioritize skills whose name appears in the message
+                    val nameWords = skill.name.split("-")
+                    nameWords.count { message.lowercase().contains(it.lowercase()) }
+                }
+
+            val kept = mutableListOf<SkillDefinition>()
+            var charBudget = maxContentChars
+
+            // Always keep profile-specific skills
+            for (skill in profileSkills) {
+                kept.add(skill)
+                charBudget -= skill.content.length
+            }
+
+            // Fill remaining budget with most relevant foundation skills
+            for (skill in foundationSkills) {
+                if (charBudget - skill.content.length < 0) break
+                kept.add(skill)
+                charBudget -= skill.content.length
+            }
+
+            logger.info("Pruned from {} to {} skills ({} chars)", filtered.size, kept.size, maxContentChars - charBudget)
+            return kept
+        }
+
         return filtered
     }
 

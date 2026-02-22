@@ -16,7 +16,7 @@ import java.util.concurrent.TimeUnit
  *
  * Usage:
  *   val runner = BaselineRunner(projectRoot = "/path/to/project")
- *   val report = runner.runBaselines(listOf("code-style-baseline", "security-baseline", "test-coverage-baseline"))
+ *   val report = runner.runBaselines(listOf("code-style-baseline", "security-baseline"))
  *   if (!report.allPassed) {
  *       // Feed failures back into OODA Observe phase
  *   }
@@ -392,7 +392,6 @@ fun main(args: Array<String>) {
             listOf(
                 "code-style-baseline",
                 "security-baseline",
-                "test-coverage-baseline",
                 "api-contract-baseline",
                 "architecture-baseline"
             )

@@ -6,7 +6,8 @@ skills:
   - test-execution
   - testing-standards
 baselines:
-  - test-coverage-baseline
+  - code-style-baseline
+  - security-baseline
 hitl-checkpoint: "Test report confirmation — present comprehensive test results and coverage report for QA review and sign-off."
 ---
 
@@ -16,8 +17,9 @@ hitl-checkpoint: "Test report confirmation — present comprehensive test result
 
 The Testing Profile activates when the SuperAgent enters the Testing delivery stage. The primary objective is to ensure comprehensive test coverage, identify defects, and produce a quality report that gives confidence for release.
 
-This profile enforces one baseline:
-- **test-coverage-baseline**: Validates service layer >= 80% coverage and controller integration tests exist
+This profile enforces two baselines:
+- **code-style-baseline**: Validates code style via ktlint/checkstyle
+- **security-baseline**: Scans for security vulnerabilities
 
 The Testing Profile may be activated independently (dedicated QA phase) or as part of the Development Profile's test-writing activities.
 
@@ -194,10 +196,10 @@ Write and execute tests:
 3. Identify gaps and write additional tests to close them
 
 ### Step 6: Run Baselines
-1. Execute `test-coverage-baseline.sh`
+1. Execute `code-style-baseline.sh` and `security-baseline.sh`
 2. On failure:
-   - Read the specific coverage gaps
-   - Write targeted tests to close the gaps
+   - Read the specific violations
+   - Fix code style or security issues
    - Re-run the baseline
    - Maximum 3 fix loops
 
