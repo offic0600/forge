@@ -3672,3 +3672,99 @@ Level 3: 子文件 + 可执行脚本（按需读取/执行，无上限）
 - 单元测试：147 passing（+修复 9 个 ChatRepositoryTest）
 - 验收测试：38 TC，94.7% 通过
 - 设计基线版本：v7 → **v8**
+
+---
+
+## Session 29 — Phase 6: 产品可用性加固（4 Sprint 全量实施 + 架构重构）
+
+**日期**: 2026-02-23
+**目标**: 实施 Phase 6 全部 4 个 Sprint：Workspace 持久化 + Git 仓库载入 / 用户 API Key 生效 / 代码转知识 / 架构重构
+
+### 29.1 Sprint 6.1 — Workspace 持久化 + Git 仓库载入
+
+**后端**:
+
+| 操作 | 文件 | 说明 |
+|------|------|------|
+| 新建 | `entity/WorkspaceEntity.kt` | JPA Entity: workspaces 表（id, name, description, status, owner, repository, branch, localPath） |
+| 新建 | `repository/WorkspaceRepository.kt` | Spring Data JPA Repository |
+| 新建 | `V6__create_workspaces.sql` | Flyway V6: workspaces 表 + 索引 |
+| 新建 | `service/GitService.kt` | git clone --depth 1 / pull / status，ProcessBuilder 实现 |
+| 重写 | `service/WorkspaceService.kt` | 内存 ConcurrentHashMap → DB + 磁盘（./data/workspaces/{id}/） |
+| 修改 | `controller/WorkspaceController.kt` | 创建 workspace 时支持 git URL 参数 |
+
+**前端**:
+
+| 操作 | 文件 | 说明 |
+|------|------|------|
+| 修改 | `app/page.tsx` | Workspace 创建对话框增加 "Git 仓库 URL" 输入框 |
+| 修改 | `app/workspace/[id]/page.tsx` | 支持持久化 workspace 加载 |
+
+### 29.2 Sprint 6.2 — 用户 API Key 生效
+
+| 操作 | 文件 | 说明 |
+|------|------|------|
+| 修改 | `adapters/.../CompletionOptions.kt` | 新增 `apiKeyOverride: String? = null` 字段 |
+| 修改 | `adapters/.../ClaudeAdapter.kt` | HTTP header `x-api-key` 优先用 apiKeyOverride |
+| 修改 | `ClaudeAgentService.kt` | 查询 UserModelConfigService 获取用户 key → 设置 override |
+
+### 29.3 Sprint 6.3 — 代码转知识（Codebase Profiler）
+
+| 操作 | 文件 | 说明 |
+|------|------|------|
+| 新建 | `plugins/.../skills/codebase-profiler/SKILL.md` | Agent 代码分析指导（项目结构扫描 → 架构提取 → Design Baseline 产出） |
+| 新建 | `plugins/.../skills/codebase-profiler/scripts/analyze-structure.py` | Python 辅助分析：统计文件/LOC、提取 package 结构、识别注解 |
+| 新建 | `plugins/.../skills/knowledge-generator/SKILL.md` | Agent 交付过程中边做边积累知识的指导 |
+| 修改 | `service/MemoryToolHandler.kt` | 新增 `analyze_codebase` MCP 工具（第 17 个工具） |
+| 修改 | `AiChatSidebar.tsx` | 交付阶段指示器（Planning→Design→Development→Testing→Ops） |
+
+### 29.4 Sprint 6.4 — 架构重构（神类拆分）
+
+**ClaudeAgentService 拆分（1097 → 4 个服务）**:
+
+| 操作 | 文件 | 说明 | LOC |
+|------|------|------|-----|
+| 新建 | `service/AgenticLoopOrchestrator.kt` | agenticStream() + 工具执行循环 + streamWithRetry() | ~371 |
+| 新建 | `service/HitlCheckpointManager.kt` | awaitHitlCheckpoint() + 审批逻辑 | ~136 |
+| 新建 | `service/BaselineAutoChecker.kt` | runBaselineAutoCheck() + 重试 | ~162 |
+| 瘦身 | `service/ClaudeAgentService.kt` | 入口协调 + history 加载 + 持久化 | ~547 |
+
+**McpProxyService 拆分（1515 → 5 个服务）**:
+
+| 操作 | 文件 | 说明 | LOC |
+|------|------|------|-----|
+| 新建 | `service/BuiltinToolHandler.kt` | search_knowledge, read_file 等 6 个 | ~374 |
+| 新建 | `service/WorkspaceToolHandler.kt` | workspace_* 5 个 + 项目检测 | ~329 |
+| 新建 | `service/SkillToolHandler.kt` | read_skill, run_skill_script, list_skills | ~265 |
+| 新建 | `service/MemoryToolHandler.kt` | update_workspace_memory, get_session_history + analyze_codebase | ~171 |
+| 瘦身 | `service/McpProxyService.kt` | 工具注册表 + 路由 + 远程发现 | ~480 |
+
+**测试重写**:
+
+| 操作 | 文件 | 说明 |
+|------|------|------|
+| 重写 | `ClaudeAgentServiceTest.kt` | 8 个测试全部改为 mock AgenticLoopOrchestrator 而非 ClaudeAdapter |
+
+### 29.5 遇到的 Bug 及修复
+
+| Bug | 根因 | 修复 |
+|-----|------|------|
+| 7 个 ClaudeAgentServiceTest 失败 | 重构后 agenticLoopOrchestrator 是 relaxed mock 返回默认值 | 重写所有测试 mock 到 orchestrator 层级 |
+| ChatMessage.toolCalls 编译错误 | toolCalls 是 nullable (List<ToolCallRecord>?) | 使用 `!!` 双重断言 |
+| git add zsh glob 展开 | `[id]` 被 zsh 解释为 glob 模式 | 路径加双引号 |
+
+### 29.6 统计快照
+
+- Phase 6 状态：**完成**（4 Sprint 全部完成）
+- Workspace 持久化：内存 → **DB + 磁盘**
+- Git 仓库载入：无 → **git clone 支持**
+- 用户 API Key：不生效 → **per-request override**
+- 代码转知识：无 → **codebase-profiler + analyze_codebase 工具**
+- 最大文件 LOC：1515 → **~547**（ClaudeAgentService）/ **~480**（McpProxyService）
+- MCP 工具：16 → **17**（+analyze_codebase）
+- Skill：28 → **30**（+codebase-profiler, +knowledge-generator）
+- Flyway migration: V1-V5 → **V1-V6**（+V6 workspaces 表）
+- 单元测试：157 → **156**（重写后微调）
+- Git commit: `04da304`（26 files changed, +3010, -1899）
+- 设计基线版本：v9 → **v10**
+- 规划基线版本：v1.9 → **v2.0**

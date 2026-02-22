@@ -1,8 +1,10 @@
-# Forge Web IDE — 设计基线 v9
+# Forge Web IDE — 设计基线 v10
 
-> 基线日期: 2026-02-22 | 全量交叉校验后更新（v8 → v9）
+> 基线日期: 2026-02-23 | Phase 6 产品可用性加固（v9 → v10）
 > 本文档冻结当前已验证的 UI/API/数据模型/架构设计细节，作为未来修改的对照基准。
 > 任何对本文档覆盖范围的修改，必须先意识到偏离、再决定是否接受。
+>
+> **v10 变更摘要**: Phase 6 — 产品可用性加固：Workspace 持久化（ConcurrentHashMap→DB+磁盘、WorkspaceEntity JPA）、Git 仓库载入（GitService git clone --depth 1）、用户 API Key 生效（CompletionOptions.apiKeyOverride per-request override）、代码转知识（codebase-profiler Skill + analyze-structure.py + analyze_codebase MCP 工具 #17）、架构重构（ClaudeAgentService 1097→4 服务 max 547 LOC、McpProxyService 1515→5 服务 max 480 LOC）、Flyway V6（workspaces 表）、单元测试 157→156。
 >
 > **v9 变更摘要**: 全量代码交叉校验修正 — 补录 3 个缺失 Controller（ModelController 4端点 + UserModelConfigController 4端点 + DashboardController 3端点）、补录 Auth `/me/jwt` 端点、补录 3 个 SSE 事件类型（sub_step/hitl_checkpoint/baseline_check）、补录 3 个 JPA Entity（UserModelConfig/ExecutionRecord/HitlCheckpoint）、修正 Flyway V2/V3/V4 文件名、MCP 工具 14→16（+workspace_compile/workspace_test）、单元测试 147→157。REST 端点总数 39→68。
 >
@@ -316,7 +318,7 @@ layout.tsx Auth Guard: isAuthenticated()?
 | POST | `/api/mcp/tools/call` | `McpToolCallRequest { name, arguments }` | `McpToolCallResponse` | 调用工具 |
 | POST | `/api/mcp/tools/cache/invalidate` | — | `{ status: "cache_invalidated" }` | 清除工具缓存 |
 
-**MCP 工具清单**（v4 创建，v5: 6→9，v7: 9→12，v8: 12→14，v9 补录: 14→16）:
+**MCP 工具清单**（v4 创建，v5: 6→9，v7: 9→12，v8: 12→14，v9 补录: 14→16，v10: 16→17）:
 
 | 工具 | MCP Server | 说明 |
 |------|-----------|------|
@@ -336,6 +338,7 @@ layout.tsx Auth Guard: isAuthenticated()?
 | `run_baseline` | backend (local) | 执行底线检查脚本 |
 | `list_baselines` | backend (local) | 列出可用底线脚本 |
 | `get_service_info` | service-graph-mcp | 获取服务信息 |
+| `analyze_codebase` | backend (local) | 对 workspace 执行结构分析脚本，返回 JSON（文件树+技术栈+统计）（v10 新增） |
 
 **Workspace 工具安全规则**（v5 新增）:
 - 路径遍历检查：包含 `..` 的路径一律拒绝（`isError: true`）
@@ -643,6 +646,19 @@ chat_sessions (1) ──→ (N) chat_messages (1) ──→ (N) tool_calls
                                                       ├─ status
                                                       └─ duration_ms
 
+workspaces
+     │
+     ├─ id (PK)
+     ├─ name
+     ├─ description
+     ├─ status
+     ├─ owner
+     ├─ repository
+     ├─ branch
+     ├─ local_path
+     ├─ created_at
+     └─ updated_at
+
 user_model_configs          execution_records          hitl_checkpoints
      │                        │                        │
      ├─ id (PK)              ├─ id (PK)              ├─ id (PK)
@@ -793,6 +809,24 @@ class StageMemoryEntity(
 )
 ```
 
+#### WorkspaceEntity（v10 新增）
+
+```kotlin
+@Entity @Table(name = "workspaces")
+class WorkspaceEntity(
+    @Id val id: String,                                     // UUID
+    @Column(name = "name") val name: String,
+    @Column(name = "description") val description: String = "",
+    @Enumerated(EnumType.STRING) @Column(name = "status") var status: WorkspaceStatus = WorkspaceStatus.ACTIVE,
+    @Column(name = "owner") val owner: String = "",
+    @Column(name = "repository") val repository: String? = null,     // git URL
+    @Column(name = "branch") val branch: String? = null,
+    @Column(name = "local_path") val localPath: String? = null,      // 磁盘路径
+    @Column(name = "created_at") val createdAt: Instant = Instant.now(),
+    @Column(name = "updated_at") var updatedAt: Instant = Instant.now()
+)
+```
+
 ### 3.3 Flyway 迁移
 
 | 版本 | 文件 | 内容 |
@@ -802,6 +836,7 @@ class StageMemoryEntity(
 | V3 | `V3__create_execution_records.sql` | 创建 `execution_records` 表（执行遥测，质量面板）（v9 修正） |
 | V4 | `V4__create_hitl_checkpoints.sql` | 创建 `hitl_checkpoints` 表（人工审批检查点）（v9 修正） |
 | V5 | `V5__create_memory_tables.sql` | 创建 `skill_preferences` + `skill_usage`（v7 backfill）+ `session_summaries` + `workspace_memories` + `stage_memories`（v8 新增） |
+| V6 | `V6__create_workspaces.sql` | 创建 `workspaces` 表（id, name, description, status, owner, repository, branch, local_path, created_at, updated_at）+ 索引（v10 新增） |
 
 **索引**:
 - `idx_sessions_workspace` → `chat_sessions(workspace_id)`
@@ -936,6 +971,27 @@ docker compose -f docker-compose.trial.yml up --build
 | `SkillLoader.kt` | 266 行 | 扫描 `plugins/` 目录，解析 YAML frontmatter (Jackson YAML)，`ConcurrentHashMap` 缓存，`@PostConstruct` 初始化，v6: Skill trigger 条件过滤（stage/type + 关键词匹配） |
 | `ProfileRouter.kt` | 197 行 | 4 级优先路由：显式标签 → 中英文关键词 → 分支名模式 → 默认 development |
 | `SystemPromptAssembler.kt` | 238 行 | 6 段式动态 system prompt 组装 |
+
+**Phase 6 架构重构**（v10 新增）:
+
+ClaudeAgentService（原 1097 行）拆分为 4 个服务：
+
+| 组件 | 源文件 | 职责 | LOC |
+|------|--------|------|-----|
+| `AgenticLoopOrchestrator.kt` | 371 行 | agenticStream() + 工具执行循环 + streamWithRetry() + collectStreamResult() | ~371 |
+| `HitlCheckpointManager.kt` | 136 行 | awaitHitlCheckpoint() + CompletableFuture 暂停/恢复 + 审批逻辑 | ~136 |
+| `BaselineAutoChecker.kt` | 162 行 | runBaselineAutoCheck() + 底线脚本执行 + 重试 | ~162 |
+| `ClaudeAgentService.kt` | 547 行 | 入口协调 + 会话历史加载 + 消息持久化 + 系统提示构建 | ~547 |
+
+McpProxyService（原 1515 行）拆分为 5 个服务：
+
+| 组件 | 源文件 | 职责 | LOC |
+|------|--------|------|-----|
+| `BuiltinToolHandler.kt` | 374 行 | search_knowledge, read_file, get_service_info, run_baseline, list_baselines, query_schema | ~374 |
+| `WorkspaceToolHandler.kt` | 329 行 | workspace_write_file, workspace_read_file, workspace_list_files, workspace_compile, workspace_test | ~329 |
+| `SkillToolHandler.kt` | 265 行 | read_skill, run_skill_script, list_skills | ~265 |
+| `MemoryToolHandler.kt` | 171 行 | update_workspace_memory, get_session_history, analyze_codebase | ~171 |
+| `McpProxyService.kt` | 480 行 | 工具注册表 + 路由分发 + 远程 MCP Server 发现 | ~480 |
 
 **完整 Agentic Loop 流程**:
 
@@ -1362,7 +1418,7 @@ const [oodaPhase, setOodaPhase] = useState<OodaPhase | null>(null);
 
 ---
 
-> 基线版本: v8
+> 基线版本: v10
 > 初始冻结日期: 2026-02-18 (v1, Phase 1.5)
 > v2 更新日期: 2026-02-18 (Phase 2 E2E 验证后)
 > v3 更新日期: 2026-02-18 (Sprint 2A 验收通过后)
@@ -1372,4 +1428,6 @@ const [oodaPhase, setOodaPhase] = useState<OodaPhase | null>(null);
 > v6 更新日期: 2026-02-21 (Sprint 2.2 — Skill 条件触发 + AgentLoop 底线 + MCP 真实服务 + 6 容器)
 > v7 更新日期: 2026-02-22 (Phase 4 — Skill 架构改造：渐进式加载 + 质量治理 + 管理 UI + 度量)
 > v8 更新日期: 2026-02-22 (Phase 5 — 记忆与上下文管理：3 层记忆架构 + 消息压缩 + Memory UI + Rate Limit 退避)
-> 下次评审: Phase 6 启动前
+> v9 更新日期: 2026-02-22 (全量交叉校验 — 补录 3 Controller / 3 Entity / 2 MCP 工具 / 3 SSE 事件)
+> v10 更新日期: 2026-02-23 (Phase 6 — 产品可用性加固：Workspace 持久化 + Git 载入 + API Key override + codebase-profiler + 架构重构)
+> 下次评审: Phase 7 启动前

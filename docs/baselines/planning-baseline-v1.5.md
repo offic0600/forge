@@ -1,6 +1,6 @@
 # Forge — 面向 AI 时代的智能交付平台
 
-> 规划基线 v1.9 | 基线日期: 2026-02-22 | 变更: v1.8→v1.9 Phase 4 详细实施计划完成（对齐 Anthropic Agent Skills 标准：metadata-first 渐进式披露 + 可执行脚本 + 用户 Skill 管理 + 生态追踪）
+> 规划基线 v2.0 | 基线日期: 2026-02-23 | 变更: v1.9→v2.0 Phase 4/5/6 全部完成，数据校准（17 MCP / 156 测试 / 30 Skill / V1-V6 migration），Phase 7-9 路线图
 
 ---
 
@@ -144,7 +144,12 @@
 | Phase 1.6 | AI 交付闭环 + SSO + UX 增强 | ✅ | AI→Workspace 写文件 + Keycloak SSO + Context Picker + CRUD + 自动保存 | Claude Code |
 | Phase 2 | 质量基础设施 + OODA 增强 + 多模型 + 内部试用 | ✅ | Sprint 2.1（CI/Playwright/Bug 修复）+ Sprint 2.2（SkillLoader/MCP 真实服务）+ Sprint 2.3（多模型适配：Bedrock/Gemini/Qwen）+ Sprint 2.4（内部试用 + 反馈） | Claude Code |
 | Phase 3 | 人机协作闭环 + 方法论平台化 | ✅ | HITL 全量暂停点 + 执行透明度 + 编译/测试管道 + 质量度量面板 + 学习循环集成（execution-logger / skill-feedback-analyzer Spring 化） | Claude Code |
-| Phase 4 | Skill 架构改造（对齐 Anthropic 标准） | ⏳ | Sprint 4.1 Metadata 架构 + 渐进加载 → 4.2 可执行脚本 + 目录改造 → 4.3 管理 API + 前端 UI → 4.4 生态度量 + 文档 | 任意 Runtime |
+| Phase 4 | Skill 架构改造（对齐 Anthropic 标准） | ✅ | Metadata-first 渐进式加载（55K→20-25K prompt）、Skill 质量治理（32→28）、管理 API（9 端点）+ /skills 前端、使用追踪 + 分析度量 | 任意 Runtime |
+| Phase 5 | 记忆与上下文管理 | ✅ | 3 层记忆（Workspace Memory + Stage Memory + Session Summary）、消息压缩 3 阶段、Memory REST API（6 端点）、4-Tab 右侧面板、Rate Limit 退避 | 任意 Runtime |
+| Phase 6 | 产品可用性加固 | ✅ | Workspace 持久化（DB+磁盘）、Git 仓库载入、用户 API Key per-request override、codebase-profiler + analyze_codebase、架构重构（2 神类→9 服务）| 任意 Runtime |
+| Phase 7 | 生产就绪 | 📋 | PostgreSQL 切换、多租户、安全加固、性能优化、CI/CD 完善 | 任意 Runtime |
+| Phase 8 | 团队协作 | 📋 | 多用户实时协作、权限管理、通知系统、审计日志 | 任意 Runtime |
+| Phase 9 | 生态扩展 | 📋 | CLI 工具、第三方集成、Marketplace、自定义 Skill 分发 | 任意 Runtime |
 
 ### 3.5 跨栈迁移工作流
 
@@ -177,6 +182,9 @@ Phase 1.5: ✅ Docker 部署 + E2E 验证 + 设计基线冻结
 Phase 1.6: ✅ AI→Workspace 交付闭环 + Keycloak SSO + Context Picker + FileExplorer CRUD + 自动保存
 Phase 2:   + SkillLoader 增强 + ProfileRouter 后端 → 独立的 Skill 加载和 Profile 切换
 Phase 3:   + AgentLoop + HookEngine + ContextBuilder → 完整 ForgeNativeRuntime
+Phase 4:   ✅ Skill 架构改造（渐进式加载 + 管理 UI + 度量）
+Phase 5:   ✅ 记忆与上下文管理（3 层记忆 + 消息压缩 + Memory UI）
+Phase 6:   ✅ 产品可用性加固（Workspace 持久化 + Git 载入 + API Key + codebase-profiler + 架构重构）
 ```
 
 **ForgeNativeRuntime 5 个核心组件**：
@@ -843,12 +851,12 @@ Level 3: 子文件 + 可执行脚本（reference/ + examples/ + scripts/）
 | mcp-servers/forge-artifact-mcp | 6 | Phase 0 | 3 tools: DependencySearch, VulnerabilityScan, VersionRecommend |
 | mcp-servers/forge-observability-mcp | 6 | Phase 0 | 3 tools: LogSearch, MetricsQuery, TraceSearch |
 | plugins/forge-foundation | ~30 | Phase 0 | plugin.json + Skills/commands/agents/hooks |
-| plugins/forge-superagent | 24 | Phase 0 | CLAUDE.md + 5 profiles + 8 skills + 5 baselines + runner + 3 learning-loop |
+| plugins/forge-superagent | 30 | Phase 6 | CLAUDE.md + 5 profiles + 10 skills（+codebase-profiler, +knowledge-generator）+ 5 baselines + runner + 3 learning-loop |
 | plugins/forge-knowledge | 8 | Phase 0 | 3 commands + 3 skills |
 | plugins/forge-deployment | 5 | Phase 0 | 2 skills + 2 commands |
 | plugins/forge-team-templates | 3 | Phase 0 | 3 team CLAUDE.md templates |
 | web-ide/frontend | 30+ | Phase 1.6 | +auth.ts, login/callback, Apply button, CRUD, auto-save, file_changed |
-| web-ide/backend | 35+ | Phase 1.6 | +workspace tools, AuthController, ContextController, SecurityConfig, MetricsService |
+| web-ide/backend | 50+ | Phase 6 | +WorkspaceEntity, GitService, 4 拆分服务（Orchestrator/Hitl/Baseline/BuiltinTool/WorkspaceTool/SkillTool/MemoryTool）, Memory, V6 migration |
 | cli | 7 | Phase 0 | 5 commands + main + build |
 | adapters | 14+ | Phase 1 | + StreamEvent, tool calling 扩展, tests |
 | agent-eval | 11 | Phase 0 | EvalRunner + Reporter + 6 eval sets |
@@ -856,18 +864,18 @@ Level 3: 子文件 + 可执行脚本（reference/ + examples/ + scripts/）
 | knowledge-base | 13 | Phase 1.6 | +git-workflow, code-review-checklist, forge-mcp-tools, troubleshooting-guide, ADR-004 |
 | managed-config | 2 | Phase 0 | managed-settings.json + managed-mcp.json |
 | .github/workflows | 6 | Phase 0 | 6 CI workflows |
-| docs | 22+ | Phase 1.6 | design-baseline v5.1, phase1.6-e2e-acceptance-test, baseline-v1.5, metrics-report, phase2-plan, delivery-analysis |
+| docs | 30+ | Phase 6 | design-baseline v10, planning-baseline v2.0, logbook Session 29, phase3-6 acceptance tests, delivery-analysis |
 | infrastructure | 8+ | Phase 1.6 | keycloak realm-export, nginx-trial.conf, docker-compose.trial.yml (4 容器) |
-| **总计** | **~325+** | | **~50,000+ 行** |
+| **总计** | **~360+** | | **~55,000+ 行** |
 
 ### 里程碑
 
 ```
-Phase 0       Phase 1          Phase 1.5         Phase 1.6            Phase 2                         Phase 3
-骨架搭建       实连+跨栈基础      设计守护+Docker    AI交付闭环+SSO        质量+OODA+多模型+试用              人机协作闭环
-244 files     37 tests         3容器+基线冻结      4容器+9工具+147测试   6容器+13模型+Sprint2.1-2.4       HITL+管道+度量
-──── ✅ ── ── ──── ✅ ── ── ── ──── ✅ ── ── ── ──── ✅ ── ── ── ──── ✅ ── ── ── ──── ✅ ── ── 👈 Phase 4
-  W1-3          W4-8                                                     W9-14                          W15-20
+Phase 0       Phase 1          Phase 1.5         Phase 1.6            Phase 2                         Phase 3            Phase 4           Phase 5          Phase 6
+骨架搭建       实连+跨栈基础      设计守护+Docker    AI交付闭环+SSO        质量+OODA+多模型+试用              人机协作闭环          Skill改造         记忆管理          可用性加固
+244 files     37 tests         3容器+基线冻结      4容器+9工具+147测试   6容器+13模型+Sprint2.1-2.4       HITL+管道+度量      28Skill+/skills  3层记忆+压缩     DB持久化+Git+17工具
+──── ✅ ── ── ──── ✅ ── ── ── ──── ✅ ── ── ── ──── ✅ ── ── ── ──── ✅ ── ── ── ──── ✅ ── ── ──── ✅ ── ── ──── ✅ ── ── ──── ✅ ── 👈 Phase 7
+  W1-3          W4-8                                                     W9-14                          W15-20            W21-24           W25-26           W27-29
 ```
 
 | 里程碑 | 状态 |
@@ -885,7 +893,9 @@ Phase 0       Phase 1          Phase 1.5         Phase 1.6            Phase 2   
 | Phase 2 Sprint 2.3 多模型适配 | ✅ 完成（5 Provider，13+ 模型，Bedrock/Gemini/Qwen） |
 | Phase 2 Sprint 2.4 内部试用 | ✅ 完成（试用执行 + 4 条核心反馈收集） |
 | Phase 3 人机协作闭环 | ✅ 完成（6 模块 16 步 + Session 23-24 验收：28 Bug 修复，规划→设计→开发全流程闭环验证通过） |
-| Phase 4 Skill 架构改造 | ⏳ 待开始（对齐 Anthropic Agent Skills 标准：Metadata 渐进式披露 + 可执行脚本 + 用户 CRUD 管理 + 生态度量，详见 `docs/phase4-implementation-plan.md`） |
+| Phase 4 Skill 架构改造 | ✅ 完成（Metadata-first 渐进式加载 55K→20-25K、Skill 质量治理 32→28、管理 API 9 端点 + /skills 前端、使用追踪 + 度量，Session 25-26） |
+| Phase 5 记忆与上下文管理 | ✅ 完成（3 层记忆架构 + 消息压缩 3 阶段 + Memory REST API 6 端点 + 4-Tab 右侧面板 + Rate Limit 退避，Session 27-28） |
+| Phase 6 产品可用性加固 | ✅ 完成（Workspace 持久化 DB+磁盘 + Git clone 载入 + API Key per-request override + codebase-profiler Skill + analyze_codebase 第 17 个 MCP 工具 + 架构重构 2 神类→9 服务，Session 29） |
 
 ### 已识别 Gap
 
@@ -903,8 +913,15 @@ Phase 0       Phase 1          Phase 1.5         Phase 1.6            Phase 2   
 | ~~编译/测试工具不存在~~ | ~~McpProxyService 无 compile / test~~ | ~~Phase 3~~ | ✅ 模块 3（workspace_compile + workspace_test 语法分析） |
 | ~~度量无可视化~~ | ~~Micrometer 数据仅在 JMX/Actuator~~ | ~~Phase 3~~ | ✅ 模块 4（DashboardController 3 端点 + QualityPanel） |
 | ~~Learning Loop 未集成~~ | ~~3 个组件是独立 .kt 文件~~ | ~~Phase 3~~ | ✅ 模块 5（ExecutionLoggerService + SkillFeedbackService Spring 化） |
-| ForgeNativeRuntime | AgentLoop.kt / HookEngine.kt / ContextBuilder.kt 完整抽象 | Phase 3+ | 待评估 |
-| asset-extractor 自动化 | 从执行日志提取知识资产 → 自动更新 Skill / 知识库 | Phase 3+ | 待评估 |
+| ~~Skill 架构不对齐 Anthropic 标准~~ | ~~渐进式加载 + 可执行脚本 + 管理 UI~~ | ~~Phase 4~~ | ✅ Phase 4（Session 25-26） |
+| ~~无记忆系统~~ | ~~AI 跨 session 遗忘~~ | ~~Phase 5~~ | ✅ Phase 5（3 层记忆 + 消息压缩） |
+| ~~Workspace 内存存储~~ | ~~重启数据丢失~~ | ~~Phase 6~~ | ✅ Sprint 6.1（DB + 磁盘持久化） |
+| ~~无 Git 仓库载入~~ | ~~只能用空 workspace~~ | ~~Phase 6~~ | ✅ Sprint 6.1（git clone --depth 1） |
+| ~~用户 API Key 不生效~~ | ~~ClaudeAdapter singleton 永远用 env var~~ | ~~Phase 6~~ | ✅ Sprint 6.2（per-request override） |
+| ~~无代码转知识能力~~ | ~~载入仓库后无法分析~~ | ~~Phase 6~~ | ✅ Sprint 6.3（codebase-profiler + analyze_codebase） |
+| ~~神类过大~~ | ~~ClaudeAgentService 1097行 / McpProxyService 1515行~~ | ~~Phase 6~~ | ✅ Sprint 6.4（拆分为 9 个服务，最大 547 LOC） |
+| ForgeNativeRuntime | AgentLoop.kt / HookEngine.kt / ContextBuilder.kt 完整抽象 | Phase 7+ | 已由直接实现替代，远期评估 |
+| asset-extractor 自动化 | 从执行日志提取知识资产 → 自动更新 Skill / 知识库 | Phase 7+ | 待评估 |
 
 ---
 
@@ -916,8 +933,8 @@ Phase 0       Phase 1          Phase 1.5         Phase 1.6            Phase 2   
 | MCP Server | 构建 + 集成测试 | `./gradlew :mcp-servers:forge-knowledge-mcp:test` | ✅ |
 | CLI | 单测 + 端到端 | `./gradlew :cli:test` + `forge doctor` | ✅ |
 | Web IDE 前端 | 单测 + E2E | `cd web-ide/frontend && npm test` + Playwright | ✅ 单测 / ⏳ Playwright |
-| Web IDE 后端 | 集成测试 | `./gradlew :web-ide:backend:test` | ✅ 118 tests |
-| Workspace 工具 | 单元测试 | McpProxyServiceTest — 9 个 workspace tool 测试用例 | ✅ |
+| Web IDE 后端 | 集成测试 | `./gradlew :web-ide:backend:test` | ✅ 156 tests |
+| Workspace 工具 | 单元测试 | McpProxyServiceTest — 40+ 测试用例（workspace + MCP 工具） | ✅ |
 | Context API | 单元测试 | ContextControllerTest — 4 个类别搜索测试 | ✅ |
 | Keycloak SSO | 容器健康检查 | docker-compose.trial.yml — 4 容器全部 healthy | ✅ |
 | Phase 1.6 验收 | E2E 手动测试 | `docs/phase1.6-e2e-acceptance-test.md` — 21 场景 87 用例 | ✅ 80/87 通过（92%） |
@@ -1041,5 +1058,8 @@ Phase 4：飞轮效应
 | v1.6 | 2026-02-21 | **Phase 2 完成 + Phase 3 重构**：Phase 2 全部 4 个 Sprint 标记完成（Sprint 2.1 CI/Playwright ✅、Sprint 2.2 OODA+MCP ✅、Sprint 2.3 多模型 ✅、Sprint 2.4 内部试用 ✅）；Phase 2 验收标准全部勾选；Sprint 2.4 试用反馈（4 条核心反馈）纳入文档；**Phase 3 从「ForgeNativeRuntime + 进化环」重构为「人机协作闭环」**（6 模块 16 步：执行透明度 / HITL 全量暂停点 / 编译测试管道 / 质量度量面板 / 学习循环集成 / 文档验收）；ForgeNativeRuntime 完整体推迟至 Phase 3+；Gap 清单更新（6 个已关闭 + 8 个新增 Phase 3 Gap）；里程碑更新（Phase 2 全部 ✅，Phase 3 拆分为独立里程碑）；新增文档引用：`docs/sprint2.4-trial-discussion-record.md`、`docs/planning/phase3-implementation-plan.md` |
 
 | v1.7 | 2026-02-21 | **Phase 3 实现完成**：6 模块 16 步全部实现（模块 1 执行透明度 ✅、模块 2 HITL 暂停点 ✅、模块 3 编译/测试管道 ✅、模块 4 质量度量面板 ✅、模块 5 学习循环集成 ✅、模块 6 文档验收 ✅）；新建 12 文件（后端 7 + 前端 2 + 配置/文档 3）；修改 11 文件（后端 5 + 前端 3 + 配置/文档 3）；6 个 Phase 3 Gap 全部关闭；24 验收用例；新增文档：`docs/phase3-acceptance-test.md` |
+| v1.8 | 2026-02-22 | **Phase 4 完成 + Phase 5 计划**：Phase 4 全部 4 个 Sprint 标记完成（Sprint 4.1 Metadata 架构 ✅、Sprint 4.2 可执行脚本 ✅、Sprint 4.3 管理 API+UI ✅、Sprint 4.4 生态度量 ✅）；Skill 32→28（质量治理）；MCP 工具 12→16；新增 /skills 管理页面 |
+| v1.9 | 2026-02-22 | Phase 4 实施计划详细化（对齐 Anthropic Agent Skills 标准） |
+| v2.0 | 2026-02-23 | **Phase 4/5/6 全部完成**：Phase 4 Skill 架构改造 ✅、Phase 5 记忆与上下文管理 ✅、Phase 6 产品可用性加固 ✅（4 Sprint: Workspace 持久化+Git+API Key+codebase-profiler+架构重构）；数据校准：17 MCP / 156 测试 / 30 Skill / V1-V6 migration / 设计基线 v10；Phase 7-9 路线图；Gap 清单全量刷新（+7 已关闭）；ForgeNativeRuntime 标记为「已由直接实现替代」|
 
-> 基线版本: v1.7 | 基线日期: 2026-02-21 | 下次评审: Phase 3 验收测试执行后
+> 基线版本: v2.0 | 基线日期: 2026-02-23 | 下次评审: Phase 7 启动前
