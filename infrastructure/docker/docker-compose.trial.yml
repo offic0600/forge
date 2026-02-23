@@ -46,6 +46,9 @@ services:
     environment:
       # --- Provider API Keys ---
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_API_URL: ${ANTHROPIC_API_URL:-https://api.anthropic.com}
+      MINIMAX_API_KEY: ${MINIMAX_API_KEY:-}
+      MINIMAX_API_URL: ${MINIMAX_API_URL:-https://api.minimaxi.com/anthropic}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
       # --- AWS Bedrock ---
@@ -73,6 +76,7 @@ services:
     volumes:
       - ../../plugins:/plugins:ro
       - ../../knowledge-base:/knowledge-base:ro
+      - forge-backend-data:/app/data
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/api/knowledge/search"]
       interval: 15s
@@ -105,3 +109,7 @@ services:
     depends_on:
       - backend
       - frontend
+
+volumes:
+  forge-backend-data:
+    driver: local

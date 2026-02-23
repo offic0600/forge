@@ -48,8 +48,10 @@ class AgenticLoopOrchestrator(
         options: CompletionOptions,
         tools: List<ToolDefinition>,
         onEvent: (Map<String, Any?>) -> Unit,
-        workspaceId: String = ""
+        workspaceId: String = "",
+        adapter: ModelAdapter? = null
     ): AgenticResult {
+        val activeAdapter = adapter ?: claudeAdapter
         var currentMessages = messages.toMutableList()
         var allToolCalls = mutableListOf<ToolCallRecord>()
         var finalContent = ""
@@ -84,7 +86,7 @@ class AgenticLoopOrchestrator(
             val turnStartMs = System.currentTimeMillis()
 
             // Stream and emit events in real-time (with rate limit retry)
-            streamWithRetry { claudeAdapter.streamWithTools(currentMessages, options, tools) }.collect { event ->
+            streamWithRetry { activeAdapter.streamWithTools(currentMessages, options, tools) }.collect { event ->
                 if (!firstEventReceived) {
                     firstEventReceived = true
                     logger.debug("First event received for turn $turn in ${System.currentTimeMillis() - turnStartMs}ms: ${event::class.simpleName}")
@@ -276,7 +278,7 @@ class AgenticLoopOrchestrator(
             ))
 
             var summaryText = StringBuilder()
-            claudeAdapter.streamWithTools(currentMessages, options, emptyList()).collect { event ->
+            activeAdapter.streamWithTools(currentMessages, options, emptyList()).collect { event ->
                 when (event) {
                     is StreamEvent.ContentDelta -> {
                         summaryText.append(event.text)
