@@ -1,8 +1,10 @@
-# Forge Web IDE — 设计基线 v10
+# Forge — AI 驱动的智能交付平台 — 设计基线 v11
 
-> 基线日期: 2026-02-23 | Phase 6 产品可用性加固（v9 → v10）
+> 基线日期: 2026-02-23 | Phase 7 异步化 + 知识库 Scope 分层（v10 → v11）
 > 本文档冻结当前已验证的 UI/API/数据模型/架构设计细节，作为未来修改的对照基准。
 > 任何对本文档覆盖范围的修改，必须先意识到偏离、再决定是否接受。
+>
+> **v11 变更摘要**: Phase 7 — 异步化 + 知识库 Scope 分层：Git Clone 异步化（WorkspaceService cloneAsync + 前端进度条 UI）、WorkspaceEntity +errorMessage、知识库三层 Scope（Global/Workspace/Personal，KnowledgeDocumentEntity DB 持久化，KnowledgeIndexService 从 ConcurrentHashMap→JPA）、KnowledgeController CRUD 端点（POST/PUT/DELETE /api/knowledge/docs）、知识搜索 scope 参数（cascade 优先级 workspace>personal>global）、前端 KnowledgeSearch scope filter、MCP search_knowledge +scope 参数、品牌重定位（AI 驱动的智能交付平台）、Flyway V7/V8、单元测试 156。
 >
 > **v10 变更摘要**: Phase 6 — 产品可用性加固：Workspace 持久化（ConcurrentHashMap→DB+磁盘、WorkspaceEntity JPA）、Git 仓库载入（GitService git clone --depth 1）、用户 API Key 生效（CompletionOptions.apiKeyOverride per-request override）、代码转知识（codebase-profiler Skill + analyze-structure.py + analyze_codebase MCP 工具 #17）、架构重构（ClaudeAgentService 1097→4 服务 max 547 LOC、McpProxyService 1515→5 服务 max 480 LOC）、Flyway V6（workspaces 表）、单元测试 157→156。
 >
