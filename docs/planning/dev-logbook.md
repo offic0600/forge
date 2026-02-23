@@ -3912,4 +3912,75 @@ Level 3: 子文件 + 可执行脚本（按需读取/执行，无上限）
 - H2 持久化: 无 volume → **forge-backend-data volume**
 - 模型选择: 前端 only → **端到端打通**（前端 → WebSocket → 后端动态 adapter）
 - 单元测试: 156（147 pass, 9 pre-existing）
-- Git commit: `b162436`
+- Git commit: `b162436`, `3e4ed81`
+
+---
+
+## Session 32 — 2026-02-23：Evaluation Profile + 知识库本地写入 + Context Usage 增强
+
+### 32.1 目标
+
+三方面：(1) Docker 后端启动崩溃修复（DB_DRIVER 默认值问题）；(2) 知识库 page_create 本地模式写入；(3) context_usage 每 turn 发送 + 前端始终显示。同时新增 evaluation-profile 及学习闭环增强。
+
+### 32.2 实施内容
+
+| 操作 | 文件 | 说明 |
+|------|------|------|
+| **Docker 修复 + 知识库写入 + Context Usage** | | |
+| 修改 | `infrastructure/docker/docker-compose.trial.yml` | DB_DRIVER 默认改回 `org.h2.Driver`，knowledge-base volume 去 `:ro` 改为可写，+`forge-backend-data` volume |
+| 修改 | `.../knowledge/tools/PageCreateTool.kt` | +local mode：KNOWLEDGE_MODE=local 时直接写 Markdown 到 `knowledge-base/<space>/`，+`httpClient` lazy 初始化 |
+| 修改 | `.../knowledge/LocalKnowledgeProvider.kt` | `lazy val` → `@Volatile var`，+`reload()` 即时重索引 |
+| 修改 | `.../knowledge/KnowledgeMcpServer.kt` | 传递 `localProvider` 和 `knowledgeBasePath` 给 PageCreateTool |
+| 修改 | `.../service/AgenticLoopOrchestrator.kt` | MAX_AGENTIC_TURNS 8→50，context_usage 每 turn 发送（含 turn 字段），去除 `/maxTurns` 日志 |
+| 修改 | `.../components/chat/AiChatSidebar.tsx` | Context Usage 卡片去除 `isStreaming` 条件始终显示，+turn 字段，显示格式 `65% · T3 · P1` |
+| 新增 | `knowledge-base/workspace/*.md` | 知识抽取测试产生的 2 个 workspace 知识文档 |
+| **Evaluation Profile + 学习闭环** | | |
+| 新增 | `plugins/.../skill-profiles/evaluation-profile.md` | read-only 分析模式 profile（mode: read-only） |
+| 修改 | `plugins/.../skill-profiles/development-profile.md` | +bug-fix-workflow skill |
+| 新增 | `plugins/.../skills/bug-fix-workflow/SKILL.md` | 结构化 Bug 修复工作流 Skill |
+| 新增 | `plugins/.../skills/document-generation/SKILL.md` | 文档生成 Skill |
+| 新增 | `plugins/.../skills/knowledge-distillation/SKILL.md` | 知识萃取 Skill |
+| 新增 | `plugins/.../skills/progress-evaluation/SKILL.md` | 进度评估 Skill |
+| 修改 | `.../service/skill/ProfileRouter.kt` | +评估关键词路由（@评估/进度/状态/复盘），关键词评分改为加权（短关键词半权），短消息弱匹配降低 confidence |
+| 修改 | `.../service/skill/SkillModels.kt` | +evaluation stage 匹配，ProfileDefinition +mode 字段 |
+| 修改 | `.../service/skill/SkillLoader.kt` | 解析 profile YAML 中的 mode 字段 |
+| 修改 | `.../service/skill/SystemPromptAssembler.kt` | +read-only mode 行为指引（Analysis Behavior 章节） |
+| 修改 | `.../service/learning/SkillFeedbackService.kt` | +evaluationRepository 注入，FeedbackReport +四维评分聚合 |
+| 新增 | `.../controller/EvaluationController.kt` | 评估 REST API（CRUD + 统计） |
+| 新增 | `.../entity/InteractionEvaluationEntity.kt` | 交互评估 JPA Entity（4 维度评分） |
+| 新增 | `.../repository/InteractionEvaluationRepository.kt` | 评估数据 Repository |
+| 新增 | `.../service/learning/InteractionEvaluationService.kt` | 评估服务（自动评估 + 手动评估） |
+| 新增 | `.../service/learning/LearningLoopPipelineService.kt` | 学习闭环管道服务 |
+| 新增 | `agent-eval/eval-sets/evaluation-profile/eval-001~003.yaml` | 评估 profile 的 3 个 eval case |
+| 新增 | `agent-eval/eval-sets/development-profile/eval-004-structured-bugfix.yaml` | 结构化 bugfix eval case |
+| 新增 | `web-ide/frontend/src/app/evaluations/page.tsx` | 评估管理前端页面 |
+| **文档** | | |
+| 修改 | `docs/baselines/design-baseline-v1.md` | v11→v12（+62 行） |
+| 修改 | `docs/analysis/buglist.md` | +BUG-029~032 |
+
+### 32.3 发现的 Bug 及修复
+
+| Bug | 根因 | 修复 |
+|-----|------|------|
+| Docker 后端崩溃 | PR #7 将 `DB_DRIVER` 默认改为 `org.postgresql.Driver`，但实际用 H2 | 改回 `org.h2.Driver`，DB_URL 默认 `jdbc:h2:file:./data/forge` |
+| Flyway V5 checksum mismatch | PR #7 修改了 V5 migration 脚本，stale volume 保留旧 checksum | 删除 `docker_forge-backend-data` volume 重建 |
+| 知识写入失败 | PageCreateTool 只支持 Confluence API，local mode 调用不存在的 wiki 端点 | 新增 `executeLocal()` 方法直接写文件 |
+| `localProvider.reload()` 编译错误 | nullable receiver 调用非空方法 | `localProvider!!.reload()`（已在 null check 分支内） |
+| Context Usage 卡片不显示 | 仅 `compressionPhase > 0` 时发送事件 + 前端要求 `isStreaming` | 每 turn 发送 + 去除 isStreaming 条件 |
+
+### 32.4 经验沉淀
+
+- **Docker 环境变量默认值要保守**：PR 合入的默认值变更（如 DB_DRIVER）可能导致其他部署模式崩溃，默认值应该对应最简配置（H2）而非最复杂配置（PostgreSQL）
+- **MCP 工具双模式设计**：知识库工具应同时支持 local（文件写入）和 wiki（API 调用）两种模式，确保 trial 部署无外部依赖也能完整运行
+- **context_usage 是 UX 关键信号**：用户需要知道每轮对话消耗多少上下文窗口，压缩阶段信息也很重要——应该每 turn 都发，不仅限于压缩触发时
+
+### 32.5 统计快照
+
+- Skill Profiles: 5 → **6**（+evaluation-profile）
+- Skills: 28 → **32**（+bug-fix-workflow, document-generation, knowledge-distillation, progress-evaluation）
+- MAX_AGENTIC_TURNS: 8 → **50**（安全上限）
+- MCP 工具: 17 → **18**（page_create local mode 不算新工具，但 knowledge write 能力新增）
+- 设计基线: v11 → **v12**
+- Buglist: 28 → **32**（BUG-029~032）
+- 单元测试: 156
+- Git commits: `20e25fe`, `cda0e21`, `a325e85`
