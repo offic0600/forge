@@ -3768,3 +3768,148 @@ Level 3: 子文件 + 可执行脚本（按需读取/执行，无上限）
 - Git commit: `04da304`（26 files changed, +3010, -1899）
 - 设计基线版本：v9 → **v10**
 - 规划基线版本：v1.9 → **v2.0**
+
+---
+
+## Session 30 — 2026-02-23：Git Clone 进度条 + 知识库 Scope 分层 + Bug 修复
+
+### 30.1 目标
+
+三大功能：Git Clone 异步化+进度条、知识库 Global/Workspace/Personal Scope 分层、品牌文档重定位。附带修复 streamWithRetry 率限重试 bug。
+
+### 30.2 实施内容
+
+**任务 1：Git Clone 异步化 + 前端进度条**
+
+| 操作 | 文件 | 说明 |
+|------|------|------|
+| 修改 | `entity/WorkspaceEntity.kt` | +errorMessage 字段 |
+| 新建 | `db/migration/V7__add_workspace_error_message.sql` | ALTER TABLE +error_message |
+| 修改 | `service/WorkspaceService.kt` | 异步 clone：POST 返回 creating → 后台线程 git clone → active/error |
+| 修改 | `model/Models.kt` | Workspace +errorMessage |
+| 修改 | `frontend/src/app/workspace/[id]/page.tsx` | 进度条 UI：模拟递增 + 2s 轮询 |
+| 修改 | `frontend/src/lib/workspace-api.ts` | +errorMessage 类型 |
+
+**任务 2：知识库 Scope 分层**
+
+| 操作 | 文件 | 说明 |
+|------|------|------|
+| 修改 | `model/Models.kt` | +KnowledgeScope enum, +scope/scopeId, +CRUD DTOs |
+| 新建 | `entity/KnowledgeDocumentEntity.kt` | JPA entity with scope 支持 |
+| 新建 | `repository/KnowledgeDocumentRepository.kt` | +findByScopeAndScopeId 等 |
+| 新建 | `db/migration/V8__create_knowledge_documents.sql` | knowledge_documents 表 + 索引 |
+| 重写 | `service/KnowledgeIndexService.kt` | ConcurrentHashMap → JPA，级联搜索优先级 ws(+20) > personal(+10) > global |
+| 修改 | `controller/KnowledgeController.kt` | +scope 参数, +POST/PUT/DELETE CRUD |
+| 修改 | `service/BuiltinToolHandler.kt` | search_knowledge +scope |
+| 修改 | `service/McpProxyService.kt` | search_knowledge schema +scope |
+| 重写 | `frontend/.../KnowledgeSearch.tsx` | Scope filter chips (All/Global/Workspace/Personal) |
+| 修改 | `frontend/.../knowledge/page.tsx` | useSearchParams 提取 workspaceId |
+
+**任务 3：品牌文档重定位**
+
+| 操作 | 文件 | 说明 |
+|------|------|------|
+| 修改 | `CLAUDE.md` | AI 驱动的智能交付平台愿景 |
+| 修改 | `design-baseline-v1.md` | 品牌统一 |
+| 修改 | `planning-baseline-v1.5.md` | 品牌统一 |
+
+**附加修复**
+
+| 操作 | 文件 | 说明 |
+|------|------|------|
+| 修复 | `service/AgenticLoopOrchestrator.kt` | streamWithRetry：RateLimitException 在 Flow collect 阶段也能被捕获重试 |
+| 修复 | `model/Models.kt` | @JsonCreator: DocumentType/KnowledgeScope 大小写无关反序列化 |
+| 修改 | `service/EncryptionService.kt` | 无密钥时降级 Base64（不再抛异常） |
+| 修改 | `test/.../McpProxyServiceTest.kt` | 适配 BuiltinToolHandler 新构造函数 |
+
+### 30.3 Bug 修复
+
+| Bug | 根因 | 修复 |
+|-----|------|------|
+| BUG-029: 聊天 UI 卡住无响应 | `streamWithRetry` 只在 Flow 创建时 catch RateLimitException，collect 阶段的 429 直接崩溃 | 用 `flow {}` builder 包裹 creation + collection 两阶段 |
+| BUG-030: Knowledge CRUD 400 | `KnowledgeScope` 有 `@JsonValue` 返回小写 → Jackson 反序列化也期望小写；`DocumentType` 无 `@JsonValue` → 期望大写。混合大小写 | 两个枚举都加 `@JsonCreator` companion object |
+| BUG-031: KnowledgeIndexService 初始化警告 | `private val` 在 `init{}` 中赋值，Kotlin 编译器警告 | 改为内联初始化 |
+
+### 30.4 待修复 Bug（已记录）
+
+| Bug | 症状 | 根因 |
+|-----|------|------|
+| BUG-032: Chat Message FK 违约 | `CHAT_MESSAGES FOREIGN KEY(SESSION_ID)` 约束失败，聊天历史未持久化 | WebSocket 传入的 chatSessionId 在 chat_sessions 表中不存在，insert message 时 FK 违约。对话能正常进行（内存中），但刷新后丢失 |
+
+### 30.5 Acceptance Test 结果
+
+| # | 场景 | 结果 |
+|---|------|------|
+| AT-1 | Knowledge Search API | ✅ 5 docs |
+| AT-2 | Knowledge Scope Filter | ✅ global=5, workspace=0, personal=0 |
+| AT-3 | Knowledge CRUD | ✅ create/read/update/delete |
+| AT-4 | Workspace 创建（空） | ✅ status=active |
+| AT-5 | Workspace 创建（git，异步 clone） | ✅ creating→active (3s) |
+| AT-6 | Git Clone 失败→错误消息 | ✅ status=error + errorMessage |
+| AT-7 | Knowledge 类型过滤 | ✅ wiki=2, runbook=1, api_doc=1 |
+| AT-8 | 级联搜索优先级 | ✅ workspace > personal > global |
+| AT-9 | MCP search_knowledge scope 参数 | ✅ |
+| AT-10 | 前端页面加载 | ✅ /, /knowledge, /skills, /workspace/new |
+| AT-11 | API 回归 | ✅ workspaces/tools/skills/services 全部正常 |
+
+**通过率：11/11 = 100%**
+
+### 30.6 统计快照
+
+- Flyway migration: V1-V6 → **V1-V8**（+V7 workspace error_message, +V8 knowledge_documents）
+- Knowledge CRUD: 无 → **POST/PUT/DELETE /api/knowledge/docs**
+- Knowledge Scope: 无 → **Global/Workspace/Personal 三层级联**
+- Workspace 创建: 同步阻塞 → **异步 clone + 前端进度条**
+- MCP 工具: 17 个（search_knowledge +scope 参数）
+- 单元测试: 156（全部通过）
+- Git commits: `8a283e5`（feat）+ `1255b5b`（docs）
+
+---
+
+## Session 31 — 2026-02-23：H2 持久化 + MiniMax 模型支持 + 模型选择端到端打通
+
+### 31.1 目标
+
+解决三个问题：(1) Docker 重启 H2 数据丢失；(2) 新增 MiniMax 模型供应商；(3) 前端选的模型没有传到后端（selectedModel 只存 localStorage）
+
+### 31.2 实施内容
+
+| 操作 | 文件 | 说明 |
+|------|------|------|
+| 修改 | `infrastructure/docker/docker-compose.trial.yml` | +backend data volume 持久化 H2, +MiniMax env vars |
+| 修改 | `web-ide/backend/Dockerfile` | +`mkdir -p /app/data` |
+| 修改 | `web-ide/backend/src/main/resources/application.yml` | +minimax 配置块（3 模型） |
+| 修改 | `.../config/ModelProperties.kt` | +minimax: ProviderConfig 字段 |
+| 修改 | `.../config/ClaudeConfig.kt` | +minimax adapter 注册（复用 ClaudeAdapter, 无系统 key 也注册） |
+| 修改 | `.../service/ClaudeAgentService.kt` | +ModelRegistry 注入, +modelId 参数, +动态 adapter 选择, resolveUserApiKey 去掉 anonymous 过滤 |
+| 修改 | `.../service/AgenticLoopOrchestrator.kt` | +adapter 参数, 内部用 activeAdapter 替代硬编码 claudeAdapter |
+| 修改 | `.../service/BaselineAutoChecker.kt` | +adapter 参数透传 |
+| 修改 | `.../websocket/ChatWebSocketHandler.kt` | +解析 modelId 从 WebSocket payload, 传给 streamMessage |
+| 修改 | `.../test/.../ClaudeAgentServiceTest.kt` | +modelRegistry mock, agenticStream 匹配 6 参数 |
+| 修改 | `adapters/model-adapter/.../ModelRegistry.kt` | +providerForModel() 公共方法 |
+| 修改 | `web-ide/frontend/src/lib/claude-client.ts` | +modelId 参数, WebSocket 消息携带 modelId |
+| 修改 | `.../components/chat/AiChatSidebar.tsx` | +传递 selectedModel 到 streamMessage |
+| 修改 | `.../components/chat/ModelSettingsDialog.tsx` | +MiniMax 供应商 |
+| 修改 | `.../components/chat/ModelSelector.tsx` | +MiniMax label |
+
+### 31.3 发现的 Bug 及修复
+
+| Bug | 根因 | 修复 |
+|-----|------|------|
+| BUG-033: MiniMax 模型不在下拉列表 | ClaudeConfig 注册条件 `minimaxKey.isNotBlank()`，无系统 key 时 adapter 不注册，/api/models 返回空 | 改为只要 `enabled` 就注册 adapter（用 placeholder key），用户可通过 Settings 配置自己的 key |
+| BUG-034: 用户配置的 API Key 不生效 | `resolveUserApiKey` 中 `userId != "anonymous"` 过滤掉了安全关闭模式下所有用户 | 去掉 anonymous 过滤，anonymous 用户也能用自己配置的 key |
+
+### 31.4 经验沉淀
+
+- **无系统 Key 也应注册 adapter**：模型列表展示和 API 调用是两个独立关注点。即使没有系统级 key，也应注册 adapter 让前端看到模型列表，运行时通过用户配置的 key 覆盖
+- **anonymous 用户不应被忽略**：`FORGE_SECURITY_ENABLED=false` 时所有用户都是 anonymous，过滤 anonymous 等于禁用了用户级配置功能
+- **端到端打通检查清单**：前端状态 → WebSocket payload → Handler 解析 → Service 参数 → Orchestrator 参数，任何一环断开都不生效
+
+### 31.5 统计快照
+
+- 模型供应商: 5 → **6**（+MiniMax）
+- MiniMax 模型: MiniMax-M2.5 / M2.5-lightning / M2.5-highspeed
+- H2 持久化: 无 volume → **forge-backend-data volume**
+- 模型选择: 前端 only → **端到端打通**（前端 → WebSocket → 后端动态 adapter）
+- 单元测试: 156（147 pass, 9 pre-existing）
+- Git commit: `b162436`
