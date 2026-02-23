@@ -6,6 +6,7 @@ import com.forge.webide.service.memory.MessageCompressor
 import com.forge.webide.service.memory.TokenEstimator
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.time.Instant
@@ -294,19 +295,26 @@ class AgenticLoopOrchestrator(
     /**
      * Wrap a streaming API call with exponential backoff retry on rate limit (429).
      * Retries up to [maxRetries] times with delays of 1s, 2s, 4s... (max 30s).
+     *
+     * IMPORTANT: RateLimitException can be thrown both during Flow creation AND
+     * during Flow collection (when the HTTP SSE connection is established).
+     * This wrapper catches both cases by re-collecting on rate limit errors.
      */
     suspend fun streamWithRetry(
         maxRetries: Int = 3,
         block: suspend () -> Flow<StreamEvent>
-    ): Flow<StreamEvent> {
+    ): Flow<StreamEvent> = flow {
         var lastException: Exception? = null
-        for (attempt in 0 until maxRetries) {
+        for (attempt in 0..maxRetries) {
             try {
-                return block()
+                val upstream = block()
+                upstream.collect { event -> emit(event) }
+                return@flow // success
             } catch (e: RateLimitException) {
                 lastException = e
+                if (attempt >= maxRetries) break
                 val delayMs = (1000L * (1 shl attempt)).coerceAtMost(30_000L)
-                logger.warn("Rate limited, retrying in ${delayMs}ms (attempt ${attempt + 1}/$maxRetries)")
+                logger.warn("Rate limited (during stream), retrying in ${delayMs}ms (attempt ${attempt + 1}/$maxRetries)")
                 delay(delayMs)
             }
         }
