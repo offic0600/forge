@@ -399,7 +399,7 @@ Before submitting a PR, please ensure:
 2. Frontend builds without errors: `cd web-ide/frontend && npm run build`
 3. Code follows existing style conventions (see `plugins/forge-foundation/skills/kotlin-conventions/`)
 
-> **Note**: By submitting a contribution, you agree to license your contribution to Forge Ltd as described in the [LICENSE](LICENSE).
+> **Note**: By submitting a contribution, you agree to license your contribution to The Forge Contributors as described in the [LICENSE](LICENSE).
 
 ---
 
@@ -410,7 +410,7 @@ This project is licensed under the [Forge Source Available License v1.0](LICENSE
 - ✅ Permitted: View source, personal learning, non-commercial use and modification, submit contributions
 - ❌ Restricted: Commercial use (SaaS, internal business tooling, consulting services) requires written authorization
 
-Commercial licensing inquiries: legal@forge.ltd
+Commercial licensing inquiries: https://github.com/pan94u/forge/issues
 
 ---
 

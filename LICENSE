@@ -1,15 +1,15 @@
 Forge Source Available License
 Version 1.0, 2026
 
-Copyright (c) 2026 Forge Ltd. All rights reserved.
+Copyright (c) 2026 The Forge Contributors. All rights reserved.
 
 DEFINITIONS
 
 "Software" means the Forge platform source code, documentation, and all
 associated files in this repository.
 
-"Forge Ltd" means the legal entity holding exclusive commercial rights to
-the Software.
+"The Forge Contributors" means the individual authors and contributors
+listed in the repository's git history.
 
 "Commercial Use" means any use of the Software, in whole or in part, for
 direct or indirect commercial advantage or monetary compensation, including
@@ -37,7 +37,7 @@ Any permitted use must:
 RESTRICTIONS
 
 The following are strictly prohibited without prior written authorization
-from Forge Ltd:
+from The Forge Contributors:
 
   1. Commercial Use of the Software or any Derivative Works
   2. Distribution of the Software as part of a commercial product or service
@@ -47,13 +47,13 @@ from Forge Ltd:
 
 EXCLUSIVE COMMERCIAL RIGHTS
 
-All Commercial Use rights are exclusively reserved by Forge Ltd.
-To inquire about a commercial license, contact: legal@forge.ltd
+All Commercial Use rights are exclusively reserved by The Forge Contributors.
+To inquire about a commercial license, contact: https://github.com/pan94u/forge/issues
 
 CONTRIBUTIONS
 
 By submitting a contribution (pull request, patch, or otherwise) to this
-repository, you agree to grant Forge Ltd a perpetual, worldwide,
+repository, you agree to grant The Forge Contributors a perpetual, worldwide,
 non-exclusive, royalty-free license to use, reproduce, modify, and
 distribute your contribution as part of the Software, including under
 commercial terms.
@@ -63,11 +63,11 @@ DISCLAIMER OF WARRANTY
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL
-FORGE LTD BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY ARISING
+THE FORGE CONTRIBUTORS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY ARISING
 FROM THE USE OF OR INABILITY TO USE THE SOFTWARE.
 
 TERMINATION
 
 Your rights under this License terminate automatically if you fail to
-comply with any of its terms. Forge Ltd reserves the right to pursue
+comply with any of its terms. The Forge Contributors reserve the right to pursue
 legal remedies for any violation of these terms.

@@ -371,7 +371,7 @@ npm run dev
 2. 前端构建无错误：`cd web-ide/frontend && npm run build`
 3. 遵循现有代码风格（Kotlin 编码规范见 `plugins/forge-foundation/skills/kotlin-conventions/`）
 
-> **注意**：提交贡献即表示你同意将贡献内容授权给 Forge Ltd，详见 [LICENSE](LICENSE)。
+> **注意**：提交贡献即表示你同意将贡献内容授权给 The Forge Contributors，详见 [LICENSE](LICENSE)。
 
 ---
 
@@ -382,7 +382,7 @@ npm run dev
 - ✅ 允许：查看源码、个人学习、非商业用途使用与修改、提交贡献
 - ❌ 禁止：商业用途（含 SaaS、内部商业工具、咨询服务）需获得书面授权
 
-商业授权咨询：legal@forge.ltd
+商业授权咨询：https://github.com/pan94u/forge/issues
 
 ---
 
