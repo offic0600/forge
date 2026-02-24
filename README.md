@@ -1,8 +1,8 @@
-# Forge — AI 驱动的智能软件交付平台
+# Forge — AI-Driven Intelligent Software Delivery Platform
 
 <div align="center">
 
-**不是 AI 辅助编程工具，而是拥有自主执行能力的 AI 驱动软件交付平台。**
+**Not an AI coding assistant — an AI-driven software delivery platform with autonomous execution capabilities.**
 
 [![License](https://img.shields.io/badge/license-Source%20Available-lightgrey.svg)](LICENSE)
 [![JDK](https://img.shields.io/badge/JDK-21-orange.svg)](https://adoptium.net/)
@@ -14,380 +14,408 @@
 
 ---
 
-## 📖 项目简介
+## 📖 Overview
 
-Forge 是一个将 AI Agent 深度嵌入软件开发全生命周期的智能交付平台。它采用 **SuperAgent 架构**——单一智能体通过 6 个 Skill Profile 动态切换专业角色，覆盖规划→设计→开发→测试→运维→评估的完整交付链。
+Forge is an intelligent delivery platform that deeply embeds AI agents into the entire software development lifecycle. It uses a **SuperAgent architecture** — a single agent dynamically switching between 6 Skill Profiles to cover the complete delivery chain from planning → design → development → testing → operations → evaluation.
 
-### 核心理念
+### Core Philosophy
 
-| 理念 | 说明 |
-|------|------|
-| **SuperAgent 优于多 Agent** | 一个智能体通过 Skill 动态切换角色，避免多 Agent 协调复杂度 |
-| **Skill 优于 Prompt** | 将专业知识编码为可复用、可组合的 32 个 Skill 资产 |
-| **底线保障质量下限** | 无论模型能力如何变化，质量底线脚本必须通过 |
-| **双环驱动持续进化** | 交付环解决"做什么"，进化环解决"越做越好" |
-| **人机协同（HITL）** | 关键决策点由人类审批，而非全自动黑盒 |
+| Principle | Description |
+|-----------|-------------|
+| **SuperAgent over Multi-Agent** | One agent dynamically switches roles via Skills, avoiding multi-agent coordination complexity |
+| **Skills over Prompts** | Professional knowledge encoded into 32 reusable, composable Skill assets |
+| **Baselines guarantee quality floor** | Quality baseline scripts must pass regardless of model capability changes |
+| **Dual-loop drives continuous improvement** | Delivery Loop solves "what to do", Learning Loop solves "getting better" |
+| **Human-In-The-Loop (HITL)** | Critical decisions require human approval, not a fully automated black box |
 
 ---
 
-## ✨ 核心功能
+## ✨ Key Features
 
-### 🤖 SuperAgent 自主执行引擎
+### 🤖 SuperAgent Autonomous Execution Engine
 
-用户声明意图，SuperAgent 自主完成规划→编码→验证→交付的完整闭环：
+Users declare intent; SuperAgent autonomously completes the full cycle of planning → coding → verification → delivery:
 
-- **50 轮自主执行**：无需逐步指令，Agent 自行决策工具调用、文件读写、代码生成
-- **OODA 循环**：Observe → Orient → Decide → Act，每阶段实时可视化
-- **18 种 MCP 工具**：文件操作、知识搜索、数据库查询、代码编译、测试运行等
-- **失败自修复**：底线检查失败后自动分析原因、修改代码、重新验证（最多 2 轮）
-- **上下文自管理**：Token 接近上限时自动压缩历史消息，不中断执行
+- **50-turn autonomous execution**: No step-by-step instructions needed — the agent decides tool calls, file operations, and code generation independently
+- **OODA Loop**: Observe → Orient → Decide → Act, with real-time visualization of each phase
+- **18 MCP tools**: File operations, knowledge search, database queries, code compilation, test execution, and more
+- **Self-repair on failure**: When baseline checks fail, automatically analyzes the cause, modifies code, and re-validates (up to 2 rounds)
+- **Self-managed context**: Automatically compresses message history when approaching token limits, without interrupting execution
 
-### 🧠 6 个 Skill Profile 智能路由
+### 🧠 6 Skill Profiles with Intelligent Routing
 
-| Profile | 职责 | 典型 Skill |
-|---------|------|-----------|
-| **planning** | 需求分析、PRD 编写 | requirement-engineering、delivery-methodology |
-| **design** | 架构设计、ADR 编写 | api-design、database-patterns |
-| **development** | 编码实现、代码生成 | kotlin-conventions、spring-boot-patterns |
-| **testing** | 测试策略、用例编写 | testing-standards |
-| **ops** | 部署运维、问题排查 | logging-observability、deployment-readiness-check |
-| **evaluation** | 进度评估、知识萃取、文档生成 | progress-evaluation、knowledge-distillation |
+| Profile | Responsibility | Typical Skills |
+|---------|---------------|----------------|
+| **planning** | Requirements analysis, PRD writing | requirement-engineering, delivery-methodology |
+| **design** | Architecture design, ADR writing | api-design, database-patterns |
+| **development** | Code implementation, code generation | kotlin-conventions, spring-boot-patterns |
+| **testing** | Test strategy, test case writing | testing-standards |
+| **ops** | Deployment, operations, troubleshooting | logging-observability, deployment-readiness-check |
+| **evaluation** | Progress evaluation, knowledge distillation, doc generation | progress-evaluation, knowledge-distillation |
 
-路由支持 4 级优先级：显式标签（`@开发`）→ 关键词检测 → 分支名模式 → 默认回退。
+Routing supports 4 priority levels: explicit tags (`@development`) → keyword detection → branch name patterns → default fallback.
 
-### 💾 三层跨 Session 记忆系统
+### 💾 Three-Layer Cross-Session Memory System
 
-解决 AI Agent "每次重新开始"的核心痛点：
+Solves the core pain point of AI agents "starting fresh every time":
 
-| 层级 | 名称 | 范围 | 容量 |
-|------|------|------|------|
-| Layer 1 | **Workspace Memory** | 工作区级 | 4,000 字符 |
-| Layer 2 | **Stage Memory** | Profile × Workspace | 8,000 字符 |
-| Layer 3 | **Session Summary** | 单次会话 | 2,000 字符/条 |
+| Layer | Name | Scope | Capacity |
+|-------|------|-------|----------|
+| Layer 1 | **Workspace Memory** | Workspace-level | 4,000 chars |
+| Layer 2 | **Stage Memory** | Profile × Workspace | 8,000 chars |
+| Layer 3 | **Session Summary** | Single session | 2,000 chars/entry |
 
-效果：新 Session 启动即拥有项目上下文，节省 30-40% Token 消耗。
+Effect: New sessions immediately have project context, saving 30-40% token consumption.
 
-### 🛡️ 质量保障体系
+### 🛡️ Quality Assurance System
 
-- **底线自动检查**：代码生成后自动运行 code-style / security / api-contract / architecture 底线
-- **HITL 审批检查点**：关键交付节点暂停等待人工审批，支持 Approve / Reject / Modify
-- **四维评估学习闭环**：意图理解 + 完成度 + 质量 + 体验，自动生成改进建议
-- **Prompt Caching**：System Prompt 缓存 5 分钟，缓存命中节省 90% 成本
+- **Automatic baseline checks**: After code generation, automatically runs code-style / security / api-contract / architecture baselines
+- **HITL approval checkpoints**: Pauses at key delivery nodes for human approval — supports Approve / Reject / Modify
+- **Four-dimensional evaluation learning loop**: Intent understanding + Completion + Quality + Experience, auto-generates improvement suggestions
+- **Prompt Caching**: System Prompt cached for 5 minutes, 90% cost savings on cache hits
 
 ### 🌐 Web IDE
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│ Header — 角色切换 + 模型选择 + 用户菜单                          │
+│ Header — Role Switch + Model Selector + User Menu               │
 ├──────────┬──────────────────────────────┬───────────────────────┤
 │ File     │ Monaco Editor                │ AI Chat Sidebar       │
-│ Explorer │   - 25+ 语言语法高亮          │  4-Tab:               │
-│          │   - 多 Tab 文件编辑           │  [对话|质量|Skills|记忆]│
-│  CRUD:   │   - AI Explain 按钮          │   - 流式响应展示       │
-│  新建    │   - 5 秒自动保存             │   - Tool Call 展开    │
-│  重命名  ├──────────────────────────────┤   - OODA 指示器       │
-│  删除    │ Terminal Panel（可折叠）       │   - Profile Badge     │
+│ Explorer │   - 25+ language highlights  │  4-Tab:               │
+│          │   - Multi-tab file editing   │  [Chat|Quality|Skills │
+│  CRUD:   │   - AI Explain button        │   |Memory]            │
+│  Create  │   - 5s auto-save             │   - Streaming output  │
+│  Rename  ├──────────────────────────────┤   - Tool call expand  │
+│  Delete  │ Terminal Panel (collapsible)  │   - OODA indicator    │
 └──────────┴──────────────────────────────┴───────────────────────┘
 ```
 
-### 🔌 多模型支持
+### 🔌 Multi-Model Support
 
-| Provider | 支持模型 | Context Window |
-|----------|---------|----------------|
+| Provider | Supported Models | Context Window |
+|----------|-----------------|----------------|
 | **Anthropic Claude** | Opus 4.6 / Sonnet 4.5 / Haiku 4.5 | 200K |
 | **Google Gemini** | Gemini Pro | 30K |
 | **Alibaba Qwen** | Qwen2.5-7B / 72B | 32K |
 | **AWS Bedrock** | Claude via AWS | Provider-specific |
 | **MiniMax** | M2.5 / M2.5-lightning / M2.5-highspeed | 1M |
-| **OpenAI-compatible** | 任意兼容 OpenAI API 的服务 | Provider-specific |
+| **OpenAI-compatible** | Any service compatible with OpenAI API | Provider-specific |
 
 ---
 
-## 🏗️ 技术架构
+## 🏗️ Architecture
 
-### 系统架构图
+### System Architecture Diagram
 
 ```
-┌─ 用户交互层 ────────────────────────────────────────────────┐
-│  Web IDE (Next.js 15)  │  CLI (Kotlin + GraalVM Native)     │
-└────────────────────────────────────────────────────────────┘
+┌─ User Interaction Layer ────────────────────────────────────────┐
+│  Web IDE (Next.js 15)  │  CLI (Kotlin + GraalVM Native)         │
+└────────────────────────────────────────────────────────────────┘
                          │
-┌─ 应用层 ────────────────────────────────────────────────────┐
-│  Spring Boot 3 Backend                                       │
-│  ├─ AgenticLoopOrchestrator (50 轮自主执行管线)              │
-│  ├─ ProfileRouter (6 Profile 智能路由)                       │
-│  ├─ SkillLoader (32 Skill 动态加载)                          │
-│  ├─ SystemPromptAssembler (动态 Prompt 组装)                 │
-│  ├─ McpProxyService (18 工具调用代理)                        │
-│  ├─ MemoryContextLoader (三层记忆注入)                       │
-│  ├─ HitlCheckpointManager (HITL 审批管理)                   │
-│  └─ LearningLoopPipelineService (学习闭环)                  │
-└────────────────────────────────────────────────────────────┘
+┌─ Application Layer ─────────────────────────────────────────────┐
+│  Spring Boot 3 Backend                                           │
+│  ├─ AgenticLoopOrchestrator (50-turn autonomous execution)       │
+│  ├─ ProfileRouter (6 Profile intelligent routing)               │
+│  ├─ SkillLoader (32 Skills dynamic loading)                     │
+│  ├─ SystemPromptAssembler (dynamic prompt assembly)             │
+│  ├─ McpProxyService (18 tool call proxy)                        │
+│  ├─ MemoryContextLoader (three-layer memory injection)          │
+│  ├─ HitlCheckpointManager (HITL approval management)            │
+│  └─ LearningLoopPipelineService (learning feedback loop)        │
+└────────────────────────────────────────────────────────────────┘
                          │
-┌─ MCP 工具层 ────────────────────────────────────────────────┐
-│  forge-knowledge-mcp:8081  │  forge-database-mcp:8082        │
-│  forge-service-graph-mcp   │  forge-artifact-mcp             │
-│  forge-observability-mcp   │  (内置 workspace/baseline 工具) │
-└────────────────────────────────────────────────────────────┘
+┌─ MCP Tool Layer ────────────────────────────────────────────────┐
+│  forge-knowledge-mcp:8081  │  forge-database-mcp:8082           │
+│  forge-service-graph-mcp   │  forge-artifact-mcp                │
+│  forge-observability-mcp   │  (built-in workspace/baseline tools)│
+└────────────────────────────────────────────────────────────────┘
                          │
-┌─ 模型适配层 ────────────────────────────────────────────────┐
-│  ClaudeAdapter  │  GeminiAdapter  │  QwenAdapter             │
-│  BedrockAdapter │  OpenAIAdapter  │  (统一 ModelAdapter 接口) │
-└────────────────────────────────────────────────────────────┘
+┌─ Model Adapter Layer ───────────────────────────────────────────┐
+│  ClaudeAdapter  │  GeminiAdapter  │  QwenAdapter                │
+│  BedrockAdapter │  OpenAIAdapter  │  (unified ModelAdapter interface)│
+└────────────────────────────────────────────────────────────────┘
 ```
 
-### 技术栈
+### Technology Stack
 
-| 层 | 技术 | 版本 |
-|---|------|------|
-| 后端语言 | Kotlin | 1.9+ |
-| 后端框架 | Spring Boot | 3.3+ |
-| 运行时 | JDK | 21 |
-| 前端框架 | Next.js + React | 15 + 19 |
-| 前端语言 | TypeScript | 5.x |
-| 数据库（开发） | H2 文件持久化 | — |
-| 数据库（生产） | PostgreSQL | 16 |
-| 数据库迁移 | Flyway | 8 个版本（V1-V8） |
-| 代码编辑器 | Monaco Editor | 4.6+ |
-| 工作流画布 | ReactFlow | 12.3+ |
-| 架构图渲染 | Mermaid | 11.4+ |
-| 认证 | Keycloak | 24.0 |
-| 监控 | Prometheus + Micrometer | — |
-| 容器化 | Docker Compose | 6 容器 |
+| Layer | Technology | Version |
+|-------|-----------|---------|
+| Backend Language | Kotlin | 1.9+ |
+| Backend Framework | Spring Boot | 3.3+ |
+| Runtime | JDK | 21 |
+| Frontend Framework | Next.js + React | 15 + 19 |
+| Frontend Language | TypeScript | 5.x |
+| Database (Dev) | H2 file persistence | — |
+| Database (Prod) | PostgreSQL | 16 |
+| DB Migration | Flyway | 8 versions (V1-V8) |
+| Code Editor | Monaco Editor | 4.6+ |
+| Workflow Canvas | ReactFlow | 12.3+ |
+| Diagram Rendering | Mermaid | 11.4+ |
+| Authentication | Keycloak | 24.0 |
+| Monitoring | Prometheus + Micrometer | — |
+| Containerization | Docker Compose | 6 containers |
 
-### Gradle 模块结构
+### Gradle Module Structure
 
 ```
 forge-platform/
 ├── web-ide/
-│   ├── backend/          # Spring Boot 3 后端（Kotlin）
-│   └── frontend/         # Next.js 15 前端（TypeScript）
+│   ├── backend/          # Spring Boot 3 backend (Kotlin)
+│   └── frontend/         # Next.js 15 frontend (TypeScript)
 ├── mcp-servers/
-│   ├── forge-mcp-common/        # MCP 协议公共库
-│   ├── forge-knowledge-mcp/     # 知识库 MCP 服务器
-│   ├── forge-database-mcp/      # 数据库 MCP 服务器
-│   ├── forge-service-graph-mcp/ # 服务拓扑 MCP 服务器
-│   ├── forge-artifact-mcp/      # 构建产物 MCP 服务器
-│   └── forge-observability-mcp/ # 可观测性 MCP 服务器
+│   ├── forge-mcp-common/        # MCP protocol common library
+│   ├── forge-knowledge-mcp/     # Knowledge base MCP server
+│   ├── forge-database-mcp/      # Database MCP server
+│   ├── forge-service-graph-mcp/ # Service topology MCP server
+│   ├── forge-artifact-mcp/      # Build artifact MCP server
+│   └── forge-observability-mcp/ # Observability MCP server
 ├── adapters/
-│   ├── model-adapter/    # 模型适配器（Claude/Gemini/Qwen/Bedrock）
-│   └── runtime-adapter/  # Runtime 适配器
+│   ├── model-adapter/    # Model adapters (Claude/Gemini/Qwen/Bedrock)
+│   └── runtime-adapter/  # Runtime adapter
 ├── plugins/
-│   ├── forge-foundation/  # 基础 Skill（Kotlin/Java/Spring/API 规范等）
-│   ├── forge-superagent/  # SuperAgent Skill + 6 个 Profile
-│   ├── forge-knowledge/   # 知识类 Skill
-│   └── forge-deployment/  # 部署类 Skill（K8s/CI-CD）
-├── cli/                   # Forge CLI（Kotlin + GraalVM Native）
-├── agent-eval/            # SuperAgent 评估框架
-├── skill-tests/           # Skill 验证框架
-├── knowledge-base/        # 知识库文档（13+ 篇）
+│   ├── forge-foundation/  # Foundation Skills (Kotlin/Java/Spring/API conventions)
+│   ├── forge-superagent/  # SuperAgent Skills + 6 Profiles
+│   ├── forge-knowledge/   # Knowledge Skills
+│   └── forge-deployment/  # Deployment Skills (K8s/CI-CD)
+├── cli/                   # Forge CLI (Kotlin + GraalVM Native)
+├── agent-eval/            # SuperAgent evaluation framework
+├── skill-tests/           # Skill validation framework
+├── knowledge-base/        # Knowledge base documents (13+ docs)
 └── infrastructure/
-    └── docker/            # Docker Compose 部署配置
+    └── docker/            # Docker Compose deployment configuration
 ```
 
 ---
 
-## 🚀 快速启动
+## 🚀 Quick Start
 
-### 前置条件
+### Prerequisites
 
-| 项目 | 要求 | 验证命令 |
-|------|------|---------|
-| JDK | **21**（必须！JDK 8/17 会编译失败） | `java -version` |
+| Item | Requirement | Verification |
+|------|-------------|-------------|
+| JDK | **21** (required! JDK 8/17 will fail to compile) | `java -version` |
 | Docker Engine | 24+ | `docker --version` |
 | Docker Compose | v2+ | `docker compose version` |
 | Node.js | 20+ | `node --version` |
-| 可用内存 | ≥ 8 GB（分配给 Docker） | Docker Desktop → Resources |
-| API Key | 至少 1 个 Provider | 见下方配置说明 |
+| Available Memory | ≥ 8 GB (allocated to Docker) | Docker Desktop → Resources |
+| API Key | At least 1 Provider | See configuration below |
 
-### Step 1: 克隆仓库
+### Step 1: Clone the Repository
 
 ```bash
 git clone git@github.com:pan94u/forge.git
 cd forge
 ```
 
-### Step 2: 配置环境变量
+### Step 2: Configure Environment Variables
 
 ```bash
 cp .env.example infrastructure/docker/.env
 ```
 
-编辑 `infrastructure/docker/.env`，至少填入一个 Provider 的 API Key：
+Edit `infrastructure/docker/.env` and fill in at least one Provider's API Key:
 
 ```bash
-# Anthropic Claude（推荐）
-ANTHROPIC_API_KEY=sk-ant-api03-你的密钥
+# Anthropic Claude (recommended)
+ANTHROPIC_API_KEY=sk-ant-api03-your-key
 
-# 或 Google Gemini
+# Or Google Gemini
 # GEMINI_API_KEY=AIza...
 
-# 或阿里云 DashScope（通义千问）
+# Or Alibaba DashScope (Qwen)
 # DASHSCOPE_API_KEY=sk-...
 
-# 或 OpenAI 兼容接口（Ollama/vLLM/LocalAI 等）
+# Or OpenAI-compatible (Ollama/vLLM/LocalAI, etc.)
 # LOCAL_MODEL_URL=http://localhost:11434
 # LOCAL_MODEL_NAME=llama3.1:8b
 ```
 
-### Step 3: 本地构建
+### Step 3: Build Locally
 
 ```bash
-# 确保 JDK 21（macOS 示例）
+# Ensure JDK 21 (macOS example)
 export JAVA_HOME=/opt/homebrew/opt/openjdk@21
 
-# 构建后端 JAR（跳过测试加速）
+# Build backend JAR (skip tests for speed)
 ./gradlew :web-ide:backend:bootJar -x test --no-daemon
 
-# 构建前端
+# Build frontend
 cd web-ide/frontend && npm install && npm run build && cd ../..
 ```
 
-### Step 4: Docker 启动
+### Step 4: Start with Docker
 
 ```bash
 cd infrastructure/docker
 docker compose -f docker-compose.trial.yml --env-file .env up --build -d
 ```
 
-### Step 5: 验证启动
+### Step 5: Verify Startup
 
 ```bash
-# 检查 6 个容器状态（均应为 healthy 或 running）
+# Check all 6 containers (all should be healthy or running)
 docker compose -f docker-compose.trial.yml ps
 
-# 测试 API
+# Test API
 curl -s http://localhost:9000/api/models | python3 -m json.tool
 ```
 
-### Step 6: 访问平台
+### Step 6: Access the Platform
 
-打开浏览器访问 **http://localhost:9000**
-
----
-
-## 📊 技术规格
-
-| 维度 | 数值 |
-|------|------|
-| REST API 端点 | 68 个（11 个 Controller） |
-| SSE 事件类型 | 14 种 |
-| MCP 工具 | 18 个内置 + 外部自动发现 |
-| JPA Entity | 12 个 |
-| Flyway 迁移 | 8 个版本（V1-V8） |
-| Skill 总数 | 32 个（6 个 Profile） |
-| 单元测试 | 156 个（全部通过） |
-| Docker 容器 | 6 个 |
-| 知识库文档 | 13+ 篇 |
-| 代码规模 | ~50K+ 行（Kotlin + TypeScript） |
-| 前端页面路由 | 7 个 |
-| 支持模型 | 6 个 Provider（13+ 模型） |
-| Context Window | 最大 200K tokens（Claude Opus） |
-| 自主执行轮次 | 最多 50 轮 |
+Open your browser and visit **http://localhost:9000**
 
 ---
 
-## 🗺️ 演进路线
+## 📊 Technical Specifications
 
-| 阶段 | 关键词 | 状态 | 核心能力 |
-|------|--------|------|---------|
-| Phase 0 | 基础骨架 | ✅ | Foundation Skills + MCP Server + CLI + 插件体系 |
-| Phase 1 | Web IDE 实连 | ✅ | 真流式 + Agentic Loop + 跨栈画像 |
-| Phase 1.5 | 设计守护 + Docker | ✅ | Docker 部署 + E2E 验证 + 设计基线冻结 |
-| Phase 1.6 | AI 交付闭环 + SSO | ✅ | AI→Workspace 写文件 + Keycloak SSO + Context Picker |
-| Phase 2 | 质量基础设施 | ✅ | CI/CD + SkillLoader + MCP 真实服务 + 多模型适配 |
-| Phase 3 | HITL + 记忆 | ✅ | 三层记忆 + HITL 审批 + 学习闭环 + 质量面板 |
-| Phase 4 | Skill 架构改造 | ✅ | 渐进式加载 + Skill 管理 + 使用追踪 |
-| Phase 5 | 产品可用性 | ✅ | Workspace 持久化 + Git Clone + 用户 API Key |
-| Phase 6 | 知识写入 + 多模型 | ✅ | MiniMax + 知识库本地写入 + Agentic Loop 50 轮 |
-| Phase 7 | 异步化 + 知识 Scope | ✅ | Git Clone 异步 + 知识库三层 Scope + CRUD |
-| Phase 8+ | 进化环闭合 | 🔄 | ForgeNativeRuntime + 方法论平台化 |
+| Dimension | Value |
+|-----------|-------|
+| REST API Endpoints | 68 (11 Controllers) |
+| SSE Event Types | 14 |
+| MCP Tools | 18 built-in + external auto-discovery |
+| JPA Entities | 12 |
+| Flyway Migrations | 8 versions (V1-V8) |
+| Total Skills | 32 (6 Profiles) |
+| Unit Tests | 156 (all passing) |
+| Docker Containers | 6 |
+| Knowledge Base Docs | 13+ |
+| Code Volume | ~50K+ lines (Kotlin + TypeScript) |
+| Frontend Routes | 7 |
+| Supported Models | 6 Providers (13+ models) |
+| Context Window | Up to 200K tokens (Claude Opus) |
+| Autonomous Execution Turns | Up to 50 |
 
 ---
 
-## 🔧 开发指南
+## 🗺️ Roadmap
 
-### 运行单元测试
+| Phase | Keyword | Status | Key Capabilities |
+|-------|---------|--------|-----------------|
+| Phase 0 | Foundation | ✅ | Foundation Skills + MCP Servers + CLI + Plugin system |
+| Phase 1 | Web IDE Connected | ✅ | Real streaming + Agentic Loop + Cross-stack profiling |
+| Phase 1.5 | Design Guard + Docker | ✅ | Docker deployment + E2E validation + Design baseline freeze |
+| Phase 1.6 | AI Delivery Loop + SSO | ✅ | AI→Workspace file writing + Keycloak SSO + Context Picker |
+| Phase 2 | Quality Infrastructure | ✅ | CI/CD + SkillLoader + Real MCP services + Multi-model |
+| Phase 3 | HITL + Memory | ✅ | Three-layer memory + HITL approval + Learning loop + Quality panel |
+| Phase 4 | Skill Architecture | ✅ | Progressive loading + Skill management + Usage tracking |
+| Phase 5 | Product Usability | ✅ | Workspace persistence + Git Clone + User API Keys |
+| Phase 6 | Knowledge Write + Multi-model | ✅ | MiniMax + Local knowledge write + 50-turn Agentic Loop |
+| Phase 7 | Async + Knowledge Scope | ✅ | Async Git Clone + Three-tier knowledge scope + CRUD |
+| Phase 8+ | Learning Loop Closure | 🔄 | ForgeNativeRuntime + Methodology platformization |
+
+---
+
+## 🔧 Development Guide
+
+### Run Unit Tests
 
 ```bash
-# 后端测试
+# Backend tests
 ./gradlew :web-ide:backend:test :adapters:model-adapter:test
 
-# 评估框架测试
+# Evaluation framework tests
 ./gradlew :agent-eval:test
 ```
 
-### 本地开发模式（不使用 Docker）
+### Local Development Mode (without Docker)
 
 ```bash
-# 启动后端
+# Start backend
 cd web-ide/backend
 ./gradlew bootRun
 
-# 启动前端（新终端）
+# Start frontend (new terminal)
 cd web-ide/frontend
 npm run dev
-# 访问 http://localhost:3000
+# Access http://localhost:3000
 ```
 
-### 常见问题
+### Common Issues
 
-| 问题 | 解决方案 |
-|------|---------|
-| JDK 版本错误 | 必须使用 JDK 21，`export JAVA_HOME=/opt/homebrew/opt/openjdk@21` |
-| 前端类型错误 | 使用 `npm run build` 而非 `npm run dev`（dev 不检查类型） |
-| WebSocket CORS | `forge.websocket.allowed-origins` 必须为逗号分隔字符串 |
-| 枚举序列化 | 所有枚举必须加 `@JsonValue` 返回小写 |
-| 空字符串 vs null | 使用 `isNullOrBlank()` 而非 `?: default` |
-
----
-
-## 📁 文档索引
-
-| 文档 | 路径 | 说明 |
-|------|------|------|
-| 产品功能清单 | `docs/product/feature-list.md` | 完整功能描述（面向用户） |
-| 设计基线 | `docs/baselines/design-baseline-v1.md` | 已验证的 UI/API/数据模型基线（v12） |
-| 规划基线 | `docs/baselines/planning-baseline-v1.5.md` | 设计驱动的规划文档 |
-| 开发日志 | `docs/planning/dev-logbook.md` | 32 个 Session 的完整开发记录 |
-| 架构概览 | `docs/architecture/overview.md` | 系统架构文档 |
-| 试用指南 | `docs/product/TRIAL-GUIDE.md` | 内部试用操作手册 |
-| 验收测试 | `docs/acceptance-tests/` | 各阶段验收测试报告 |
-| Bug 列表 | `docs/analysis/buglist.md` | 已知问题追踪 |
+| Issue | Solution |
+|-------|---------|
+| JDK version error | Must use JDK 21: `export JAVA_HOME=/opt/homebrew/opt/openjdk@21` |
+| Frontend type errors | Use `npm run build` not `npm run dev` (dev doesn't check types) |
+| WebSocket CORS | `forge.websocket.allowed-origins` must be a comma-separated string |
+| Enum serialization | All enums must add `@JsonValue` returning lowercase |
+| Empty string vs null | Use `isNullOrBlank()` instead of `?: default` |
 
 ---
 
-## 🤝 贡献
+## 🆚 Competitive Positioning
 
-欢迎参与贡献！你可以通过以下方式参与：
+### vs. GitHub Copilot / Cursor
 
-- **提交 Issue**：报告 Bug、提出功能建议或改进想法
-- **提交 Pull Request**：修复 Bug、完善文档、新增 Skill
-- **扩展 Skill**：在 `plugins/` 目录下添加新的 Skill 或 Profile
-- **完善知识库**：在 `knowledge-base/` 目录下补充文档
+| Dimension | Copilot / Cursor | Forge |
+|-----------|-----------------|-------|
+| Positioning | Code completion / editor-level AI | **Autonomous full-delivery SuperAgent** |
+| Execution Mode | User gives line-by-line instructions | **User declares intent, Agent autonomously plans→executes→verifies→delivers** |
+| Coverage | Development phase only | Planning→Design→Dev→Test→Ops→Evaluation |
+| Execution Depth | Single completion / single conversation | **Up to 50 autonomous turns (tool chain orchestration + self-repair)** |
+| Role Switching | None | 6 Profiles with automatic routing |
+| Quality Assurance | None | **Automatic baseline checks + self-repair retry** |
+| Human-in-the-Loop | None | HITL approval checkpoints |
+| Knowledge System | None | 32 Skills + 13+ knowledge docs + knowledge writing |
+| Memory | Single-file context | **3-layer cross-session memory (project + stage + session summary)** |
+| Learning | None | **Four-dimensional evaluation + learning loop pipeline** |
 
-提交 PR 前请确保：
-1. 单元测试全部通过：`./gradlew :web-ide:backend:test`
-2. 前端构建无错误：`cd web-ide/frontend && npm run build`
-3. 遵循现有代码风格（Kotlin 编码规范见 `plugins/forge-foundation/skills/kotlin-conventions/`）
+### vs. Traditional DevOps Platforms (Jenkins / GitLab CI)
 
-> **注意**：提交贡献即表示你同意将贡献内容授权给 Forge Ltd，详见 [LICENSE](LICENSE)。
+| Dimension | Traditional DevOps | Forge |
+|-----------|-------------------|-------|
+| Automation Target | CI/CD pipelines | **Full delivery lifecycle (including planning, design, coding, evaluation)** |
+| Execution Mode | Predefined scripts, static pipelines | **AI Agent dynamic decision-making, autonomously selects tools and strategies** |
+| AI Capability | None / limited | **Multi-turn Agentic Loop + 18 tool orchestration + knowledge base** |
+| Learning | Static rules | **Skill evolution + memory accumulation + four-dimensional evaluation feedback** |
 
 ---
 
-## 📄 许可证
+## 📁 Documentation Index
 
-本项目采用 [Forge Source Available License v1.0](LICENSE)。
+| Document | Path | Description |
+|----------|------|-------------|
+| Product Feature List | `docs/product/feature-list.md` | Complete feature description (user-facing) |
+| Design Baseline | `docs/baselines/design-baseline-v1.md` | Validated UI/API/data model baseline (v12) |
+| Planning Baseline | `docs/baselines/planning-baseline-v1.5.md` | Design-driven planning document |
+| Development Logbook | `docs/planning/dev-logbook.md` | Complete development records for 32 sessions |
+| Architecture Overview | `docs/architecture/overview.md` | System architecture documentation |
+| Trial Guide | `docs/product/TRIAL-GUIDE.md` | Internal trial operation manual |
+| Acceptance Tests | `docs/acceptance-tests/` | Phase-by-phase acceptance test reports |
+| Bug List | `docs/analysis/buglist.md` | Known issue tracking |
 
-- ✅ 允许：查看源码、个人学习、非商业用途使用与修改、提交贡献
-- ❌ 禁止：商业用途（含 SaaS、内部商业工具、咨询服务）需获得书面授权
+---
 
-商业授权咨询：legal@forge.ltd
+## 🤝 Contributing
+
+Contributions are welcome! Here's how you can participate:
+
+- **Submit Issues**: Report bugs, suggest features, or propose improvements
+- **Submit Pull Requests**: Fix bugs, improve documentation, add new Skills
+- **Extend Skills**: Add new Skills or Profiles in the `plugins/` directory
+- **Enrich Knowledge Base**: Add documentation in the `knowledge-base/` directory
+
+Before submitting a PR, please ensure:
+1. All unit tests pass: `./gradlew :web-ide:backend:test`
+2. Frontend builds without errors: `cd web-ide/frontend && npm run build`
+3. Code follows existing style conventions (see `plugins/forge-foundation/skills/kotlin-conventions/`)
+
+> **Note**: By submitting a contribution, you agree to license your contribution to Forge Ltd as described in the [LICENSE](LICENSE).
+
+---
+
+## 📄 License
+
+This project is licensed under the [Forge Source Available License v1.0](LICENSE).
+
+- ✅ Permitted: View source, personal learning, non-commercial use and modification, submit contributions
+- ❌ Restricted: Commercial use (SaaS, internal business tooling, consulting services) requires written authorization
+
+Commercial licensing inquiries: legal@forge.ltd
 
 ---
 
 <div align="center">
 
-**Forge — 让 AI 真正参与软件交付，而不只是辅助编程**
+**Forge — Making AI truly participate in software delivery, not just assist with coding**
 
 </div>
