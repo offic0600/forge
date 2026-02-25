@@ -361,3 +361,41 @@ data class KnowledgeGap(
     val resolved: Boolean = false,
     val resolvedAt: Instant? = null
 )
+
+// --- Knowledge Tag Models ---
+
+data class KnowledgeTag(
+    val id: String,
+    val name: String,
+    val description: String = "",
+    val chapterHeading: String,
+    val content: String,
+    val sortOrder: Int = 0,
+    val status: String = "active",
+    val sourceFile: String? = null,
+    val createdAt: Instant = Instant.now(),
+    val updatedAt: Instant = Instant.now()
+)
+
+data class CreateKnowledgeTagRequest(
+    val id: String,
+    val name: String,
+    val description: String = "",
+    val chapterHeading: String,
+    val content: String,
+    val sortOrder: Int = 0,
+    val sourceFile: String? = null
+)
+
+data class UpdateKnowledgeTagRequest(
+    val name: String? = null,
+    val description: String? = null,
+    val chapterHeading: String? = null,
+    val content: String? = null,
+    val status: String? = null,
+    val sourceFile: String? = null
+)
+
+data class ReorderKnowledgeTagsRequest(
+    val tagIds: List<String>
+)

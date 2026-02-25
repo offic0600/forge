@@ -22,7 +22,8 @@ import java.util.UUID
  */
 @Service
 class KnowledgeIndexService(
-    private val knowledgeDocumentRepository: KnowledgeDocumentRepository
+    private val knowledgeDocumentRepository: KnowledgeDocumentRepository,
+    private val knowledgeTagRepository: com.forge.webide.repository.KnowledgeTagRepository
 ) {
 
     private val logger = LoggerFactory.getLogger(KnowledgeIndexService::class.java)
@@ -128,6 +129,27 @@ class KnowledgeIndexService(
                     }
                 }.thenByDescending { it.updatedAt }
             )
+        }
+
+        // 4. Merge knowledge tag search results
+        if (query.isNotBlank()) {
+            val matchingTags = knowledgeTagRepository
+                .findByNameContainingIgnoreCaseOrContentContainingIgnoreCase(query, query)
+            val tagDocs = matchingTags.map { tag ->
+                KnowledgeDocument(
+                    id = "tag:${tag.id}",
+                    title = tag.name,
+                    type = DocumentType.WIKI,
+                    content = tag.content,
+                    snippet = tag.description.take(200),
+                    author = "",
+                    tags = listOf("standard"),
+                    scope = KnowledgeScope.GLOBAL,
+                    createdAt = tag.createdAt,
+                    updatedAt = tag.updatedAt
+                )
+            }
+            results = results + tagDocs
         }
 
         return results.take(limit)
