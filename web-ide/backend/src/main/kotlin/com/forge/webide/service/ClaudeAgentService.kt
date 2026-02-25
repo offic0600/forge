@@ -458,7 +458,9 @@ class ClaudeAgentService(
                                 Message(role = Message.Role.USER, content = fullMessage),
                                 Message(role = Message.Role.ASSISTANT, content = finalResult.content)
                             ),
-                            toolCalls = finalResult.toolCalls
+                            toolCalls = finalResult.toolCalls,
+                            adapterOverride = adapter,
+                            modelOverride = actualModel
                         )
                         // Update Stage Memory and Workspace Memory from the generated summary
                         memoryContextLoader.updateFromSessionSummary(

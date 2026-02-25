@@ -227,6 +227,17 @@ export function FileExplorer({
     closeContextMenu();
   }, [contextMenu, onFileSelect, closeContextMenu]);
 
+  const handlePreviewInBrowser = useCallback(() => {
+    const previewUrl = `/api/workspaces/${workspaceId}/preview/${contextMenu.path}`;
+    window.open(previewUrl, "_blank");
+    closeContextMenu();
+  }, [workspaceId, contextMenu.path, closeContextMenu]);
+
+  const isPreviewable = useCallback((path: string) => {
+    const ext = path.split(".").pop()?.toLowerCase();
+    return ["html", "htm", "svg", "png", "jpg", "jpeg", "gif"].includes(ext ?? "");
+  }, []);
+
   /** Get parent path for context menu actions */
   const getParentPath = useCallback(() => {
     if (!contextMenu.path) return undefined;
@@ -431,6 +442,15 @@ export function FileExplorer({
             >
               <ExternalLink className="h-3.5 w-3.5" />
               Open
+            </button>
+          )}
+          {!contextMenu.isDirectory && contextMenu.path && isPreviewable(contextMenu.path) && (
+            <button
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent"
+              onClick={handlePreviewInBrowser}
+            >
+              <ExternalLink className="h-3.5 w-3.5 text-green-400" />
+              Preview in Browser
             </button>
           )}
           <button

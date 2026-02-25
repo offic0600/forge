@@ -41,6 +41,16 @@
 | BUG-030 | P2 | ✅ 已修复 | Knowledge CRUD 400 — DocumentType/KnowledgeScope 枚举反序列化大小写不兼容 |
 | BUG-031 | P3 | ✅ 已修复 | KnowledgeIndexService 初始化警告 — private val 在 init{} 中赋值 |
 | BUG-032 | P1 | 🔴 未修复 | Chat Message FK 违约 — chatSessionId 在 chat_sessions 表中不存在，聊天历史未持久化 |
+| BUG-033 | P2 | ✅ 已修复 | Sidebar 缺少 Evaluations 导航入口 |
+| BUG-034 | P3 | ✅ 已修复 | 创建文件夹后 .gitkeep 文件显示在文件树中 |
+| BUG-035 | P1 | ✅ 已修复 | 离开 workspace 再返回后用户消息显示为 AI 消息（role 大小写） |
+| BUG-036 | P2 | ✅ 已修复 | AI 回复内容未按时间顺序展示（文本/工具/日志分块） |
+| BUG-037 | P2 | ✅ 已修复 | Intent Confirmation 选 Profile 后直接执行，不追问具体意图 |
+| BUG-038 | P2 | ✅ 已修复 | Focus Mode 切换时页面显示异常（退出未恢复面板状态） |
+| BUG-039 | P2 | ✅ 已修复 | Skills Tab 无启用/禁用开关 |
+| BUG-040 | P2 | ✅ 已修复 | Evaluations 页面数据全部不可交互（纯静态展示） |
+| BUG-041 | P3 | ✅ 已修复 | MAX_CONVERSATION_TOKENS 仅 25K，远低于 200K 上下文容量 |
+| BUG-042 | P2 | ✅ 已修复 | SessionSummaryService 硬编码 Claude adapter，未跟随用户选择的模型 |
 
 ---
 
@@ -329,14 +339,14 @@
 
 ## 统计
 
-- **总计**: 32 个 Bug
-- **已修复**: 30 个
+- **总计**: 42 个 Bug
+- **已修复**: 40 个
 - **挂起**: 1 个 (BUG-016)
 - **未修复**: 1 个 (BUG-032)
 - **P0 (阻塞)**: 2 个 (BUG-008, BUG-012) — 均已修复
-- **P1 (严重)**: 10 个 (BUG-001, BUG-005, BUG-013, BUG-017, BUG-021, BUG-022, BUG-026, BUG-028, BUG-029, BUG-032) — 9 已修复 / 1 未修复
-- **P2 (一般)**: 17 个
-- **P3 (低)**: 1 个 (BUG-031)
+- **P1 (严重)**: 11 个 — 10 已修复 / 1 未修复
+- **P2 (一般)**: 24 个 — 均已修复
+- **P3 (低)**: 3 个 (BUG-031, BUG-034, BUG-041) — 均已修复
 
 ## 影响文件
 

@@ -1,6 +1,6 @@
 # Forge — AI 驱动的智能交付平台
 
-> 规划基线 v2.2 | 基线日期: 2026-02-23 | 变更: v2.1→v2.2 Session 31-32（MiniMax 多模型端到端 + Evaluation Profile + 知识库本地写入 + Context Usage 增强 + 学习闭环），数据校准（18 MCP / 156 测试 / 32 Skill / 6 Profile / 6 Provider / V1-V8 migration / 设计基线 v12）
+> 规划基线 v2.3 | 基线日期: 2026-02-25 | 变更: v2.2→v2.3 Session 33（Phase 8 Workspace Runtime & 交付验证闭环：Terminal 工作目录修复 + Node.js + 反向代理 + 服务生命周期 + MCP 工具 2 个），Phase 编号调整（原 8/9/10 → 9/10/11），数据校准（19 MCP 工具 / 156 测试）
 
 ---
 
@@ -148,9 +148,10 @@
 | Phase 5 | 记忆与上下文管理 | ✅ | 3 层记忆（Workspace Memory + Stage Memory + Session Summary）、消息压缩 3 阶段、Memory REST API（6 端点）、4-Tab 右侧面板、Rate Limit 退避 | 任意 Runtime |
 | Phase 6 | 产品可用性加固 | ✅ | Workspace 持久化（DB+磁盘）、Git 仓库载入、用户 API Key per-request override、codebase-profiler + analyze_codebase、架构重构（2 神类→9 服务）| 任意 Runtime |
 | Phase 7 | 多模型 + 评估 + 知识增强 | ✅ | MiniMax 端到端 + Evaluation Profile + 知识库本地写入 + Context Usage 增强 + 学习闭环管道 | 任意 Runtime |
-| Phase 8 | 生产就绪 | 📋 | PostgreSQL 切换、多租户、安全加固、性能优化、CI/CD 完善 | 任意 Runtime |
-| Phase 9 | 团队协作 | 📋 | 多用户实时协作、权限管理、通知系统、审计日志 | 任意 Runtime |
-| Phase 10 | 生态扩展 | 📋 | CLI 工具、第三方集成、Marketplace、自定义 Skill 分发 | 任意 Runtime |
+| Phase 8 | Workspace Runtime & 交付验证闭环 | ✅ | Terminal 工作目录修复、Node.js 运行时、反向代理（端口 3000-9999）、服务生命周期管理、ServicePanel UI、workspace_start/stop_service MCP 工具、Docker 端口直接暴露 | 任意 Runtime |
+| Phase 9 | 生产就绪 | 📋 | PostgreSQL 切换、多租户、安全加固、性能优化、CI/CD 完善 | 任意 Runtime |
+| Phase 10 | 团队协作 | 📋 | 多用户实时协作、权限管理、通知系统、审计日志 | 任意 Runtime |
+| Phase 11 | 生态扩展 | 📋 | CLI 工具、第三方集成、Marketplace、自定义 Skill 分发 | 任意 Runtime |
 
 ### 3.5 跨栈迁移工作流
 
@@ -994,9 +995,10 @@ Phase 0       Phase 1          Phase 1.5         Phase 1.6            Phase 2   
 | ~~知识库无本地写入~~ | ~~page_create 仅 MCP Server 模式~~ | ~~Phase 7~~ | ✅ Session 32（PageCreateTool 本地模式，写入 knowledge-base/） |
 | ~~学习闭环未落地~~ | ~~InteractionEvaluation / LearningLoop 无实现~~ | ~~Phase 7~~ | ✅ Session 32（InteractionEvaluation 全栈 + LearningLoopPipelineService + SkillFeedbackService 4D 评分） |
 | ~~Context Usage 不持续~~ | ~~仅初次返回，后续无更新~~ | ~~Phase 7~~ | ✅ Session 32（每轮发送 context_usage + turn 字段，前端始终可见） |
-| ForgeNativeRuntime | AgentLoop.kt / HookEngine.kt / ContextBuilder.kt 完整抽象 | Phase 8+ | 已由直接实现替代，远期评估 |
-| asset-extractor 自动化 | 从执行日志提取知识资产 → 自动更新 Skill / 知识库 | Phase 8+ | 待评估 |
-| PostgreSQL 切换 | H2 → PostgreSQL 生产数据库 | Phase 8 | 待启动 |
+| ~~Workspace Runtime~~ | ~~Terminal 默认 /app，无 Node.js，无法预览服务~~ | ~~Phase 8~~ | ✅ Session 33（Terminal 工作目录 + Node.js + 反向代理 + 服务管理 + MCP 工具） |
+| ForgeNativeRuntime | AgentLoop.kt / HookEngine.kt / ContextBuilder.kt 完整抽象 | Phase 9+ | 已由直接实现替代，远期评估 |
+| asset-extractor 自动化 | 从执行日志提取知识资产 → 自动更新 Skill / 知识库 | Phase 9+ | 待评估 |
+| PostgreSQL 切换 | H2 → PostgreSQL 生产数据库 | Phase 9 | 待启动 |
 
 ---
 
@@ -1139,4 +1141,4 @@ Phase 4：飞轮效应
 | v2.1 | 2026-02-23 | **Phase 7 实现（Session 30）**：Git Clone 异步化 + 知识库 Scope 三层分层 + 品牌重定位统一为"AI 驱动的智能交付平台"；数据校准（17 MCP / 156 测试 / 30 Skill / V1-V8 migration） |
 | v2.2 | 2026-02-23 | **Phase 7 完成（Session 31-32）**：MiniMax 多模型端到端（3 模型，第 6 Provider）+ Evaluation Profile（第 6 个 Profile）+ 4 新 Skill（bug-fix-workflow / document-generation / knowledge-distillation / progress-evaluation）+ PageCreateTool 本地模式（知识库写入）+ Context Usage 每轮增强 + InteractionEvaluation 全栈 + LearningLoopPipelineService 学习闭环 + SkillFeedbackService 4D 评分 + H2 持久化恢复 + MAX_AGENTIC_TURNS 8→50；数据校准：18 MCP / 156 测试 / 32 Skill / 6 Profile / 6 Provider / V1-V8 migration / 设计基线 v12；Buglist 32（30 fixed / 1 pending / 1 unfixed）；演进路线重编号（Phase 7 实现，Phase 8-10 路线图）；5 个新 Gap 关闭 |
 
-> 基线版本: v2.2 | 基线日期: 2026-02-23 | 下次评审: Phase 8 启动前
+> 基线版本: v2.3 | 基线日期: 2026-02-25 | 下次评审: Phase 9 启动前

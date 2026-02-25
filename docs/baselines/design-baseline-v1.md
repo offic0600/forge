@@ -1,6 +1,7 @@
-# Forge — AI 驱动的智能交付平台 — 设计基线 v12
+# Forge — AI 驱动的智能交付平台 — 设计基线 v13
 
-> 基线日期: 2026-02-23 | Session 32 — MiniMax 多模型 + 知识写入 + Context Usage 增强（v11 → v12）
+> 基线日期: 2026-02-25 | Session 33 — Phase 8 Workspace Runtime & 交付验证闭环（v12 → v13）
+> 新增: WorkspaceProxyController、WorkspaceRuntimeService、ServicePanel、workspace_start/stop_service MCP 工具
 > 本文档冻结当前已验证的 UI/API/数据模型/架构设计细节，作为未来修改的对照基准。
 > 任何对本文档覆盖范围的修改，必须先意识到偏离、再决定是否接受。
 >
@@ -315,6 +316,14 @@ layout.tsx Auth Guard: isAuthenticated()?
 | PUT | `/api/workspaces/{id}/files/content` | `FileContentRequest { path, content }` | 200 | 保存文件 |
 | POST | `/api/workspaces/{id}/files` | `FileContentRequest { path, content }` | 201 | 创建文件 |
 | DELETE | `/api/workspaces/{id}/files?path=` | — | 204 | 删除文件 |
+| GET | `/api/workspaces/{id}/services` | — | `List<ServiceInfo>` | 列出运行中服务（v13 新增） |
+| DELETE | `/api/workspaces/{id}/services/{port}` | — | 204 | 停止指定端口服务（v13 新增） |
+
+#### Workspace Proxy API (`WorkspaceProxyController` → `/api/workspaces/{id}/proxy/{port}`, v13 新增)
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| ANY | `/api/workspaces/{id}/proxy/{port}/**` | 反向代理到容器内 localhost:{port}，端口范围 3000-9999 |
 
 #### Knowledge API (`KnowledgeController` → `/api/knowledge`)
 
@@ -335,7 +344,7 @@ layout.tsx Auth Guard: isAuthenticated()?
 | POST | `/api/mcp/tools/call` | `McpToolCallRequest { name, arguments }` | `McpToolCallResponse` | 调用工具 |
 | POST | `/api/mcp/tools/cache/invalidate` | — | `{ status: "cache_invalidated" }` | 清除工具缓存 |
 
-**MCP 工具清单**（v4 创建，v5: 6→9，v7: 9→12，v8: 12→14，v9 补录: 14→16，v10: 16→17，v12: 17→18）:
+**MCP 工具清单**（v4 创建，v5: 6→9，v7: 9→12，v8: 12→14，v9 补录: 14→16，v10: 16→17，v12: 17→18，v13: 18→20）:
 
 | 工具 | MCP Server | 说明 |
 |------|-----------|------|
@@ -357,6 +366,8 @@ layout.tsx Auth Guard: isAuthenticated()?
 | `get_service_info` | service-graph-mcp | 获取服务信息 |
 | `analyze_codebase` | backend (local) | 对 workspace 执行结构分析脚本，返回 JSON（文件树+技术栈+统计）（v10 新增） |
 | `page_create` | knowledge-mcp | 创建知识页面（local mode 写 Markdown 到 knowledge-base/<space>/，wiki mode 调 Confluence API）（v12 新增） |
+| `workspace_start_service` | backend (local) | 在 workspace 内启动服务进程（command + port），通过反向代理可浏览器访问（v13 新增） |
+| `workspace_stop_service` | backend (local) | 按端口停止 workspace 内运行的服务（v13 新增） |
 
 **Workspace 工具安全规则**（v5 新增）:
 - 路径遍历检查：包含 `..` 的路径一律拒绝（`isError: true`）
@@ -1100,10 +1111,12 @@ ClaudeAgentService
     ▼
 McpProxyService.callTool(name, args, workspaceId?)
     │
-    │ 1. Workspace 工具（local, v5 新增）
-    │   ├─ workspace_write_file → WorkspaceService.createFile()
-    │   ├─ workspace_read_file  → WorkspaceService.getFileContent()
-    │   └─ workspace_list_files → WorkspaceService.getFileTree()
+    │ 1. Workspace 工具（local, v5 新增, v13 扩展）
+    │   ├─ workspace_write_file    → WorkspaceService.createFile()
+    │   ├─ workspace_read_file     → WorkspaceService.getFileContent()
+    │   ├─ workspace_list_files    → WorkspaceService.getFileTree()
+    │   ├─ workspace_start_service → WorkspaceRuntimeService.startService() (v13)
+    │   └─ workspace_stop_service  → WorkspaceRuntimeService.stopService() (v13)
     │
     │ 2. 外部 MCP Server 查找（v6 改进）
     │   ├─ toolCache 查找: 哪个 server 有此工具 → 直接调用该 server

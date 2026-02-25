@@ -3985,3 +3985,66 @@ Level 3: 子文件 + 可执行脚本（按需读取/执行，无上限）
 - 单元测试: 156
 - 规划基线: v2.1 → **v2.2**（+77 行，Phase 7 ✅，演进路线重编号 Phase 8-10）
 - Git commits: `20e25fe`, `cda0e21`, `a325e85`, `e37b89f`(logbook), `bfe3d4d`(规划基线 v2.2)
+
+---
+
+## Session 33 — 2026-02-25：Phase 8 Workspace Runtime & 交付验证闭环
+
+### 33.1 目标
+
+**Phase 8**: 修复 AI 生成代码后用户无法运行和验证的核心断点。Terminal 工作目录错误、Docker 容器无 Node.js、无端口转发机制。实现运行时验证闭环：规划 → 设计 → 开发 → 编译 → 测试 → **运行时验证** → 底线检查 → HITL 审批 → 完成。
+
+### 33.2 实施内容
+
+#### Sprint 8.1 — Terminal 修复 + 基础运行时
+
+| 操作 | 文件 | 说明 |
+|------|------|------|
+| 修改 | `websocket/TerminalWebSocketHandler.kt` | 注入 WorkspaceService + WorkspaceRuntimeService，设置 processBuilder.directory(wsDir)，新增端口检测 detectPort() |
+| 修改 | `service/WorkspaceService.kt` | getWorkspaceDir() private → internal；新增 runtimeService 引用 + suspend/delete 自动清理 |
+| 修改 | `web-ide/backend/Dockerfile` | apk add 增加 nodejs npm |
+| 新建 | `controller/WorkspaceProxyController.kt` | HTTP 反向代理（/api/workspaces/{id}/proxy/{port}/** → localhost:{port}），端口限制 3000-9999 |
+
+#### Sprint 8.2 — 服务生命周期管理
+
+| 操作 | 文件 | 说明 |
+|------|------|------|
+| 新建 | `service/WorkspaceRuntimeService.kt` | 进程注册/查询/停止/清理，ConcurrentHashMap + RunningService data class |
+| 修改 | `controller/WorkspaceController.kt` | 新增 GET /{id}/services + DELETE /{id}/services/{port} |
+| 修改 | `model/Models.kt` | 新增 ServiceInfo data class（port, command, status, startTime, proxyUrl） |
+| 新建 | `frontend/components/workspace/ServicePanel.tsx` | 服务列表 UI（端口/命令/状态 + Open in Browser + Stop），5s 轮询 |
+| 修改 | `frontend/app/workspace/[id]/page.tsx` | 集成 ServicePanel（Terminal 下方 + 始终可见） |
+| 修改 | `frontend/lib/workspace-api.ts` | 新增 ServiceInfo 接口 + listServices/stopService/getProxyUrl 方法 |
+
+#### Sprint 8.3 — MCP 工具 + Docker 端口暴露
+
+| 操作 | 文件 | 说明 |
+|------|------|------|
+| 修改 | `service/WorkspaceToolHandler.kt` | 注入 RuntimeService，新增 workspace_start_service + workspace_stop_service 处理 |
+| 修改 | `service/McpProxyService.kt` | 新增 2 个 MCP 工具定义 + ALL_TOOLS 更新（18→20） |
+| 修改 | `infrastructure/docker/docker-compose.trial.yml` | backend 新增 ports 3000-3005, 8000-8005, 8888 |
+
+#### Sprint 8.4 — 文档基线刷新
+
+| 操作 | 文件 | 说明 |
+|------|------|------|
+| 修改 | `docs/baselines/planning-baseline-v1.5.md` | v2.2→v2.3：Phase 8 插入（Workspace Runtime），原 8/9/10→9/10/11 |
+| 修改 | `docs/baselines/design-baseline-v1.md` | v12→v13：+2 MCP 工具 + WorkspaceProxyController + 服务管理 API |
+| 修改 | `docs/CHANGELOG.md` | +v0.9.0 条目 |
+| 修改 | `docs/planning/dev-logbook.md` | +Session 33 |
+
+### 33.3 核心架构决策
+
+- **反向代理方案**：选择 Backend 充当反向代理（而非 nginx 配置），因为 nginx 静态配置无法动态路由到容器内任意端口
+- **循环依赖处理**：WorkspaceService ↔ WorkspaceRuntimeService 通过 late-init + PostConstruct 注入打破循环
+- **端口检测策略**：命令字符串正则匹配（http.server, npm start, node, PORT= 等），非 100% 准确但覆盖常见场景
+
+### 33.4 统计快照
+
+- MCP 工具: 18 → **20**（+workspace_start_service, +workspace_stop_service）
+- API 端点: 68 → **71**（+GET services, +DELETE service, +proxy）
+- 新增文件: 3（WorkspaceProxyController.kt, WorkspaceRuntimeService.kt, ServicePanel.tsx）
+- 修改文件: 12（后端 6 + 前端 3 + Docker 1 + 文档 4）
+- 设计基线: v12 → **v13**
+- 规划基线: v2.2 → **v2.3**
+- Phase 编号: 8(生产就绪)/9(团队)/10(生态) → 8(Runtime)/9(生产)/10(团队)/11(生态)

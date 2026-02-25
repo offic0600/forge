@@ -50,7 +50,9 @@ class SessionSummaryService(
         workspaceId: String,
         profile: String,
         conversationHistory: List<Message>,
-        toolCalls: List<ToolCallRecord>
+        toolCalls: List<ToolCallRecord>,
+        adapterOverride: ModelAdapter? = null,
+        modelOverride: String? = null
     ) {
         // Skip if summary already exists for this session
         if (sessionSummaryRepository.findBySessionId(sessionId) != null) {
@@ -59,7 +61,7 @@ class SessionSummaryService(
         }
 
         try {
-            val summaryJson = generateSummaryViaLLM(conversationHistory)
+            val summaryJson = generateSummaryViaLLM(conversationHistory, adapterOverride, modelOverride)
             saveSummary(sessionId, workspaceId, profile, summaryJson, conversationHistory.size, toolCalls.size)
             logger.info("Session summary generated for session {} ({} chars)", sessionId, summaryJson.length)
         } catch (e: Exception) {
@@ -124,7 +126,11 @@ class SessionSummaryService(
 
     // ---- Internal ----
 
-    private fun generateSummaryViaLLM(conversationHistory: List<Message>): String {
+    private fun generateSummaryViaLLM(
+        conversationHistory: List<Message>,
+        adapterOverride: ModelAdapter? = null,
+        modelOverride: String? = null
+    ): String {
         // Build a condensed version of the conversation for summary generation
         val condensedHistory = condenseForSummary(conversationHistory)
 
@@ -133,15 +139,18 @@ class SessionSummaryService(
             content = SUMMARY_PROMPT
         )
 
+        val actualAdapter = adapterOverride ?: claudeAdapter
+        val actualModel = modelOverride ?: model
+
         val options = CompletionOptions(
-            model = model,
+            model = actualModel,
             maxTokens = 1024,
             systemPrompt = "你是一个会话摘要生成器。根据对话历史生成结构化 JSON 摘要。只输出 JSON，不要包含任何其他文本。",
             temperature = 0.3
         )
 
         val result = runBlocking {
-            val events = claudeAdapter.streamWithTools(messages, options, emptyList()).toList()
+            val events = actualAdapter.streamWithTools(messages, options, emptyList()).toList()
             events.filterIsInstance<StreamEvent.ContentDelta>()
                 .joinToString("") { it.text }
         }

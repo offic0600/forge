@@ -74,7 +74,7 @@ Forge is a Gradle monorepo (Kotlin DSL) with the following modules:
 - **环境变量**: `ANTHROPIC_API_KEY`, `FORGE_SECURITY_ENABLED`, `FORGE_PLUGINS_PATH=/plugins`
 - **Volume 挂载**: `plugins/` 和 `knowledge-base/` 必须挂载为只读
 
-## MCP 工具清单（17 个）
+## MCP 工具清单（19 个）
 
 | 工具 | 来源 | 说明 |
 |------|------|------|
@@ -92,6 +92,8 @@ Forge is a Gradle monorepo (Kotlin DSL) with the following modules:
 | workspace_list_files | workspace | 列出 workspace 文件树 |
 | workspace_compile | workspace | 编译/构建项目，自动检测项目类型 |
 | workspace_test | workspace | 运行测试，自动检测测试框架 |
+| workspace_start_service | workspace | 在 workspace 内启动服务进程（command + port） |
+| workspace_stop_service | workspace | 按端口停止 workspace 内运行的服务 |
 | update_workspace_memory | memory | Agent 主动更新 workspace 记忆 |
 | get_session_history | memory | 读取历史 session 摘要 |
 | analyze_codebase | memory | 对 workspace 执行结构分析，返回 JSON |

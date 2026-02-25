@@ -1,8 +1,20 @@
 # Forge Platform — Changelog
 
-> 8 天 · 34 Sessions · 75 Commits · 50K+ 行代码
+> 9 天 · 35 Sessions · 75+ Commits · 50K+ 行代码
 
 ---
+
+### v0.9.0 (2026-02-25) — Workspace Runtime & 交付验证闭环
+- Terminal 工作目录修复（默认 `/app` → workspace 目录）
+- Docker 后端镜像新增 Node.js/npm（Alpine nodejs npm）
+- WorkspaceProxyController 反向代理（端口 3000-9999 → localhost 转发）
+- WorkspaceRuntimeService 进程生命周期管理（注册/查询/停止/自动清理）
+- Terminal 端口自动检测 + 服务注册
+- ServicePanel 前端组件（服务列表 + Open in Browser + Stop）
+- `workspace_start_service` / `workspace_stop_service` MCP 工具（AI 驱动服务管理）
+- Docker 端口直接暴露（3000-3005, 8000-8005, 8888）
+- Suspend/Delete workspace 自动停止所有服务
+- 服务管理 REST API（GET services, DELETE service by port）
 
 ### v0.8.0 (2026-02-24) — E2E Bugfix
 - 修复 9 Bug + 5 UX 问题（AI 回复时间顺序、Intent 追问、角色显示、Skills 开关等）
@@ -60,4 +72,4 @@
 
 ---
 
-**累计**: 68 API · 18 MCP 工具 · 32 Skill · 156 单元测试 · 11 DB 迁移 · 6 Provider
+**累计**: 71 API · 20 MCP 工具 · 32 Skill · 156 单元测试 · 11 DB 迁移 · 6 Provider
