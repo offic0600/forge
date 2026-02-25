@@ -153,6 +153,10 @@ class ChatWebSocketHandler(
                         "type" to "error",
                         "content" to (error.message ?: "Unknown error")
                     ))
+                    // Always send done after error so frontend Promise resolves
+                    sendMessage(wsSession, mapOf(
+                        "type" to "done"
+                    ))
                 }
             }
         )

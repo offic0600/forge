@@ -221,7 +221,7 @@ class McpProxyService(
         return listOf(
             McpTool(
                 name = "workspace_write_file",
-                description = "Create or overwrite a file in the current workspace. Always use this tool when generating code, configuration, or documentation — write files instead of only showing code in the chat response.",
+                description = "Create or overwrite a file in the current workspace. Always use this tool when generating code, configuration, or documentation — write files instead of only showing code in the chat response. IMPORTANT: Before writing, you MUST first: 1) Use workspace_read_file to read the existing file (if updating), 2) Use workspace_list_files to understand project structure (if creating new files), 3) If a previous workspace_compile returned errors, read related files first. Never write files blindly — always gather context first.",
                 inputSchema = mapOf(
                     "type" to "object",
                     "properties" to mapOf(
@@ -405,6 +405,18 @@ class McpProxyService(
                 )
             ),
             McpTool(
+                name = "trigger_knowledge_extraction",
+                description = "Trigger AI-driven knowledge extraction for a workspace. Analyzes the codebase and generates standard documentation (UI/UX, API contracts, data models, architecture decisions, etc.). Returns a job ID to track progress.",
+                inputSchema = mapOf(
+                    "type" to "object",
+                    "properties" to mapOf(
+                        "workspaceId" to mapOf("type" to "string", "description" to "Workspace ID to analyze"),
+                        "tagId" to mapOf("type" to "string", "description" to "Optional: specific tag ID to extract (omit for all tags)")
+                    ),
+                    "required" to listOf("workspaceId")
+                )
+            ),
+            McpTool(
                 name = "workspace_start_service",
                 description = "Start a service process in the workspace (e.g. HTTP server, Node.js app). The service runs in the background and is accessible via the reverse proxy URL at /api/workspaces/{workspaceId}/proxy/{port}/. Use this to let users preview generated web applications. IMPORTANT: Ports 8080-8082 are reserved by the platform. Recommended ports: 8888 for Python HTTP servers, 3000 for Node.js apps.",
                 inputSchema = mapOf(
@@ -425,6 +437,17 @@ class McpProxyService(
                         "port" to mapOf("type" to "integer", "description" to "Port of the service to stop")
                     ),
                     "required" to listOf("port")
+                )
+            ),
+            McpTool(
+                name = "workspace_delete_file",
+                description = "Delete a file or directory from the current workspace. Use this to remove files that are no longer needed.",
+                inputSchema = mapOf(
+                    "type" to "object",
+                    "properties" to mapOf(
+                        "path" to mapOf("type" to "string", "description" to "File or directory path relative to workspace root to delete")
+                    ),
+                    "required" to listOf("path")
                 )
             )
         )
@@ -453,7 +476,8 @@ class McpProxyService(
         // Tool name sets for routing
         private val BUILTIN_TOOLS = setOf(
             "search_knowledge", "read_file", "get_service_info",
-            "run_baseline", "query_schema", "list_baselines"
+            "run_baseline", "query_schema", "list_baselines",
+            "trigger_knowledge_extraction"
         )
 
         private val SKILL_TOOLS = setOf(
@@ -467,7 +491,8 @@ class McpProxyService(
         private val ALL_TOOLS = BUILTIN_TOOLS + SKILL_TOOLS + MEMORY_TOOLS + setOf(
             "workspace_write_file", "workspace_read_file", "workspace_list_files",
             "workspace_compile", "workspace_test",
-            "workspace_start_service", "workspace_stop_service"
+            "workspace_start_service", "workspace_stop_service",
+            "workspace_delete_file"
         )
 
         /**

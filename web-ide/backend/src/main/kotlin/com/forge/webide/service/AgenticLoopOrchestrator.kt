@@ -324,6 +324,12 @@ class AgenticLoopOrchestrator(
                 val delayMs = (1000L * (1 shl attempt)).coerceAtMost(30_000L)
                 logger.warn("Rate limited (during stream), retrying in ${delayMs}ms (attempt ${attempt + 1}/$maxRetries)")
                 delay(delayMs)
+            } catch (e: java.io.IOException) {
+                lastException = e
+                if (attempt >= maxRetries) break
+                val delayMs = (1000L * (1 shl attempt)).coerceAtMost(30_000L)
+                logger.warn("IOException (SSL/network), retrying in ${delayMs}ms (attempt ${attempt + 1}/$maxRetries): ${e.message}")
+                delay(delayMs)
             }
         }
         throw lastException!!

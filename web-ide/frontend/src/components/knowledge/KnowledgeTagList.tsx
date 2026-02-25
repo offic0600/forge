@@ -2,7 +2,7 @@
 
 import React from "react";
 import { KnowledgeTagView } from "@/lib/knowledge-tag-api";
-import { Search, BookMarked } from "lucide-react";
+import { Search, BookMarked, Loader2 } from "lucide-react";
 
 interface KnowledgeTagListProps {
   tags: KnowledgeTagView[];
@@ -11,6 +11,23 @@ interface KnowledgeTagListProps {
   loading?: boolean;
   searchQuery: string;
   onSearchChange: (query: string) => void;
+}
+
+function getStatusBadge(status: string) {
+  switch (status) {
+    case "active":
+      return { className: "bg-green-500/10 text-green-500", label: "active" };
+    case "draft":
+      return { className: "bg-amber-500/10 text-amber-500", label: "AI Draft" };
+    case "extracting":
+      return { className: "bg-blue-500/10 text-blue-500", label: "extracting" };
+    case "not_applicable":
+      return { className: "bg-gray-500/10 text-gray-400", label: "N/A" };
+    case "empty":
+      return { className: "bg-gray-500/10 text-gray-400", label: "empty" };
+    default:
+      return { className: "bg-yellow-500/10 text-yellow-500", label: status };
+  }
 }
 
 export function KnowledgeTagList({
@@ -29,6 +46,11 @@ export function KnowledgeTagList({
       tag.description.toLowerCase().includes(q)
     );
   });
+
+  const handleClick = (tag: KnowledgeTagView) => {
+    if (tag.status === "extracting" || tag.status === "not_applicable") return;
+    onSelect(tag.id);
+  };
 
   return (
     <div className="flex h-full flex-col">
@@ -59,42 +81,52 @@ export function KnowledgeTagList({
             No standards found
           </div>
         ) : (
-          filtered.map((tag) => (
-            <button
-              key={tag.id}
-              onClick={() => onSelect(tag.id)}
-              className={`w-full border-b border-border px-3 py-3 text-left transition-colors ${
-                selectedTagId === tag.id
-                  ? "bg-accent"
-                  : "hover:bg-accent/50"
-              }`}
-            >
-              <div className="flex items-start gap-3">
-                <span className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded bg-primary/10 text-xs font-bold text-primary">
-                  {tag.sortOrder + 1}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="truncate text-sm font-medium text-foreground">
-                      {tag.name}
-                    </span>
-                    <span
-                      className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                        tag.status === "active"
-                          ? "bg-green-500/10 text-green-500"
-                          : "bg-yellow-500/10 text-yellow-500"
-                      }`}
-                    >
-                      {tag.status}
-                    </span>
+          filtered.map((tag) => {
+            const badge = getStatusBadge(tag.status);
+            const isDisabled =
+              tag.status === "extracting" || tag.status === "not_applicable";
+            const isEmpty = tag.status === "empty";
+
+            return (
+              <button
+                key={tag.id}
+                onClick={() => handleClick(tag)}
+                className={`w-full border-b px-3 py-3 text-left transition-colors ${
+                  isDisabled
+                    ? "cursor-not-allowed opacity-50 border-border"
+                    : isEmpty
+                      ? "border-dashed border-border hover:bg-accent/50"
+                      : selectedTagId === tag.id
+                        ? "bg-accent border-border"
+                        : "hover:bg-accent/50 border-border"
+                }${tag.status === "extracting" ? " pointer-events-none" : ""}`}
+              >
+                <div className="flex items-start gap-3">
+                  <span className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded bg-primary/10 text-xs font-bold text-primary">
+                    {tag.sortOrder + 1}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate text-sm font-medium text-foreground">
+                        {tag.name}
+                      </span>
+                      <span
+                        className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${badge.className}`}
+                      >
+                        {tag.status === "extracting" && (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        )}
+                        {badge.label}
+                      </span>
+                    </div>
+                    <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+                      {tag.description || tag.chapterHeading}
+                    </p>
                   </div>
-                  <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
-                    {tag.description || tag.chapterHeading}
-                  </p>
                 </div>
-              </div>
-            </button>
-          ))
+              </button>
+            );
+          })
         )}
       </div>
 

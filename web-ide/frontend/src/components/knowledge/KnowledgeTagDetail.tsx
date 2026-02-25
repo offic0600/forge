@@ -3,11 +3,12 @@
 import React, { useState, useMemo, useCallback } from "react";
 import { KnowledgeTagView, knowledgeTagApi } from "@/lib/knowledge-tag-api";
 import { MonacoEditor } from "@/components/editor/MonacoEditor";
-import { Pencil, Save, X, Clock, List } from "lucide-react";
+import { Pencil, Save, X, Clock, List, CheckCircle, RotateCw, FileQuestion } from "lucide-react";
 
 interface KnowledgeTagDetailProps {
   tag: KnowledgeTagView;
   onUpdated: (tag: KnowledgeTagView) => void;
+  onReExtract?: (tagId: string) => void;
 }
 
 interface TocEntry {
@@ -145,10 +146,11 @@ function renderDocMarkdown(content: string): React.ReactNode {
   return <>{elements}</>;
 }
 
-export function KnowledgeTagDetail({ tag, onUpdated }: KnowledgeTagDetailProps) {
+export function KnowledgeTagDetail({ tag, onUpdated, onReExtract }: KnowledgeTagDetailProps) {
   const [editing, setEditing] = useState(false);
   const [editContent, setEditContent] = useState(tag.content);
   const [saving, setSaving] = useState(false);
+  const [approving, setApproving] = useState(false);
   const [showToc, setShowToc] = useState(true);
 
   const toc = useMemo(() => extractToc(tag.content), [tag.content]);
@@ -178,6 +180,69 @@ export function KnowledgeTagDetail({ tag, onUpdated }: KnowledgeTagDetailProps) 
       setSaving(false);
     }
   }, [tag.id, editContent, onUpdated]);
+
+  const handleApprove = useCallback(async () => {
+    setApproving(true);
+    try {
+      const updated = await knowledgeTagApi.updateTag(tag.id, {
+        status: "active",
+      });
+      onUpdated(updated);
+    } catch (err) {
+      console.error("Failed to approve tag:", err);
+    } finally {
+      setApproving(false);
+    }
+  }, [tag.id, onUpdated]);
+
+  // Empty state
+  if (tag.status === "empty") {
+    return (
+      <div className="flex h-full items-center justify-center text-muted-foreground">
+        <div className="text-center">
+          <FileQuestion className="mx-auto h-12 w-12 opacity-50" />
+          <p className="mt-4 text-lg font-medium">{tag.name}</p>
+          <p className="mt-1 text-sm">
+            Click &quot;Extract All&quot; to generate this document from codebase
+          </p>
+          {onReExtract && (
+            <button
+              onClick={() => onReExtract(tag.id)}
+              className="mt-4 flex items-center gap-1.5 mx-auto rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"
+            >
+              <RotateCw className="h-4 w-4" />
+              Extract This Tag
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Not applicable state
+  if (tag.status === "not_applicable") {
+    return (
+      <div className="flex h-full items-center justify-center text-muted-foreground">
+        <div className="text-center max-w-md">
+          <FileQuestion className="mx-auto h-12 w-12 opacity-30" />
+          <p className="mt-4 text-lg font-medium text-gray-400">{tag.name}</p>
+          <p className="mt-2 text-sm">Not applicable to this codebase</p>
+          {tag.description && (
+            <p className="mt-2 text-xs text-gray-500 italic">{tag.description}</p>
+          )}
+          {onReExtract && (
+            <button
+              onClick={() => onReExtract(tag.id)}
+              className="mt-4 flex items-center gap-1.5 mx-auto rounded-md border border-border px-3 py-1.5 text-sm hover:bg-accent"
+            >
+              <RotateCw className="h-3.5 w-3.5" />
+              Re-extract
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   if (editing) {
     return (
@@ -245,6 +310,34 @@ export function KnowledgeTagDetail({ tag, onUpdated }: KnowledgeTagDetailProps) 
       {/* Content */}
       <div className="flex-1 overflow-auto">
         <div className="mx-auto max-w-3xl p-8">
+          {/* Draft banner */}
+          {tag.status === "draft" && (
+            <div className="mb-4 flex items-center justify-between rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+              <span className="text-sm text-amber-600">
+                AI Generated — Review before approving
+              </span>
+              <div className="flex items-center gap-2">
+                {onReExtract && (
+                  <button
+                    onClick={() => onReExtract(tag.id)}
+                    className="flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-xs hover:bg-accent"
+                  >
+                    <RotateCw className="h-3 w-3" />
+                    Re-extract
+                  </button>
+                )}
+                <button
+                  onClick={handleApprove}
+                  disabled={approving}
+                  className="flex items-center gap-1 rounded-md bg-green-600 px-2.5 py-1 text-xs text-white hover:bg-green-700 disabled:opacity-50"
+                >
+                  <CheckCircle className="h-3 w-3" />
+                  {approving ? "Approving..." : "Approve"}
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Header */}
           <div className="mb-6">
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -252,7 +345,9 @@ export function KnowledgeTagDetail({ tag, onUpdated }: KnowledgeTagDetailProps) 
                 className={`rounded px-2 py-0.5 font-medium ${
                   tag.status === "active"
                     ? "bg-green-500/10 text-green-500"
-                    : "bg-yellow-500/10 text-yellow-500"
+                    : tag.status === "draft"
+                      ? "bg-amber-500/10 text-amber-500"
+                      : "bg-yellow-500/10 text-yellow-500"
                 }`}
               >
                 {tag.status}

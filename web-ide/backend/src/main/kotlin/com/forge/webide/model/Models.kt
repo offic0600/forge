@@ -399,3 +399,51 @@ data class UpdateKnowledgeTagRequest(
 data class ReorderKnowledgeTagsRequest(
     val tagIds: List<String>
 )
+
+// --- Knowledge Extraction Models ---
+
+data class KnowledgeExtractionLog(
+    val id: String,
+    val jobId: String,
+    val workspaceId: String,
+    val tagId: String,
+    val tagName: String,
+    val phase: String,
+    val status: String,
+    val applicable: Boolean,
+    val reason: String?,
+    val contentLength: Int,
+    val tokensUsed: Int,
+    val durationMs: Long,
+    val modelUsed: String?,
+    val sourceFiles: String?,
+    val createdAt: Instant
+)
+
+data class ExtractionTriggerRequest(
+    val workspaceId: String,
+    val tagId: String? = null,
+    val modelId: String? = null,
+    val apiKey: String? = null
+)
+
+data class ExtractionJobStatus(
+    val jobId: String,
+    val status: String,
+    val progress: ExtractionProgress,
+    val results: List<TagExtractionResult>
+)
+
+data class ExtractionProgress(
+    val totalTags: Int,
+    val completedTags: Int,
+    val currentTag: String?
+)
+
+data class TagExtractionResult(
+    val tagId: String,
+    val tagName: String,
+    val applicable: Boolean,
+    val reason: String?,
+    val contentLength: Int
+)

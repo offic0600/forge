@@ -170,14 +170,26 @@ class ClaudeClient {
         );
       };
 
+      let errorTimeout: ReturnType<typeof setTimeout> | null = null;
+
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data) as StreamEvent;
           onEvent(data);
 
           if (data.type === "done") {
+            if (errorTimeout) clearTimeout(errorTimeout);
             cleanup();
             resolve();
+          }
+
+          // If we get an error event, set a 5s safety timeout
+          // in case the server fails to send a "done" event
+          if (data.type === "error" && !errorTimeout) {
+            errorTimeout = setTimeout(() => {
+              cleanup();
+              resolve();
+            }, 5000);
           }
         } catch {
           onEvent({ type: "content", content: event.data });

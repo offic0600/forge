@@ -1,6 +1,8 @@
 package com.forge.webide.service
 
 import com.forge.webide.model.*
+import com.forge.webide.model.ExtractionTriggerRequest
+import org.springframework.context.annotation.Lazy
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
@@ -15,7 +17,8 @@ import javax.sql.DataSource
 class BuiltinToolHandler(
     private val baselineService: BaselineService,
     private val dataSource: DataSource,
-    private val knowledgeIndexService: KnowledgeIndexService
+    private val knowledgeIndexService: KnowledgeIndexService,
+    @Lazy private val knowledgeExtractionService: KnowledgeExtractionService
 ) {
 
     private val logger = LoggerFactory.getLogger(BuiltinToolHandler::class.java)
@@ -34,6 +37,7 @@ class BuiltinToolHandler(
             "run_baseline" -> handleRunBaseline(args)
             "query_schema" -> handleQuerySchema(args)
             "list_baselines" -> handleListBaselines()
+            "trigger_knowledge_extraction" -> handleTriggerExtraction(args, workspaceId)
             else -> McpProxyService.errorResponse("Unknown builtin tool: $toolName")
         }
     }
@@ -376,6 +380,27 @@ class BuiltinToolHandler(
                 isError = true
             )
         }
+    }
+
+    /**
+     * Trigger AI knowledge extraction for a workspace.
+     */
+    private fun handleTriggerExtraction(arguments: Map<String, Any?>, workspaceId: String?): McpToolCallResponse {
+        val wsId = workspaceId ?: arguments["workspaceId"] as? String
+            ?: return McpProxyService.errorResponse("'workspaceId' parameter is required")
+        val tagId = arguments["tagId"] as? String
+
+        val jobId = knowledgeExtractionService.triggerExtraction(
+            ExtractionTriggerRequest(workspaceId = wsId, tagId = tagId)
+        )
+
+        return McpToolCallResponse(
+            content = listOf(McpContent(
+                type = "text",
+                text = "Knowledge extraction triggered. Job ID: $jobId\nUse GET /api/knowledge/extraction/jobs/$jobId to check progress."
+            )),
+            isError = false
+        )
     }
 
     // ---- Utility ----

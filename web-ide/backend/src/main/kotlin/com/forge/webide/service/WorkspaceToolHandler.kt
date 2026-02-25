@@ -66,6 +66,22 @@ class WorkspaceToolHandler(
                 }
                 "workspace_compile" -> handleWorkspaceCompile(workspaceId, args)
                 "workspace_test" -> handleWorkspaceTest(workspaceId, args)
+                "workspace_delete_file" -> {
+                    val path = args["path"] as? String
+                        ?: return McpProxyService.errorResponse("'path' parameter is required")
+                    if (path.contains("..")) {
+                        return McpProxyService.errorResponse("Path traversal not allowed")
+                    }
+                    workspaceService.deleteFile(workspaceId, path)
+                    logger.info("Workspace file deleted: workspace=$workspaceId, path=$path")
+                    McpToolCallResponse(
+                        content = listOf(McpContent(
+                            type = "text",
+                            text = "File deleted successfully: $path"
+                        )),
+                        isError = false
+                    )
+                }
                 "workspace_start_service" -> handleStartService(workspaceId, args)
                 "workspace_stop_service" -> handleStopService(workspaceId, args)
                 else -> McpProxyService.errorResponse("Unknown workspace tool: $toolName")

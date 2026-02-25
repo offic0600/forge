@@ -130,6 +130,85 @@ class KnowledgeTagApi {
     if (!response.ok) throw new Error(`Failed to reorder tags: ${response.status}`);
     return response.json();
   }
+  // --- Extraction API ---
+
+  async triggerExtraction(
+    workspaceId: string,
+    tagId?: string,
+    modelId?: string
+  ): Promise<{ jobId: string }> {
+    const response = await fetch(
+      `${this.baseUrl}/api/knowledge/extraction/trigger`,
+      {
+        method: "POST",
+        headers: this.headers({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ workspaceId, tagId, modelId }),
+      }
+    );
+    handleAuthError(response);
+    if (!response.ok)
+      throw new Error(`Failed to trigger extraction: ${response.status}`);
+    return response.json();
+  }
+
+  async getJobStatus(jobId: string): Promise<ExtractionJobStatus> {
+    const response = await fetch(
+      `${this.baseUrl}/api/knowledge/extraction/jobs/${encodeURIComponent(jobId)}`,
+      { headers: this.headers() }
+    );
+    handleAuthError(response);
+    if (!response.ok)
+      throw new Error(`Failed to get job status: ${response.status}`);
+    return response.json();
+  }
+
+  async getExtractionLogs(
+    tagId?: string,
+    limit?: number
+  ): Promise<ExtractionLog[]> {
+    const params = new URLSearchParams();
+    if (tagId) params.set("tagId", tagId);
+    if (limit) params.set("limit", String(limit));
+    const response = await fetch(
+      `${this.baseUrl}/api/knowledge/extraction/logs?${params}`,
+      { headers: this.headers() }
+    );
+    handleAuthError(response);
+    if (!response.ok)
+      throw new Error(`Failed to get extraction logs: ${response.status}`);
+    return response.json();
+  }
+}
+
+export interface ExtractionJobStatus {
+  jobId: string;
+  status: string;
+  progress: {
+    totalTags: number;
+    completedTags: number;
+    currentTag: string | null;
+  };
+  results: Array<{
+    tagId: string;
+    tagName: string;
+    applicable: boolean;
+    reason: string | null;
+    contentLength: number;
+  }>;
+}
+
+export interface ExtractionLog {
+  id: string;
+  jobId: string;
+  tagId: string;
+  tagName: string;
+  phase: string;
+  status: string;
+  applicable: boolean;
+  reason: string | null;
+  contentLength: number;
+  durationMs: number;
+  createdAt: string;
 }
 
 export const knowledgeTagApi = new KnowledgeTagApi();

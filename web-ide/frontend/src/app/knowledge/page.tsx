@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { KnowledgeSearch } from "@/components/knowledge/KnowledgeSearch";
 import { DocViewer } from "@/components/knowledge/DocViewer";
@@ -10,7 +10,7 @@ import { ApiExplorer } from "@/components/knowledge/ApiExplorer";
 import { KnowledgeTagList } from "@/components/knowledge/KnowledgeTagList";
 import { KnowledgeTagDetail } from "@/components/knowledge/KnowledgeTagDetail";
 import { KnowledgeTagView, knowledgeTagApi } from "@/lib/knowledge-tag-api";
-import { BookOpen, BookMarked, GitBranch, Network, Globe } from "lucide-react";
+import { BookOpen, BookMarked, GitBranch, Network, Globe, Sparkles, Loader2 } from "lucide-react";
 
 type KnowledgeTab = "docs" | "standards" | "architecture" | "services" | "apis";
 
@@ -34,6 +34,15 @@ export default function KnowledgePage() {
   const [selectedTagId, setSelectedTagId] = useState<string | null>(null);
   const [tagSearchQuery, setTagSearchQuery] = useState("");
 
+  // Extraction state
+  const [extracting, setExtracting] = useState(false);
+  const [extractionProgress, setExtractionProgress] = useState<{
+    totalTags: number;
+    completedTags: number;
+    currentTag: string | null;
+  } | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   const loadTags = useCallback(async () => {
     setTagsLoading(true);
     try {
@@ -52,11 +61,78 @@ export default function KnowledgePage() {
     }
   }, [activeTab, loadTags]);
 
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, []);
+
   const selectedTag = tags.find((t) => t.id === selectedTagId) ?? null;
 
   const handleTagUpdated = useCallback((updated: KnowledgeTagView) => {
     setTags((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
   }, []);
+
+  const handleExtractAll = useCallback(async () => {
+    if (!workspaceId || extracting) return;
+    setExtracting(true);
+    setExtractionProgress(null);
+
+    try {
+      const { jobId } = await knowledgeTagApi.triggerExtraction(workspaceId);
+
+      // Poll for progress
+      pollRef.current = setInterval(async () => {
+        try {
+          const status = await knowledgeTagApi.getJobStatus(jobId);
+          setExtractionProgress(status.progress);
+
+          if (status.status === "completed" || status.status === "failed") {
+            if (pollRef.current) clearInterval(pollRef.current);
+            pollRef.current = null;
+            setExtracting(false);
+            setExtractionProgress(null);
+            // Refresh tags
+            loadTags();
+          }
+        } catch {
+          // Continue polling on transient errors
+        }
+      }, 2000);
+    } catch (err) {
+      console.error("Failed to trigger extraction:", err);
+      setExtracting(false);
+    }
+  }, [workspaceId, extracting, loadTags]);
+
+  const handleReExtract = useCallback(
+    async (tagId: string) => {
+      if (!workspaceId) return;
+      try {
+        const { jobId } = await knowledgeTagApi.triggerExtraction(
+          workspaceId,
+          tagId
+        );
+
+        // Poll for this single tag
+        const poll = setInterval(async () => {
+          try {
+            const status = await knowledgeTagApi.getJobStatus(jobId);
+            if (status.status === "completed" || status.status === "failed") {
+              clearInterval(poll);
+              loadTags();
+            }
+          } catch {
+            // Continue polling
+          }
+        }, 2000);
+      } catch (err) {
+        console.error("Failed to re-extract tag:", err);
+      }
+    },
+    [workspaceId, loadTags]
+  );
 
   return (
     <div className="flex h-full flex-col">
@@ -115,6 +191,47 @@ export default function KnowledgePage() {
         {activeTab === "standards" && (
           <>
             <div className="w-80 flex-shrink-0 border-r border-border overflow-auto">
+              {/* Extract All button + progress */}
+              {workspaceId && (
+                <div className="border-b border-border p-3">
+                  {extracting ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-sm text-blue-500">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>
+                          {extractionProgress
+                            ? `Analyzing codebase... (${extractionProgress.completedTags}/${extractionProgress.totalTags} tags)`
+                            : "Starting extraction..."}
+                        </span>
+                      </div>
+                      {extractionProgress &&
+                        extractionProgress.totalTags > 0 && (
+                          <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-blue-500 transition-all"
+                              style={{
+                                width: `${(extractionProgress.completedTags / extractionProgress.totalTags) * 100}%`,
+                              }}
+                            />
+                          </div>
+                        )}
+                      {extractionProgress?.currentTag && (
+                        <p className="text-xs text-muted-foreground truncate">
+                          Current: {extractionProgress.currentTag}
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <button
+                      onClick={handleExtractAll}
+                      className="flex w-full items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+                    >
+                      <Sparkles className="h-4 w-4" />
+                      Extract All
+                    </button>
+                  )}
+                </div>
+              )}
               <KnowledgeTagList
                 tags={tags}
                 selectedTagId={selectedTagId}
@@ -129,6 +246,7 @@ export default function KnowledgePage() {
                 <KnowledgeTagDetail
                   tag={selectedTag}
                   onUpdated={handleTagUpdated}
+                  onReExtract={workspaceId ? handleReExtract : undefined}
                 />
               ) : (
                 <div className="flex h-full items-center justify-center text-muted-foreground">
