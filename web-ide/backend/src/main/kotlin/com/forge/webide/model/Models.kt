@@ -373,6 +373,8 @@ data class KnowledgeTag(
     val sortOrder: Int = 0,
     val status: String = "active",
     val sourceFile: String? = null,
+    val workspaceId: String? = null,
+    val tagKey: String? = null,
     val createdAt: Instant = Instant.now(),
     val updatedAt: Instant = Instant.now()
 )
@@ -431,7 +433,8 @@ data class ExtractionJobStatus(
     val jobId: String,
     val status: String,
     val progress: ExtractionProgress,
-    val results: List<TagExtractionResult>
+    val results: List<TagExtractionResult>,
+    val workspaceId: String = ""
 )
 
 data class ExtractionProgress(

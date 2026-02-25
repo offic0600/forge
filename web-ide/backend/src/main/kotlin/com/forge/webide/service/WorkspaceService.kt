@@ -24,6 +24,7 @@ import java.util.concurrent.Executors
 class WorkspaceService(
     private val workspaceRepository: WorkspaceRepository,
     private val gitService: GitService,
+    private val knowledgeTagService: KnowledgeTagService,
     @Value("\${forge.workspaces.data-dir:./data/workspaces}") private val dataDir: String
 ) {
 
@@ -130,6 +131,9 @@ class WorkspaceService(
 
         // Stop all running services before deleting
         runtimeService?.stopAllServices(id)
+
+        // Clean up workspace knowledge tags
+        knowledgeTagService.deleteWorkspaceTags(id)
 
         // Remove files from disk
         val wsDir = getWorkspaceDir(id)

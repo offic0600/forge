@@ -4,8 +4,8 @@ import com.forge.adapter.model.*
 import com.forge.webide.entity.KnowledgeExtractionLogEntity
 import com.forge.webide.model.*
 import com.forge.webide.repository.KnowledgeExtractionLogRepository
+import com.forge.webide.repository.WorkspaceRepository
 import io.mockk.*
-import kotlinx.coroutines.flow.flow
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -19,12 +19,13 @@ class KnowledgeExtractionServiceTest {
     private lateinit var extractionLogRepository: KnowledgeExtractionLogRepository
     private lateinit var claudeAdapter: ModelAdapter
     private lateinit var modelRegistry: ModelRegistry
+    private lateinit var workspaceRepository: WorkspaceRepository
     private lateinit var service: KnowledgeExtractionService
 
     private val sampleTags = listOf(
-        KnowledgeTag("ui-ux", "UI/UX 设计基线", "desc", "一、UI/UX", "", 0, "empty"),
-        KnowledgeTag("api-contract", "API 契约基线", "desc", "二、API", "", 1, "empty"),
-        KnowledgeTag("data-model", "数据模型基线", "desc", "三、数据模型", "", 2, "empty")
+        KnowledgeTag("ws-1_ui-ux", "UI/UX 设计基线", "desc", "一、UI/UX", "", 0, "empty", null, "ws-1", "ui-ux"),
+        KnowledgeTag("ws-1_api-contract", "API 契约基线", "desc", "二、API", "", 1, "empty", null, "ws-1", "api-contract"),
+        KnowledgeTag("ws-1_data-model", "数据模型基线", "desc", "三、数据模型", "", 2, "empty", null, "ws-1", "data-model")
     )
 
     @BeforeEach
@@ -35,6 +36,7 @@ class KnowledgeExtractionServiceTest {
         extractionLogRepository = mockk(relaxed = true)
         claudeAdapter = mockk(relaxed = true)
         modelRegistry = mockk(relaxed = true)
+        workspaceRepository = mockk(relaxed = true)
 
         service = KnowledgeExtractionService(
             agenticLoopOrchestrator,
@@ -42,7 +44,8 @@ class KnowledgeExtractionServiceTest {
             knowledgeTagService,
             extractionLogRepository,
             claudeAdapter,
-            modelRegistry
+            modelRegistry,
+            workspaceRepository
         )
 
         // Default mocks
@@ -54,7 +57,8 @@ class KnowledgeExtractionServiceTest {
             McpTool("read_file", "Read file", emptyMap()),
             McpTool("workspace_write_file", "Write file", emptyMap())
         )
-        every { knowledgeTagService.listTags() } returns sampleTags
+        every { knowledgeTagService.listTags("ws-1") } returns sampleTags
+        every { knowledgeTagService.listTags(null) } returns emptyList()
         every { knowledgeTagService.updateTag(any(), any()) } returns sampleTags[0]
         every { extractionLogRepository.save(any()) } answers { firstArg() }
     }
@@ -67,6 +71,7 @@ class KnowledgeExtractionServiceTest {
         val status = service.getJobStatus(jobId)
         assertThat(status).isNotNull
         assertThat(status!!.status).isEqualTo("running")
+        assertThat(status.workspaceId).isEqualTo("ws-1")
     }
 
     @Test
@@ -107,7 +112,7 @@ class KnowledgeExtractionServiceTest {
         val results = service.parseDiscoveryJson(content, sampleTags)
 
         assertThat(results["ui-ux"]!!.applicable).isTrue()
-        // Other tags default to applicable
+        // Other tags default to applicable (matched by tagKey)
         assertThat(results["api-contract"]!!.applicable).isTrue()
     }
 
@@ -136,7 +141,7 @@ class KnowledgeExtractionServiceTest {
         val entities = listOf(
             KnowledgeExtractionLogEntity(
                 id = "log-1", jobId = "job-1", workspaceId = "ws-1",
-                tagId = "ui-ux", tagName = "UI/UX", phase = "extraction",
+                tagId = "ws-1_ui-ux", tagName = "UI/UX", phase = "extraction",
                 status = "extracted", applicable = true, contentLength = 500,
                 durationMs = 1000, createdAt = Instant.now()
             )
@@ -147,7 +152,7 @@ class KnowledgeExtractionServiceTest {
 
         assertThat(logs).hasSize(1)
         assertThat(logs[0].jobId).isEqualTo("job-1")
-        assertThat(logs[0].tagId).isEqualTo("ui-ux")
+        assertThat(logs[0].tagId).isEqualTo("ws-1_ui-ux")
     }
 
     @Test
@@ -155,17 +160,35 @@ class KnowledgeExtractionServiceTest {
         val entities = listOf(
             KnowledgeExtractionLogEntity(
                 id = "log-2", jobId = "job-1", workspaceId = "ws-1",
-                tagId = "api-contract", tagName = "API", phase = "extraction",
+                tagId = "ws-1_api-contract", tagName = "API", phase = "extraction",
                 status = "extracted", applicable = true, contentLength = 300,
                 durationMs = 800, createdAt = Instant.now()
             )
         )
-        every { extractionLogRepository.findByTagIdOrderByCreatedAtDesc("api-contract") } returns entities
+        every { extractionLogRepository.findByTagIdOrderByCreatedAtDesc("ws-1_api-contract") } returns entities
 
-        val logs = service.getLogs("api-contract", null)
+        val logs = service.getLogs("ws-1_api-contract", null)
 
         assertThat(logs).hasSize(1)
-        assertThat(logs[0].tagId).isEqualTo("api-contract")
+        assertThat(logs[0].tagId).isEqualTo("ws-1_api-contract")
+    }
+
+    @Test
+    fun `getLogs filters by workspaceId when provided`() {
+        val entities = listOf(
+            KnowledgeExtractionLogEntity(
+                id = "log-3", jobId = "job-2", workspaceId = "ws-2",
+                tagId = "ws-2_ui-ux", tagName = "UI/UX", phase = "extraction",
+                status = "extracted", applicable = true, contentLength = 200,
+                durationMs = 500, createdAt = Instant.now()
+            )
+        )
+        every { extractionLogRepository.findByWorkspaceIdOrderByCreatedAtDesc("ws-2") } returns entities
+
+        val logs = service.getLogs(null, null, "ws-2")
+
+        assertThat(logs).hasSize(1)
+        assertThat(logs[0].workspaceId).isEqualTo("ws-2")
     }
 
     @Test
@@ -187,10 +210,10 @@ class KnowledgeExtractionServiceTest {
 
     @Test
     fun `triggerExtraction with specific tagId only processes that tag`() {
-        every { knowledgeTagService.listTags() } returns sampleTags
+        every { knowledgeTagService.listTags("ws-1") } returns sampleTags
 
         val jobId = service.triggerExtraction(
-            ExtractionTriggerRequest("ws-1", tagId = "ui-ux")
+            ExtractionTriggerRequest("ws-1", tagId = "ws-1_ui-ux")
         )
 
         assertThat(jobId).isNotBlank()
@@ -200,10 +223,10 @@ class KnowledgeExtractionServiceTest {
 
     @Test
     fun `triggerExtraction with empty tag list completes immediately`() {
-        every { knowledgeTagService.listTags() } returns emptyList()
+        every { knowledgeTagService.listTags("ws-empty") } returns emptyList()
 
         val jobId = service.triggerExtraction(
-            ExtractionTriggerRequest("ws-1", tagId = "nonexistent")
+            ExtractionTriggerRequest("ws-empty", tagId = "nonexistent")
         )
 
         // Wait briefly for async completion
@@ -212,5 +235,13 @@ class KnowledgeExtractionServiceTest {
         val status = service.getJobStatus(jobId)
         assertThat(status).isNotNull
         assertThat(status!!.status).isEqualTo("completed")
+    }
+
+    @Test
+    fun `duplicate extraction for same workspace returns existing jobId`() {
+        val jobId1 = service.triggerExtraction(ExtractionTriggerRequest("ws-dup"))
+        val jobId2 = service.triggerExtraction(ExtractionTriggerRequest("ws-dup"))
+
+        assertThat(jobId2).isEqualTo(jobId1)
     }
 }

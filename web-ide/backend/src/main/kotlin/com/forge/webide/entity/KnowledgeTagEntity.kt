@@ -34,5 +34,11 @@ class KnowledgeTagEntity(
     val createdAt: Instant = Instant.now(),
 
     @Column(name = "updated_at", nullable = false)
-    var updatedAt: Instant = Instant.now()
+    var updatedAt: Instant = Instant.now(),
+
+    @Column(name = "workspace_id", length = 36)
+    val workspaceId: String? = null,
+
+    @Column(name = "tag_key", length = 50)
+    val tagKey: String? = null
 )

@@ -47,6 +47,8 @@ services:
       - 8.8.8.8
       - 114.114.114.114
     environment:
+      # --- Model Provider Selection ---
+      MODEL_PROVIDER: ${MODEL_PROVIDER:-minimax}
       # --- Provider API Keys ---
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       ANTHROPIC_API_URL: ${ANTHROPIC_API_URL:-https://api.anthropic.com}

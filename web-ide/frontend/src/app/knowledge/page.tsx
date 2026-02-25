@@ -10,7 +10,8 @@ import { ApiExplorer } from "@/components/knowledge/ApiExplorer";
 import { KnowledgeTagList } from "@/components/knowledge/KnowledgeTagList";
 import { KnowledgeTagDetail } from "@/components/knowledge/KnowledgeTagDetail";
 import { KnowledgeTagView, knowledgeTagApi } from "@/lib/knowledge-tag-api";
-import { BookOpen, BookMarked, GitBranch, Network, Globe, Sparkles, Loader2 } from "lucide-react";
+import { Workspace, workspaceApi } from "@/lib/workspace-api";
+import { BookOpen, BookMarked, GitBranch, Network, Globe, Sparkles, Loader2, ChevronDown } from "lucide-react";
 
 type KnowledgeTab = "docs" | "standards" | "architecture" | "services" | "apis";
 
@@ -26,7 +27,12 @@ export default function KnowledgePage() {
   const [activeTab, setActiveTab] = useState<KnowledgeTab>("docs");
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
   const searchParams = useSearchParams();
-  const workspaceId = searchParams.get("workspaceId") ?? undefined;
+
+  // Workspace selector state
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | undefined>(
+    searchParams.get("workspaceId") ?? undefined
+  );
 
   // Standards tab state
   const [tags, setTags] = useState<KnowledgeTagView[]>([]);
@@ -43,23 +49,33 @@ export default function KnowledgePage() {
   } | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Load workspace list
+  useEffect(() => {
+    workspaceApi.listWorkspaces().then(setWorkspaces).catch(console.error);
+  }, []);
+
   const loadTags = useCallback(async () => {
     setTagsLoading(true);
     try {
-      const data = await knowledgeTagApi.listTags();
+      const data = await knowledgeTagApi.listTags(selectedWorkspaceId);
       setTags(data);
     } catch (err) {
       console.error("Failed to load tags:", err);
     } finally {
       setTagsLoading(false);
     }
-  }, []);
+  }, [selectedWorkspaceId]);
 
   useEffect(() => {
     if (activeTab === "standards") {
       loadTags();
     }
   }, [activeTab, loadTags]);
+
+  // Reset selected tag when workspace changes
+  useEffect(() => {
+    setSelectedTagId(null);
+  }, [selectedWorkspaceId]);
 
   // Cleanup polling on unmount
   useEffect(() => {
@@ -75,12 +91,12 @@ export default function KnowledgePage() {
   }, []);
 
   const handleExtractAll = useCallback(async () => {
-    if (!workspaceId || extracting) return;
+    if (!selectedWorkspaceId || extracting) return;
     setExtracting(true);
     setExtractionProgress(null);
 
     try {
-      const { jobId } = await knowledgeTagApi.triggerExtraction(workspaceId);
+      const { jobId } = await knowledgeTagApi.triggerExtraction(selectedWorkspaceId);
 
       // Poll for progress
       pollRef.current = setInterval(async () => {
@@ -104,14 +120,14 @@ export default function KnowledgePage() {
       console.error("Failed to trigger extraction:", err);
       setExtracting(false);
     }
-  }, [workspaceId, extracting, loadTags]);
+  }, [selectedWorkspaceId, extracting, loadTags]);
 
   const handleReExtract = useCallback(
     async (tagId: string) => {
-      if (!workspaceId) return;
+      if (!selectedWorkspaceId) return;
       try {
         const { jobId } = await knowledgeTagApi.triggerExtraction(
-          workspaceId,
+          selectedWorkspaceId,
           tagId
         );
 
@@ -131,8 +147,10 @@ export default function KnowledgePage() {
         console.error("Failed to re-extract tag:", err);
       }
     },
-    [workspaceId, loadTags]
+    [selectedWorkspaceId, loadTags]
   );
+
+  const selectedWorkspace = workspaces.find((w) => w.id === selectedWorkspaceId);
 
   return (
     <div className="flex h-full flex-col">
@@ -165,7 +183,7 @@ export default function KnowledgePage() {
               <KnowledgeSearch
                 onSelectDocument={(docId) => setSelectedDocId(docId)}
                 selectedDocId={selectedDocId}
-                workspaceId={workspaceId}
+                workspaceId={selectedWorkspaceId}
               />
             </div>
             <div className="flex-1 overflow-auto">
@@ -191,47 +209,68 @@ export default function KnowledgePage() {
         {activeTab === "standards" && (
           <>
             <div className="w-80 flex-shrink-0 border-r border-border overflow-auto">
-              {/* Extract All button + progress */}
-              {workspaceId && (
-                <div className="border-b border-border p-3">
-                  {extracting ? (
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2 text-sm text-blue-500">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        <span>
-                          {extractionProgress
-                            ? `Analyzing codebase... (${extractionProgress.completedTags}/${extractionProgress.totalTags} tags)`
-                            : "Starting extraction..."}
-                        </span>
-                      </div>
-                      {extractionProgress &&
-                        extractionProgress.totalTags > 0 && (
-                          <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                            <div
-                              className="h-full rounded-full bg-blue-500 transition-all"
-                              style={{
-                                width: `${(extractionProgress.completedTags / extractionProgress.totalTags) * 100}%`,
-                              }}
-                            />
-                          </div>
-                        )}
-                      {extractionProgress?.currentTag && (
-                        <p className="text-xs text-muted-foreground truncate">
-                          Current: {extractionProgress.currentTag}
-                        </p>
-                      )}
-                    </div>
-                  ) : (
-                    <button
-                      onClick={handleExtractAll}
-                      className="flex w-full items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-                    >
-                      <Sparkles className="h-4 w-4" />
-                      Extract All
-                    </button>
-                  )}
+              {/* Workspace Selector + Extract All */}
+              <div className="border-b border-border p-3 space-y-2">
+                <div className="relative">
+                  <select
+                    value={selectedWorkspaceId ?? ""}
+                    onChange={(e) => setSelectedWorkspaceId(e.target.value || undefined)}
+                    className="w-full appearance-none rounded-md border border-border bg-background px-3 py-2 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  >
+                    <option value="">Select workspace...</option>
+                    {workspaces
+                      .filter((w) => w.status === "active")
+                      .map((w) => (
+                        <option key={w.id} value={w.id}>
+                          {w.name}
+                        </option>
+                      ))}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 </div>
-              )}
+
+                {selectedWorkspaceId && (
+                  <>
+                    {extracting ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 text-sm text-blue-500">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <span>
+                            {extractionProgress
+                              ? `Analyzing... (${extractionProgress.completedTags}/${extractionProgress.totalTags})`
+                              : "Starting extraction..."}
+                          </span>
+                        </div>
+                        {extractionProgress &&
+                          extractionProgress.totalTags > 0 && (
+                            <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                              <div
+                                className="h-full rounded-full bg-blue-500 transition-all"
+                                style={{
+                                  width: `${(extractionProgress.completedTags / extractionProgress.totalTags) * 100}%`,
+                                }}
+                              />
+                            </div>
+                          )}
+                        {extractionProgress?.currentTag && (
+                          <p className="text-xs text-muted-foreground truncate">
+                            Current: {extractionProgress.currentTag}
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <button
+                        onClick={handleExtractAll}
+                        className="flex w-full items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+                      >
+                        <Sparkles className="h-4 w-4" />
+                        Extract All
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+
               <KnowledgeTagList
                 tags={tags}
                 selectedTagId={selectedTagId}
@@ -246,17 +285,21 @@ export default function KnowledgePage() {
                 <KnowledgeTagDetail
                   tag={selectedTag}
                   onUpdated={handleTagUpdated}
-                  onReExtract={workspaceId ? handleReExtract : undefined}
+                  onReExtract={selectedWorkspaceId ? handleReExtract : undefined}
                 />
               ) : (
                 <div className="flex h-full items-center justify-center text-muted-foreground">
                   <div className="text-center">
                     <BookMarked className="mx-auto h-12 w-12 opacity-50" />
                     <p className="mt-4 text-lg font-medium">
-                      Select a standard
+                      {selectedWorkspaceId
+                        ? "Select a standard"
+                        : "Select a workspace first"}
                     </p>
                     <p className="mt-1 text-sm">
-                      Browse and edit design baseline standards
+                      {selectedWorkspaceId
+                        ? "Browse and edit design baseline standards"
+                        : "Choose a workspace to view its knowledge tags"}
                     </p>
                   </div>
                 </div>

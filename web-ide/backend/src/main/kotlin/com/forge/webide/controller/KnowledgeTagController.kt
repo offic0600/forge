@@ -13,8 +13,8 @@ class KnowledgeTagController(
 ) {
 
     @GetMapping
-    fun listTags(): ResponseEntity<List<KnowledgeTag>> {
-        return ResponseEntity.ok(knowledgeTagService.listTags())
+    fun listTags(@RequestParam(required = false) workspaceId: String?): ResponseEntity<List<KnowledgeTag>> {
+        return ResponseEntity.ok(knowledgeTagService.listTags(workspaceId))
     }
 
     @GetMapping("/{tagId}")
@@ -60,5 +60,13 @@ class KnowledgeTagController(
     fun reorderTags(@RequestBody request: ReorderKnowledgeTagsRequest): ResponseEntity<List<KnowledgeTag>> {
         val tags = knowledgeTagService.reorderTags(request.tagIds)
         return ResponseEntity.ok(tags)
+    }
+
+    @GetMapping("/search")
+    fun searchTags(
+        @RequestParam q: String,
+        @RequestParam(required = false) workspaceId: String?
+    ): ResponseEntity<List<KnowledgeTag>> {
+        return ResponseEntity.ok(knowledgeTagService.searchTags(q, workspaceId))
     }
 }

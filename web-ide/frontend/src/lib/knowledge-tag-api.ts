@@ -7,6 +7,8 @@ export interface KnowledgeTagView {
   sortOrder: number;
   status: string;
   sourceFile: string | null;
+  workspaceId: string | null;
+  tagKey: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -54,8 +56,9 @@ class KnowledgeTagApi {
     return { ...getAuthHeader(), ...extra };
   }
 
-  async listTags(): Promise<KnowledgeTagView[]> {
-    const response = await fetch(`${this.baseUrl}/api/knowledge/tags`, {
+  async listTags(workspaceId?: string): Promise<KnowledgeTagView[]> {
+    const params = workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : "";
+    const response = await fetch(`${this.baseUrl}/api/knowledge/tags${params}`, {
       headers: this.headers(),
     });
     handleAuthError(response);

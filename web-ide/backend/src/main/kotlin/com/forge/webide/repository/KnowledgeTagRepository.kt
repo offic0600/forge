@@ -10,4 +10,8 @@ interface KnowledgeTagRepository : JpaRepository<KnowledgeTagEntity, String> {
         name: String,
         content: String
     ): List<KnowledgeTagEntity>
+    fun findByWorkspaceIdOrderBySortOrderAsc(workspaceId: String): List<KnowledgeTagEntity>
+    fun findByWorkspaceIdIsNullOrderBySortOrderAsc(): List<KnowledgeTagEntity>
+    fun countByWorkspaceId(workspaceId: String): Long
+    fun deleteByWorkspaceId(workspaceId: String)
 }

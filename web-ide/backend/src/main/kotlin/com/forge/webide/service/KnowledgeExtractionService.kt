@@ -4,8 +4,12 @@ import com.forge.adapter.model.*
 import com.forge.webide.entity.KnowledgeExtractionLogEntity
 import com.forge.webide.model.*
 import com.forge.webide.repository.KnowledgeExtractionLogRepository
+import com.forge.webide.repository.WorkspaceRepository
 import org.slf4j.LoggerFactory
+import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
+import java.time.Instant
+import java.time.temporal.ChronoUnit
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
@@ -18,7 +22,8 @@ class KnowledgeExtractionService(
     private val knowledgeTagService: KnowledgeTagService,
     private val extractionLogRepository: KnowledgeExtractionLogRepository,
     private val claudeAdapter: ModelAdapter,
-    private val modelRegistry: ModelRegistry
+    private val modelRegistry: ModelRegistry,
+    private val workspaceRepository: WorkspaceRepository
 ) {
 
     private val logger = LoggerFactory.getLogger(KnowledgeExtractionService::class.java)
@@ -32,10 +37,10 @@ class KnowledgeExtractionService(
     fun triggerExtraction(request: ExtractionTriggerRequest): String {
         // Prevent duplicate jobs on same workspace
         val existingJob = activeJobs.values.find {
-            it.status == "running" && it.progress.currentTag != null
+            it.status == "running" && it.workspaceId == request.workspaceId
         }
         if (existingJob != null) {
-            logger.warn("Extraction job already running: {}", existingJob.jobId)
+            logger.warn("Extraction job already running for workspace {}: {}", request.workspaceId, existingJob.jobId)
             return existingJob.jobId
         }
 
@@ -44,7 +49,8 @@ class KnowledgeExtractionService(
             jobId = jobId,
             status = "running",
             progress = ExtractionProgress(totalTags = 0, completedTags = 0, currentTag = "initializing"),
-            results = emptyList()
+            results = emptyList(),
+            workspaceId = request.workspaceId
         )
         activeJobs[jobId] = status
 
@@ -65,13 +71,46 @@ class KnowledgeExtractionService(
         return activeJobs[jobId]
     }
 
-    fun getLogs(tagId: String?, limit: Int?): List<KnowledgeExtractionLog> {
-        val entities = if (!tagId.isNullOrBlank()) {
-            extractionLogRepository.findByTagIdOrderByCreatedAtDesc(tagId)
-        } else {
-            extractionLogRepository.findTop30ByOrderByCreatedAtDesc()
+    fun getLogs(tagId: String?, limit: Int?, workspaceId: String? = null): List<KnowledgeExtractionLog> {
+        val entities = when {
+            !tagId.isNullOrBlank() -> extractionLogRepository.findByTagIdOrderByCreatedAtDesc(tagId)
+            !workspaceId.isNullOrBlank() -> extractionLogRepository.findByWorkspaceIdOrderByCreatedAtDesc(workspaceId)
+            else -> extractionLogRepository.findTop30ByOrderByCreatedAtDesc()
         }
         return entities.map { it.toModel() }
+    }
+
+    // =========================================================================
+    // Scheduled batch extraction
+    // =========================================================================
+
+    @Scheduled(cron = "\${forge.knowledge.extraction-cron:0 0 */4 * * *}")
+    fun scheduledBatchExtraction() {
+        logger.info("Starting scheduled batch knowledge extraction")
+        val cutoff = Instant.now().minus(4, ChronoUnit.HOURS)
+
+        val activeWorkspaces = workspaceRepository.findByStatusNot(WorkspaceStatus.SUSPENDED)
+            .filter { it.status == WorkspaceStatus.ACTIVE }
+
+        for (workspace in activeWorkspaces) {
+            val recentLogs = extractionLogRepository.findByWorkspaceIdAndCreatedAtAfter(workspace.id, cutoff)
+            if (recentLogs.isNotEmpty()) {
+                logger.debug("Skipping workspace {} — recently refreshed", workspace.id)
+                continue
+            }
+
+            try {
+                logger.info("Batch extraction for workspace: {} ({})", workspace.name, workspace.id)
+                val request = ExtractionTriggerRequest(workspaceId = workspace.id)
+                triggerExtraction(request)
+                // Wait for completion before next workspace to avoid API rate limits
+                Thread.sleep(5000)
+            } catch (e: Exception) {
+                logger.error("Batch extraction failed for workspace {}: {}", workspace.id, e.message)
+            }
+        }
+
+        logger.info("Scheduled batch extraction completed for {} workspaces", activeWorkspaces.size)
     }
 
     // =========================================================================
@@ -90,8 +129,8 @@ class KnowledgeExtractionService(
             apiKeyOverride = request.apiKey
         )
 
-        // Determine which tags to process
-        val allTags = knowledgeTagService.listTags()
+        // Determine which tags to process — workspace-scoped!
+        val allTags = knowledgeTagService.listTags(request.workspaceId)
         val targetTags = if (!request.tagId.isNullOrBlank()) {
             allTags.filter { it.id == request.tagId }
         } else {
@@ -112,7 +151,7 @@ class KnowledgeExtractionService(
         var completedCount = 0
 
         for (tag in targetTags) {
-            val discovery = discoveryResults[tag.id]
+            val discovery = discoveryResults[tag.tagKey ?: tag.id]
             val applicable = discovery?.applicable ?: true
             val reason = discovery?.reason
 
@@ -201,7 +240,7 @@ class KnowledgeExtractionService(
         adapter: ModelAdapter? = null
     ): Map<String, DiscoveryResult> {
         val tagListText = tags.mapIndexed { i, tag ->
-            "${i + 1}. ${tag.id} — ${tag.name}（${tag.chapterHeading}）"
+            "${i + 1}. ${tag.tagKey ?: tag.id} — ${tag.name}（${tag.chapterHeading}）"
         }.joinToString("\n")
 
         val systemPrompt = """
@@ -267,10 +306,11 @@ reason 用一句话解释判定理由。
             logger.warn("Failed to parse discovery JSON, defaulting all tags to applicable: ${e.message}")
         }
 
-        // Default: any tags not in results are assumed applicable
+        // Default: any tags not in results are assumed applicable (use tagKey for matching)
         for (tag in tags) {
-            if (tag.id !in results) {
-                results[tag.id] = DiscoveryResult(true, "Default: assumed applicable")
+            val key = tag.tagKey ?: tag.id
+            if (key !in results) {
+                results[key] = DiscoveryResult(true, "Default: assumed applicable")
             }
         }
 
@@ -301,7 +341,7 @@ reason 用一句话解释判定理由。
         baseOptions: CompletionOptions,
         adapter: ModelAdapter? = null
     ): String {
-        val extractionPrompt = getExtractionPrompt(tag.id, tag.name)
+        val extractionPrompt = getExtractionPrompt(tag.tagKey ?: tag.id, tag.name)
 
         val messages = listOf(
             Message(role = Message.Role.USER, content = "请分析 workspace 代码库，生成「${tag.name}」标准文档。")

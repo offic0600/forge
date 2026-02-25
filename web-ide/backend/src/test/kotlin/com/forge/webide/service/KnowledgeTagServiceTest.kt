@@ -19,7 +19,9 @@ class KnowledgeTagServiceTest {
     private fun makeEntity(
         id: String = "ui-ux",
         name: String = "UI/UX 设计基线",
-        sortOrder: Int = 0
+        sortOrder: Int = 0,
+        workspaceId: String? = null,
+        tagKey: String? = null
     ) = KnowledgeTagEntity(
         id = id,
         name = name,
@@ -27,33 +29,75 @@ class KnowledgeTagServiceTest {
         chapterHeading = "一、$name",
         content = "# $name\n\nContent here",
         sortOrder = sortOrder,
-        status = "active"
+        status = "active",
+        workspaceId = workspaceId,
+        tagKey = tagKey
     )
 
     @BeforeEach
     fun setUp() {
         repository = mockk(relaxed = true)
-        // Repository count > 0 so init doesn't trigger import
-        every { repository.count() } returns 1
+        // Global templates exist so init doesn't trigger import
+        every { repository.findByWorkspaceIdIsNullOrderBySortOrderAsc() } returns listOf(makeEntity())
 
         service = KnowledgeTagService(repository, "")
     }
 
     @Test
-    fun `listTags returns tags sorted by sortOrder`() {
+    fun `listTags with null workspaceId returns global templates`() {
         val entities = listOf(
-            makeEntity("ui-ux", "UI/UX 设计基线", 0),
-            makeEntity("api-contract", "API 契约基线", 1),
-            makeEntity("data-model", "数据模型基线", 2)
+            makeEntity("ui-ux", "UI/UX 设计基线", 0, null, "ui-ux"),
+            makeEntity("api-contract", "API 契约基线", 1, null, "api-contract"),
+            makeEntity("data-model", "数据模型基线", 2, null, "data-model")
         )
-        every { repository.findAllByOrderBySortOrderAsc() } returns entities
+        every { repository.findByWorkspaceIdIsNullOrderBySortOrderAsc() } returns entities
 
-        val result = service.listTags()
+        val result = service.listTags(null)
 
         assertThat(result).hasSize(3)
         assertThat(result[0].id).isEqualTo("ui-ux")
         assertThat(result[1].id).isEqualTo("api-contract")
         assertThat(result[2].id).isEqualTo("data-model")
+    }
+
+    @Test
+    fun `listTags with workspaceId returns workspace tags`() {
+        val wsId = "ws-123"
+        every { repository.countByWorkspaceId(wsId) } returns 7
+        val entities = listOf(
+            makeEntity("${wsId}_ui-ux", "UI/UX 设计基线", 0, wsId, "ui-ux"),
+            makeEntity("${wsId}_api-contract", "API 契约基线", 1, wsId, "api-contract")
+        )
+        every { repository.findByWorkspaceIdOrderBySortOrderAsc(wsId) } returns entities
+
+        val result = service.listTags(wsId)
+
+        assertThat(result).hasSize(2)
+        assertThat(result[0].workspaceId).isEqualTo(wsId)
+        assertThat(result[0].tagKey).isEqualTo("ui-ux")
+    }
+
+    @Test
+    fun `listTags auto-initializes workspace tags when count is 0`() {
+        val wsId = "ws-new"
+        every { repository.countByWorkspaceId(wsId) } returns 0
+        every { repository.existsById(any()) } returns false
+        every { repository.save(any()) } answers { firstArg() }
+        every { repository.findByWorkspaceIdOrderBySortOrderAsc(wsId) } returns emptyList()
+
+        service.listTags(wsId)
+
+        // Should have saved 7 tags (one per chapterDef)
+        verify(exactly = 7) { repository.save(match { it.workspaceId == wsId }) }
+    }
+
+    @Test
+    fun `deleteWorkspaceTags removes all workspace tags`() {
+        val wsId = "ws-delete"
+
+        service.deleteWorkspaceTags(wsId)
+
+        verify { repository.deleteByWorkspaceId(wsId) }
     }
 
     @Test
@@ -153,7 +197,7 @@ class KnowledgeTagServiceTest {
         every { repository.findById("api-contract") } returns Optional.of(entity1)
         every { repository.findById("ui-ux") } returns Optional.of(entity2)
         every { repository.save(any()) } answers { firstArg() }
-        every { repository.findAllByOrderBySortOrderAsc() } returns listOf(entity2, entity1)
+        every { repository.findByWorkspaceIdIsNullOrderBySortOrderAsc() } returns listOf(entity2, entity1)
 
         // Reorder: api-contract first, then ui-ux
         service.reorderTags(listOf("api-contract", "ui-ux"))
@@ -181,10 +225,27 @@ class KnowledgeTagServiceTest {
             makeEntity("ui-ux", "UI/UX 设计基线", 0),
             makeEntity("api-contract", "API 契约基线", 1)
         )
-        every { repository.findAllByOrderBySortOrderAsc() } returns entities
+        every { repository.findByWorkspaceIdIsNullOrderBySortOrderAsc() } returns entities
 
         val result = service.searchTags("")
 
         assertThat(result).hasSize(2)
+    }
+
+    @Test
+    fun `searchTags with workspaceId filters by workspace`() {
+        val wsId = "ws-search"
+        val entities = listOf(
+            makeEntity("${wsId}_ui-ux", "UI/UX 设计基线", 0, wsId, "ui-ux"),
+            makeEntity("global-ui", "UI Global", 0, null, null)
+        )
+        every {
+            repository.findByNameContainingIgnoreCaseOrContentContainingIgnoreCase("UI", "UI")
+        } returns entities
+
+        val result = service.searchTags("UI", wsId)
+
+        assertThat(result).hasSize(1)
+        assertThat(result[0].workspaceId).isEqualTo(wsId)
     }
 }

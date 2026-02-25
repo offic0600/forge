@@ -3,6 +3,7 @@ package com.forge.webide.service
 import com.forge.webide.entity.KnowledgeTagEntity
 import com.forge.webide.model.*
 import com.forge.webide.repository.KnowledgeTagRepository
+import jakarta.transaction.Transactional
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
@@ -42,8 +43,15 @@ class KnowledgeTagService(
     // CRUD
     // =========================================================================
 
-    fun listTags(): List<KnowledgeTag> {
-        return knowledgeTagRepository.findAllByOrderBySortOrderAsc().map { it.toModel() }
+    fun listTags(workspaceId: String? = null): List<KnowledgeTag> {
+        if (workspaceId.isNullOrBlank()) {
+            return knowledgeTagRepository.findByWorkspaceIdIsNullOrderBySortOrderAsc().map { it.toModel() }
+        }
+        // Auto-initialize workspace tags on first access
+        if (knowledgeTagRepository.countByWorkspaceId(workspaceId) == 0L) {
+            initializeWorkspaceTags(workspaceId)
+        }
+        return knowledgeTagRepository.findByWorkspaceIdOrderBySortOrderAsc(workspaceId).map { it.toModel() }
     }
 
     fun getTag(id: String): KnowledgeTag? {
@@ -87,6 +95,41 @@ class KnowledgeTagService(
     }
 
     // =========================================================================
+    // Workspace tag lifecycle
+    // =========================================================================
+
+    fun initializeWorkspaceTags(workspaceId: String) {
+        try {
+            chapterDefs.forEach { def ->
+                val compoundId = "${workspaceId}_${def.id}"
+                if (!knowledgeTagRepository.existsById(compoundId)) {
+                    val entity = KnowledgeTagEntity(
+                        id = compoundId,
+                        name = def.name,
+                        description = "",
+                        chapterHeading = def.chapterHeading,
+                        content = "",
+                        sortOrder = def.sortOrder,
+                        status = "empty",
+                        workspaceId = workspaceId,
+                        tagKey = def.id
+                    )
+                    knowledgeTagRepository.save(entity)
+                }
+            }
+            logger.info("Initialized {} workspace tags for workspace {}", chapterDefs.size, workspaceId)
+        } catch (e: Exception) {
+            logger.warn("Failed to initialize workspace tags (may already exist): {}", e.message)
+        }
+    }
+
+    @Transactional
+    fun deleteWorkspaceTags(workspaceId: String) {
+        knowledgeTagRepository.deleteByWorkspaceId(workspaceId)
+        logger.info("Deleted workspace tags for workspace {}", workspaceId)
+    }
+
+    // =========================================================================
     // Reorder
     // =========================================================================
 
@@ -106,10 +149,11 @@ class KnowledgeTagService(
     // Search
     // =========================================================================
 
-    fun searchTags(query: String): List<KnowledgeTag> {
-        if (query.isBlank()) return listTags()
+    fun searchTags(query: String, workspaceId: String? = null): List<KnowledgeTag> {
+        if (query.isBlank()) return listTags(workspaceId)
         return knowledgeTagRepository
             .findByNameContainingIgnoreCaseOrContentContainingIgnoreCase(query, query)
+            .filter { if (workspaceId.isNullOrBlank()) it.workspaceId == null else it.workspaceId == workspaceId }
             .sortedBy { it.sortOrder }
             .map { it.toModel() }
     }
@@ -119,8 +163,8 @@ class KnowledgeTagService(
     // =========================================================================
 
     fun importFromBaseline(): Boolean {
-        if (knowledgeTagRepository.count() > 0) {
-            logger.info("Knowledge tags already exist, skipping baseline import")
+        if (knowledgeTagRepository.findByWorkspaceIdIsNullOrderBySortOrderAsc().isNotEmpty()) {
+            logger.info("Global knowledge tags already exist, skipping baseline import")
             return false
         }
 
@@ -147,7 +191,8 @@ class KnowledgeTagService(
                     chapterHeading = def.chapterHeading,
                     content = chapterContent.trim(),
                     sortOrder = def.sortOrder,
-                    sourceFile = baselinePath
+                    sourceFile = baselinePath,
+                    tagKey = def.id
                 )
                 knowledgeTagRepository.save(entity)
             }
@@ -202,6 +247,8 @@ class KnowledgeTagService(
             sortOrder = sortOrder,
             status = status,
             sourceFile = sourceFile,
+            workspaceId = workspaceId,
+            tagKey = tagKey,
             createdAt = createdAt,
             updatedAt = updatedAt
         )

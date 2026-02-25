@@ -73,7 +73,8 @@ class McpProxyServiceTest {
         }
         every { workspaceRepository.count() } answers { entityStore.size.toLong() }
 
-        workspaceService = WorkspaceService(workspaceRepository, gitService, tempDir.toString())
+        val knowledgeTagService = mockk<KnowledgeTagService>(relaxed = true)
+        workspaceService = WorkspaceService(workspaceRepository, gitService, knowledgeTagService, tempDir.toString())
         workspaceService.init()
 
         // Build handler beans

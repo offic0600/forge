@@ -27,9 +27,10 @@ class KnowledgeExtractionController(
     @GetMapping("/logs")
     fun getLogs(
         @RequestParam(required = false) tagId: String?,
-        @RequestParam(required = false) limit: Int?
+        @RequestParam(required = false) limit: Int?,
+        @RequestParam(required = false) workspaceId: String?
     ): ResponseEntity<Any> {
-        val logs = extractionService.getLogs(tagId, limit)
+        val logs = extractionService.getLogs(tagId, limit, workspaceId)
         return ResponseEntity.ok(logs)
     }
 }

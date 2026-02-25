@@ -6,6 +6,7 @@ import com.forge.webide.model.McpContent
 import com.forge.webide.model.McpToolCallResponse
 import com.forge.webide.repository.WorkspaceRepository
 import com.forge.webide.service.GitService
+import com.forge.webide.service.KnowledgeTagService
 import com.forge.webide.service.McpProxyService
 import com.forge.webide.service.WorkspaceService
 import io.mockk.every
@@ -48,7 +49,8 @@ class ContextControllerTest {
         }
         every { workspaceRepository.count() } answers { entityStore.size.toLong() }
 
-        workspaceService = WorkspaceService(workspaceRepository, gitService, tempDir.toString())
+        val knowledgeTagService = mockk<KnowledgeTagService>(relaxed = true)
+        workspaceService = WorkspaceService(workspaceRepository, gitService, knowledgeTagService, tempDir.toString())
         workspaceService.init()
 
         controller = ContextController(workspaceService, mcpProxyService)
