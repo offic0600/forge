@@ -107,7 +107,7 @@ Forge is a Gradle monorepo (Kotlin DSL) with the following modules:
 - All MCP servers require OAuth2 Bearer Token authentication
 - All requests include audit trail (user, timestamp, tool, parameters)
 - Workspace 工具有路径遍历检查（`..` 禁止）
-- **docs/ 目录已纳入 Git 管理**：包含验收测试、分析报告、截图、演示等文档
+- **docs/ 是独立 Git submodule**：指向 `git@github.com:pan94u/forge-docs.git`（branch: main）。docs 内的改动需在 docs/ 目录单独 commit/push，主仓库再更新 submodule 指针（`git add docs && git commit`）
 
 ## Module Dependency Rules
 
