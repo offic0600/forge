@@ -108,7 +108,6 @@ Forge is a Gradle monorepo (Kotlin DSL) with the following modules:
 - All MCP servers require OAuth2 Bearer Token authentication
 - All requests include audit trail (user, timestamp, tool, parameters)
 - Workspace 工具有路径遍历检查（`..` 禁止）
-- **docs/ 是独立 Git submodule**：指向 `git@github.com:pan94u/forge-docs.git`（branch: main）。docs 内的改动需在 docs/ 目录单独 commit/push，主仓库再更新 submodule 指针（`git add docs && git commit`）
 
 ## Module Dependency Rules
 
@@ -235,7 +234,39 @@ Forge is a Gradle monorepo (Kotlin DSL) with the following modules:
 
 ## Git
 
-- **Remote**: `git@github.com:pan94u/forge.git`（branch: main）
+- **主仓库**: `git@github.com:pan94u/forge.git`（branch: main）
+- **docs submodule**: `git@github.com:pan94u/forge-docs.git`（branch: main）
+
+### docs/ Submodule 操作规范
+
+`docs/` 是独立 Git submodule，指向 `pan94u/forge-docs.git`。**不要在主仓库直接 commit docs/ 下的文件**。
+
+```bash
+# 初始化（clone 主仓库后）
+git submodule update --init --recursive
+
+# 修改 docs 内容的标准流程
+cd docs
+git checkout main
+# ... 编辑文件 ...
+git add <files>
+git commit -m "docs: 描述"
+git push                    # 推送到 forge-docs 远程
+
+# 回到主仓库，更新 submodule 指针
+cd ..
+git add docs
+git commit -m "docs: update submodule pointer"
+git push                    # 推送到 forge 主仓库
+```
+
+**注意事项**：
+- `git submodule update --init` 后 docs/ 处于 detached HEAD，修改前必须先 `cd docs && git checkout main`
+- 主仓库的 `git diff` / `git status` 只显示 submodule 指针变化（`docs (new commits)`），不显示 docs 内文件级 diff
+- 并行 Agent 修改 docs 时，需在 submodule 内操作（`cd docs` 后执行 git 命令）
+
+### 文档导航
+
 - **文档导航**: `docs/index.md`
 - **开发日志**: `docs/planning/dev-logbook.md`
 - **设计基线**: `docs/baselines/design-baseline-v1.md`
