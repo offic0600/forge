@@ -3,6 +3,7 @@ package com.forge.webide.service
 import com.forge.webide.entity.KnowledgeTagEntity
 import com.forge.webide.model.*
 import com.forge.webide.repository.KnowledgeTagRepository
+import com.forge.webide.repository.WorkspaceRepository
 import jakarta.transaction.Transactional
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
@@ -13,7 +14,8 @@ import java.time.Instant
 @Service
 class KnowledgeTagService(
     private val knowledgeTagRepository: KnowledgeTagRepository,
-    @Value("\${forge.knowledge.baseline-path:}") private val baselinePath: String
+    @Value("\${forge.knowledge.baseline-path:}") private val baselinePath: String,
+    private val workspaceRepository: WorkspaceRepository
 ) {
 
     private val logger = LoggerFactory.getLogger(KnowledgeTagService::class.java)
@@ -49,6 +51,8 @@ class KnowledgeTagService(
         }
         // Auto-initialize workspace tags on first access
         if (knowledgeTagRepository.countByWorkspaceId(workspaceId) == 0L) {
+            // BUG-051: Guard against orphan tag rebuild after workspace deletion
+            if (!workspaceRepository.existsById(workspaceId)) return emptyList()
             initializeWorkspaceTags(workspaceId)
         }
         return knowledgeTagRepository.findByWorkspaceIdOrderBySortOrderAsc(workspaceId).map { it.toModel() }

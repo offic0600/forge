@@ -22,8 +22,10 @@ export interface StreamEvent {
     | "baseline_check"
     | "hitl_checkpoint"
     | "context_usage"
-    | "intent_confirmation";
+    | "intent_confirmation"
+    | "skills_activated";
   content?: string;
+  skills?: string[];
   toolCallId?: string;
   toolName?: string;
   toolInput?: Record<string, unknown>;

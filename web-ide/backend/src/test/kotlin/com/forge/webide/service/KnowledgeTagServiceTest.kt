@@ -4,6 +4,7 @@ import com.forge.webide.entity.KnowledgeTagEntity
 import com.forge.webide.model.CreateKnowledgeTagRequest
 import com.forge.webide.model.UpdateKnowledgeTagRequest
 import com.forge.webide.repository.KnowledgeTagRepository
+import com.forge.webide.repository.WorkspaceRepository
 import io.mockk.*
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
@@ -14,6 +15,7 @@ import java.util.Optional
 class KnowledgeTagServiceTest {
 
     private lateinit var repository: KnowledgeTagRepository
+    private lateinit var workspaceRepository: WorkspaceRepository
     private lateinit var service: KnowledgeTagService
 
     private fun makeEntity(
@@ -37,10 +39,13 @@ class KnowledgeTagServiceTest {
     @BeforeEach
     fun setUp() {
         repository = mockk(relaxed = true)
+        workspaceRepository = mockk(relaxed = true)
         // Global templates exist so init doesn't trigger import
         every { repository.findByWorkspaceIdIsNullOrderBySortOrderAsc() } returns listOf(makeEntity())
+        // Default: workspaces exist (so tags can be initialized)
+        every { workspaceRepository.existsById(any()) } returns true
 
-        service = KnowledgeTagService(repository, "")
+        service = KnowledgeTagService(repository, "", workspaceRepository)
     }
 
     @Test
@@ -84,11 +89,25 @@ class KnowledgeTagServiceTest {
         every { repository.existsById(any()) } returns false
         every { repository.save(any()) } answers { firstArg() }
         every { repository.findByWorkspaceIdOrderBySortOrderAsc(wsId) } returns emptyList()
+        every { workspaceRepository.existsById(wsId) } returns true
 
         service.listTags(wsId)
 
         // Should have saved 7 tags (one per chapterDef)
         verify(exactly = 7) { repository.save(match { it.workspaceId == wsId }) }
+    }
+
+    @Test
+    fun `listTags returns empty list when workspace does not exist (BUG-051)`() {
+        val wsId = "ws-deleted"
+        every { repository.countByWorkspaceId(wsId) } returns 0
+        every { workspaceRepository.existsById(wsId) } returns false
+
+        val result = service.listTags(wsId)
+
+        assertThat(result).isEmpty()
+        // Should NOT attempt to initialize tags for a deleted workspace
+        verify(exactly = 0) { repository.save(any()) }
     }
 
     @Test

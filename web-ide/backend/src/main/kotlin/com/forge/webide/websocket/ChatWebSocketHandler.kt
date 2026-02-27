@@ -1,7 +1,9 @@
 package com.forge.webide.websocket
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.forge.webide.entity.ChatSessionEntity
 import com.forge.webide.model.*
+import com.forge.webide.repository.ChatSessionRepository
 import com.forge.webide.service.ClaudeAgentService
 import com.forge.webide.service.skill.HitlAction
 import com.forge.webide.service.skill.HitlDecision
@@ -11,6 +13,7 @@ import org.springframework.web.socket.CloseStatus
 import org.springframework.web.socket.TextMessage
 import org.springframework.web.socket.WebSocketSession
 import org.springframework.web.socket.handler.TextWebSocketHandler
+import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -24,7 +27,8 @@ import java.util.concurrent.ConcurrentHashMap
 @Component
 class ChatWebSocketHandler(
     private val claudeAgentService: ClaudeAgentService,
-    private val objectMapper: ObjectMapper
+    private val objectMapper: ObjectMapper,
+    private val chatSessionRepository: ChatSessionRepository
 ) : TextWebSocketHandler() {
 
     private val logger = LoggerFactory.getLogger(ChatWebSocketHandler::class.java)
@@ -124,6 +128,15 @@ class ChatWebSocketHandler(
         }
 
         logger.debug("Chat message received: session=$chatSessionId, workspace=$workspaceId, length=${content.length}")
+
+        // BUG-032: Ensure ChatSessionEntity exists before persisting messages (FK constraint)
+        chatSessionRepository.findById(chatSessionId).orElseGet {
+            chatSessionRepository.save(ChatSessionEntity(
+                id = chatSessionId,
+                workspaceId = workspaceId.ifBlank { "unknown" },
+                createdAt = Instant.now()
+            ))
+        }
 
         // Stream the response back via the agentic loop
         claudeAgentService.streamMessage(

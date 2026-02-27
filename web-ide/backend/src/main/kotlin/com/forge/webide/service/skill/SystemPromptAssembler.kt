@@ -57,6 +57,87 @@ Always be concise but thorough in your responses."""
     }
 
     /**
+     * Assemble a system prompt using IntentSkillRouter result — no ProfileDefinition required.
+     * Replaces profile OODA guidance with a generic Agent behavior spec.
+     */
+    fun assembleForSkills(
+        routing: SkillSelectionResult,
+        skills: List<SkillDefinition>,
+        memoryContext: MemoryContext,
+        clarificationNeeded: Boolean = false
+    ): String {
+        val sections = mutableListOf<String>()
+
+        // [1] SuperAgent role definition
+        val superAgentIntro = extractRoleDefinition(skillLoader.superAgentInstructions)
+        if (superAgentIntro.isNotBlank()) {
+            sections.add(superAgentIntro)
+        }
+
+        // [2] Workspace Memory (Layer 1)
+        if (memoryContext.workspaceMemory.isNotBlank()) {
+            sections.add("## 工作区记忆\n\n${memoryContext.workspaceMemory}")
+        }
+
+        // [3] Stage Memory (Layer 2)
+        if (memoryContext.stageMemory.isNotBlank()) {
+            sections.add("## 当前阶段上下文\n\n${memoryContext.stageMemory}")
+        }
+
+        // [4] Recent Session Summaries (Layer 3)
+        if (memoryContext.recentSessions.isNotEmpty()) {
+            val sessionsSection = buildString {
+                appendLine("## 近期会话摘要")
+                appendLine()
+                for (s in memoryContext.recentSessions) {
+                    appendLine(s)
+                    appendLine()
+                }
+            }
+            sections.add(sessionsSection.trim())
+        }
+
+        // [5] Generic Agent Behavior (replaces profile OODA guidance)
+        sections.add(buildAgentBehaviorSection(routing.mode, clarificationNeeded))
+
+        // [6] Available Skills — Level 1 metadata only
+        val skillsSection = buildSkillsSections(skills)
+        if (skillsSection.isNotBlank()) {
+            sections.add(skillsSection)
+        }
+
+        // [7] Baseline rules
+        if (routing.baselines.isNotEmpty()) {
+            sections.add(buildBaselineSectionFromList(routing.baselines))
+        }
+
+        // [8] Available MCP tools + progressive loading protocol
+        val toolsSection = buildToolsSection(routing.mode)
+        if (toolsSection.isNotBlank()) {
+            sections.add(toolsSection)
+        }
+
+        val assembled = sections.joinToString("\n\n---\n\n")
+
+        if (assembled.length > MAX_PROMPT_CHARS) {
+            logger.warn(
+                "Assembled prompt exceeds limit ({} chars > {}), truncating",
+                assembled.length, MAX_PROMPT_CHARS
+            )
+            return assembled.take(MAX_PROMPT_CHARS)
+        }
+
+        logger.debug(
+            "Assembled intent-routed prompt: {} chars, skills={}, confidence={}, memory={}c+{}c+{}sessions",
+            assembled.length, skills.map { it.name }, routing.confidence,
+            memoryContext.workspaceMemory.length, memoryContext.stageMemory.length,
+            memoryContext.recentSessions.size
+        )
+
+        return assembled
+    }
+
+    /**
      * Assemble a complete system prompt with memory context injection.
      * Memory layers are inserted between the SuperAgent role and the active profile.
      */
@@ -229,6 +310,46 @@ Always be concise but thorough in your responses."""
             }
         }
 
+        return sb.toString().trim()
+    }
+
+    private fun buildAgentBehaviorSection(mode: String, clarificationNeeded: Boolean): String {
+        val sb = StringBuilder()
+        sb.appendLine("## Agent 行为规范")
+        sb.appendLine()
+        sb.appendLine("你是 Forge SuperAgent，专业的 AI 驱动交付助手。执行任务时遵循以下规范：")
+        sb.appendLine()
+        sb.appendLine("1. **使用工具实际写文件**，不只展示代码（使用 `workspace_write_file`）")
+        sb.appendLine("2. **写文件前先读取现有内容**（`workspace_read_file`），避免覆盖重要代码")
+        sb.appendLine("3. **代码生成后验证**：使用 `workspace_compile` 确认编译通过")
+        sb.appendLine("4. **Git 操作前先查看状态**：先调用 `workspace_git_status`/`workspace_git_diff`")
+        sb.appendLine("5. **完成后简要总结**：说明创建/修改了哪些文件，做了什么改动")
+
+        if (mode == "read-only") {
+            sb.appendLine()
+            sb.appendLine("**当前模式：只读分析** — 仅观察分析，不写代码文件，输出结构化报告。")
+        }
+
+        if (clarificationNeeded) {
+            sb.appendLine()
+            sb.appendLine("**[意图澄清]** 当前请求意图不够明确。请先简洁地询问用户具体想要什么（给出 2-3 个具体选项），" +
+                "等用户明确后再执行任务。不要直接猜测并执行。")
+        }
+
+        return sb.toString().trim()
+    }
+
+    private fun buildBaselineSectionFromList(baselines: List<String>): String {
+        val sb = StringBuilder()
+        sb.appendLine("## Baseline Enforcement")
+        sb.appendLine()
+        sb.appendLine("After every Act phase, run ALL of the following baselines:")
+        for (baseline in baselines) {
+            sb.appendLine("- **$baseline**")
+        }
+        sb.appendLine()
+        sb.appendLine("On any failure: do NOT deliver the result. Loop back to Observe, fix the issue, and re-run.")
+        sb.appendLine("Maximum 3 OODA loops for baseline fixes. If still failing, escalate to the user.")
         return sb.toString().trim()
     }
 

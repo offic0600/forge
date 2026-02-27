@@ -52,6 +52,20 @@ class SkillLoader(
 
     fun loadAllSkills(): List<SkillDefinition> = skillCache.values.toList()
 
+    /**
+     * Load skills by their names (used by IntentSkillRouter).
+     * Skips unknown skill names with a warning.
+     */
+    fun loadByNames(names: List<String>): List<SkillDefinition> {
+        return names.mapNotNull { name ->
+            val skill = skillCache[name]
+            if (skill == null) {
+                logger.debug("Skill '{}' requested by IntentSkillRouter not found in cache", name)
+            }
+            skill
+        }.filter { it.enabled }
+    }
+
     fun loadAllProfiles(): List<ProfileDefinition> = profileCache.values.toList()
 
     fun loadAllFoundationSkills(): List<SkillDefinition> {

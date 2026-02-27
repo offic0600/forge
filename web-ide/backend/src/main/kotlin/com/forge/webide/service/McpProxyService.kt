@@ -441,13 +441,84 @@ class McpProxyService(
             ),
             McpTool(
                 name = "workspace_delete_file",
-                description = "Delete a file or directory from the current workspace. Use this to remove files that are no longer needed.",
+                description = "Delete a file or directory from the current workspace. Use this to remove files that are no longer needed. SECURITY: path traversal (.. ) is forbidden.",
                 inputSchema = mapOf(
                     "type" to "object",
                     "properties" to mapOf(
                         "path" to mapOf("type" to "string", "description" to "File or directory path relative to workspace root to delete")
                     ),
                     "required" to listOf("path")
+                )
+            ),
+            McpTool(
+                name = "workspace_git_status",
+                description = "Show git status of the workspace: current branch name and list of modified/staged/untracked files.",
+                inputSchema = mapOf(
+                    "type" to "object",
+                    "properties" to mapOf<String, Any>()
+                )
+            ),
+            McpTool(
+                name = "workspace_git_diff",
+                description = "Show git diff (staged + unstaged changes) in the workspace. Use this before committing to review what will be committed.",
+                inputSchema = mapOf(
+                    "type" to "object",
+                    "properties" to mapOf<String, Any>()
+                )
+            ),
+            McpTool(
+                name = "workspace_git_add",
+                description = "Stage files for the next git commit. Use 'paths' to stage specific files, or 'all=true' to stage all changes.",
+                inputSchema = mapOf(
+                    "type" to "object",
+                    "properties" to mapOf(
+                        "paths" to mapOf("type" to "array", "items" to mapOf("type" to "string"), "description" to "List of file paths to stage (relative to workspace root)"),
+                        "all" to mapOf("type" to "boolean", "description" to "If true, stage all changes (git add -A). Overrides paths.")
+                    )
+                )
+            ),
+            McpTool(
+                name = "workspace_git_commit",
+                description = "Commit staged changes with a message. The message will be tagged with [Forge-Agent] automatically. Always run workspace_git_diff and workspace_git_add before committing.",
+                inputSchema = mapOf(
+                    "type" to "object",
+                    "properties" to mapOf(
+                        "message" to mapOf("type" to "string", "description" to "Commit message (format: 'type: description', e.g. 'feat: add login feature')")
+                    ),
+                    "required" to listOf("message")
+                )
+            ),
+            McpTool(
+                name = "workspace_git_push",
+                description = "Push the current branch to a remote repository. SAFETY: pushing to main/master returns a warning instead of executing. Use feature branches and PRs.",
+                inputSchema = mapOf(
+                    "type" to "object",
+                    "properties" to mapOf(
+                        "remote" to mapOf("type" to "string", "description" to "Remote name (default: origin)"),
+                        "branch" to mapOf("type" to "string", "description" to "Branch name to push (default: current branch)")
+                    )
+                )
+            ),
+            McpTool(
+                name = "workspace_git_pull",
+                description = "Pull latest changes from the remote repository. Uses --rebase by default to maintain a clean history.",
+                inputSchema = mapOf(
+                    "type" to "object",
+                    "properties" to mapOf(
+                        "remote" to mapOf("type" to "string", "description" to "Remote name (default: origin)"),
+                        "rebase" to mapOf("type" to "boolean", "description" to "Use --rebase instead of merge (default: true)")
+                    )
+                )
+            ),
+            McpTool(
+                name = "workspace_git_branch",
+                description = "Create a new git branch or list existing branches. Provide 'name' to create a new branch, or 'list=true' to list all branches.",
+                inputSchema = mapOf(
+                    "type" to "object",
+                    "properties" to mapOf(
+                        "name" to mapOf("type" to "string", "description" to "New branch name to create (e.g. 'feature/user-login')"),
+                        "list" to mapOf("type" to "boolean", "description" to "If true, list all branches instead of creating")
+                    )
                 )
             )
         )
@@ -492,7 +563,10 @@ class McpProxyService(
             "workspace_write_file", "workspace_read_file", "workspace_list_files",
             "workspace_compile", "workspace_test",
             "workspace_start_service", "workspace_stop_service",
-            "workspace_delete_file"
+            "workspace_delete_file",
+            "workspace_git_status", "workspace_git_diff", "workspace_git_add",
+            "workspace_git_commit", "workspace_git_push", "workspace_git_pull",
+            "workspace_git_branch"
         )
 
         /**

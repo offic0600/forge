@@ -85,6 +85,7 @@ class ClaudeAgentServiceTest {
             chatMessageRepository = chatMessageRepository,
             executionRecordRepository = mockk(relaxed = true),
             profileRouter = profileRouter,
+            intentSkillRouter = mockk(relaxed = true),
             skillLoader = skillLoader,
             systemPromptAssembler = systemPromptAssembler,
             metricsService = metricsService,

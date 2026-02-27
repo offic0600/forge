@@ -106,12 +106,7 @@ export function AiChatSidebar({
     baselineResults?: Array<{ name: string; status: string; output?: string }>;
     timeoutSeconds: number;
   } | null>(null);
-  const [intentConfirmation, setIntentConfirmation] = useState<{
-    currentProfile: string;
-    confidence: number;
-    reason: string;
-    options: Array<{ id: string; label: string; description: string }>;
-  } | null>(null);
+  const [activatedSkills, setActivatedSkills] = useState<string[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -320,16 +315,10 @@ export function AiChatSidebar({
                 setHitlData(null);
               }
               break;
-            case "intent_confirmation":
-              setIntentConfirmation({
-                currentProfile: event.currentProfile ?? "",
-                confidence: event.confidence ?? 0,
-                reason: event.reason ?? "",
-                options: event.options ?? [],
-              });
+            case "skills_activated":
+              setActivatedSkills(event.skills ?? []);
               break;
             case "profile_active":
-              setIntentConfirmation(null);
               setActiveProfile({
                 name: event.activeProfile ?? "unknown",
                 skills: event.loadedSkills ?? [],
@@ -433,6 +422,10 @@ export function AiChatSidebar({
                     : m,
                 ),
               );
+              // BUG-048: Clear streaming state on error so UI doesn't stay stuck in "Thinking..."
+              setIsStreaming(false);
+              setThinkingText("");
+              setOodaPhase(null);
               break;
             case "file_changed": {
               // Notify workspace page to refresh file tree and open the file
@@ -478,7 +471,6 @@ export function AiChatSidebar({
       // contextUsage intentionally NOT cleared — keep showing after stream ends
       setHitlPending(false);
       setHitlData(null);
-      setIntentConfirmation(null);
       abortRef.current = null;
     }
   };
@@ -856,34 +848,22 @@ export function AiChatSidebar({
             )}
           </div>
         )}
-        {/* Intent Confirmation Card */}
-        {intentConfirmation && (
-          <div className="mx-1 rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2">
-            <div className="text-xs text-muted-foreground">
-              检测到你的意图可能是：
-              <span className="font-medium text-foreground ml-1">
-                {intentConfirmation.currentProfile.replace("-profile", "")}
+        {/* Skills Activated Tags */}
+        {activatedSkills.length > 0 && isStreaming && (
+          <div className="mx-1 flex flex-wrap gap-1">
+            {activatedSkills.slice(0, 5).map((skill) => (
+              <span
+                key={skill}
+                className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] text-primary border border-primary/20"
+              >
+                {skill}
               </span>
-              <span className="ml-1 text-muted-foreground/60">
-                (置信度 {Math.round(intentConfirmation.confidence * 100)}%)
+            ))}
+            {activatedSkills.length > 5 && (
+              <span className="text-[10px] text-muted-foreground">
+                +{activatedSkills.length - 5}
               </span>
-            </div>
-            <div className="text-xs text-muted-foreground mb-1">你想要我做什么？</div>
-            <div className="grid grid-cols-2 gap-1.5">
-              {intentConfirmation.options.map((option) => (
-                <button
-                  key={option.id}
-                  onClick={() => {
-                    claudeClient.sendIntentResponse(option.id);
-                    setIntentConfirmation(null);
-                  }}
-                  className="flex flex-col items-start gap-0.5 rounded-md border border-border bg-background px-2.5 py-2 text-left hover:border-primary/50 hover:bg-primary/5 transition-colors"
-                >
-                  <span className="text-xs font-medium text-foreground">{option.label}</span>
-                  <span className="text-[10px] text-muted-foreground leading-tight">{option.description}</span>
-                </button>
-              ))}
-            </div>
+            )}
           </div>
         )}
         {/* HITL Approval Panel */}

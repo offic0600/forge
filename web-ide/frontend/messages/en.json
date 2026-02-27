@@ -53,7 +53,15 @@
     "scopeCustom": "Custom",
     "selectSkill": "Select a skill",
     "selectSkillDesc": "Browse and manage platform, workspace, and custom skills",
-    "failedToLoad": "Failed to load skills"
+    "failedToLoad": "Failed to load skills",
+    "skillsActivated": "Activated Skills",
+    "gitWorkflow": "Git Workflow"
+  },
+  "chat": {
+    "directRouting": "Direct Routing",
+    "skillsActivated": "{count} skill(s) activated",
+    "lowConfidenceHint": "Intent unclear, AI will ask for clarification first",
+    "gitSkillHint": "Use @git to activate the Git workflow skill"
   },
   "knowledge": {
     "tabDocs": "Documentation",

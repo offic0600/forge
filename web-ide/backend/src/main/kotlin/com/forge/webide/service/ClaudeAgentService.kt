@@ -46,6 +46,7 @@ class ClaudeAgentService(
     private val chatMessageRepository: ChatMessageRepository,
     private val executionRecordRepository: ExecutionRecordRepository,
     private val profileRouter: ProfileRouter,
+    private val intentSkillRouter: IntentSkillRouter,
     private val skillLoader: SkillLoader,
     private val systemPromptAssembler: SystemPromptAssembler,
     private val metricsService: MetricsService,
@@ -95,17 +96,17 @@ class ClaudeAgentService(
     }
 
     /**
-     * Build a dynamic system prompt based on the user's message.
+     * Build a dynamic system prompt using IntentSkillRouter (direct skill selection).
      * Injects 3-layer memory context for cross-session continuity.
      * Falls back to a static prompt if skill loading fails.
      */
     private fun buildDynamicSystemPrompt(message: String, workspaceId: String = ""): DynamicPromptResult {
         return try {
-            val routing = profileRouter.route(message)
-            // Load memory context for cross-session continuity
+            val routing = intentSkillRouter.analyze(message, workspaceId)
+            // Load memory context using profile hint for backward compat
             val memoryContext = if (workspaceId.isNotBlank()) {
                 try {
-                    memoryContextLoader.loadMemoryContext(workspaceId, routing.profile.name)
+                    memoryContextLoader.loadMemoryContext(workspaceId, routing.profileHint)
                 } catch (e: Exception) {
                     logger.debug("Failed to load memory context: {}", e.message)
                     MemoryContext()
@@ -113,13 +114,14 @@ class ClaudeAgentService(
             } else {
                 MemoryContext()
             }
-            val skills = skillLoader.loadSkillsForProfile(routing.profile, message)
-            val systemPrompt = systemPromptAssembler.assemble(routing.profile, skills, memoryContext)
-            metricsService.recordProfileRoute(routing.profile.name, routing.reason)
-            metricsService.recordSkillLoaded(routing.profile.name, skills.size)
+            val skills = skillLoader.loadByNames(routing.skills)
+            val clarificationNeeded = routing.confidence < INTENT_CONFIRMATION_THRESHOLD
+            val systemPrompt = systemPromptAssembler.assembleForSkills(routing, skills, memoryContext, clarificationNeeded)
+            metricsService.recordProfileRoute(routing.profileHint, routing.reason)
+            metricsService.recordSkillLoaded(routing.profileHint, skills.size)
             DynamicPromptResult(
                 systemPrompt = systemPrompt,
-                activeProfile = routing.profile.name,
+                activeProfile = routing.profileHint,
                 loadedSkills = skills.map { it.name },
                 routingReason = routing.reason,
                 confidence = routing.confidence
@@ -256,74 +258,14 @@ class ClaudeAgentService(
                 metricsService.recordOodaPhase("observe")
                 emitSubStep(onEvent, "解析用户意图（${message.length} 字符）")
 
-                var promptResult = buildDynamicSystemPrompt(message, workspaceId)
-                logger.info("Stream profile: {}, Skills: {}, confidence: {}", promptResult.activeProfile, promptResult.loadedSkills, promptResult.confidence)
+                val promptResult = buildDynamicSystemPrompt(message, workspaceId)
+                logger.info("Stream skills: {}, confidence: {}, reason: {}", promptResult.loadedSkills, promptResult.confidence, promptResult.routingReason)
 
-                // Low-confidence intent confirmation
+                // Low confidence: system prompt already has clarification instruction injected by assembleForSkills
                 if (promptResult.confidence < INTENT_CONFIRMATION_THRESHOLD) {
-                    logger.info("Low confidence routing ({}) for session {}, requesting intent confirmation",
+                    logger.info("Low confidence routing ({}) for session {}, AI will ask for clarification",
                         promptResult.confidence, sessionId)
-
-                    val confirmationFuture = java.util.concurrent.CompletableFuture<String>()
-                    pendingIntentConfirmations[sessionId] = confirmationFuture
-
-                    onEvent(mapOf(
-                        "type" to "intent_confirmation",
-                        "currentProfile" to promptResult.activeProfile,
-                        "confidence" to promptResult.confidence,
-                        "reason" to promptResult.routingReason,
-                        "options" to listOf(
-                            mapOf("id" to "evaluation-profile", "label" to "分析/评估", "description" to "查看进度、评估代码、生成报告"),
-                            mapOf("id" to "development-profile", "label" to "开发/修复", "description" to "写代码、修 Bug、实现功能"),
-                            mapOf("id" to "planning-profile", "label" to "规划/需求", "description" to "需求分析、产品规划"),
-                            mapOf("id" to "design-profile", "label" to "设计/架构", "description" to "架构设计、API 设计、数据库设计"),
-                            mapOf("id" to "testing-profile", "label" to "测试", "description" to "写测试、测试分析"),
-                            mapOf("id" to "ops-profile", "label" to "运维/部署", "description" to "部署、发布、监控")
-                        )
-                    ))
-
-                    try {
-                        val selectedProfile = confirmationFuture.get(60, java.util.concurrent.TimeUnit.SECONDS)
-                        pendingIntentConfirmations.remove(sessionId)
-
-                        if (selectedProfile != promptResult.activeProfile) {
-                            val confirmedProfile = skillLoader.loadProfile(selectedProfile)
-                            if (confirmedProfile != null) {
-                                val memoryContext = if (workspaceId.isNotBlank()) {
-                                    try { memoryContextLoader.loadMemoryContext(workspaceId, confirmedProfile.name) }
-                                    catch (e: Exception) { com.forge.webide.service.memory.MemoryContext() }
-                                } else { com.forge.webide.service.memory.MemoryContext() }
-                                val skills = skillLoader.loadSkillsForProfile(confirmedProfile, message)
-                                val systemPrompt = systemPromptAssembler.assemble(confirmedProfile, skills, memoryContext)
-                                promptResult = DynamicPromptResult(
-                                    systemPrompt = systemPrompt,
-                                    activeProfile = confirmedProfile.name,
-                                    loadedSkills = skills.map { it.name },
-                                    routingReason = "User confirmed: $selectedProfile",
-                                    confidence = 1.0
-                                )
-                            }
-                        } else {
-                            promptResult = promptResult.copy(
-                                confidence = 1.0,
-                                routingReason = "User confirmed: ${promptResult.routingReason}"
-                            )
-                        }
-
-                        // Inject clarification instruction: AI should ask user what they specifically want
-                        val clarifyInstruction = "\n\n[IMPORTANT] 用户的原始消息比较模糊，系统已通过意图确认将你切换到 ${promptResult.activeProfile.replace("-profile", "")} 模式。" +
-                            "请先用简短的一句话确认你理解了用户的需求方向，然后**主动追问**用户具体想做什么（给出 2-3 个具体选项），" +
-                            "等用户明确后再开始执行。不要直接猜测并执行任务。"
-                        promptResult = promptResult.copy(
-                            systemPrompt = promptResult.systemPrompt + clarifyInstruction
-                        )
-
-                        emitSubStep(onEvent, "用户确认意图：${promptResult.activeProfile}")
-                    } catch (e: java.util.concurrent.TimeoutException) {
-                        pendingIntentConfirmations.remove(sessionId)
-                        logger.info("Intent confirmation timed out for session {}, proceeding with default", sessionId)
-                        emitSubStep(onEvent, "意图确认超时，使用默认路由: ${promptResult.activeProfile}")
-                    }
+                    emitSubStep(onEvent, "意图不明确（置信度 ${String.format("%.2f", promptResult.confidence)}），AI 将先澄清需求")
                 }
 
                 // Resolve adapter and model based on modelId
@@ -345,12 +287,18 @@ class ClaudeAgentService(
                 metricsService.recordOodaPhase("orient")
                 emitSubStep(onEvent, "路由到 ${promptResult.activeProfile}，加载 ${promptResult.loadedSkills.size} 个 Skills")
 
-                // Emit profile routing info
+                // Emit routing info (profile_active for backward compat + skills_activated)
                 onEvent(mapOf(
                     "type" to "profile_active",
                     "activeProfile" to promptResult.activeProfile,
                     "loadedSkills" to promptResult.loadedSkills,
                     "routingReason" to promptResult.routingReason,
+                    "confidence" to promptResult.confidence
+                ))
+                onEvent(mapOf(
+                    "type" to "skills_activated",
+                    "skills" to promptResult.loadedSkills,
+                    "reason" to promptResult.routingReason,
                     "confidence" to promptResult.confidence
                 ))
 

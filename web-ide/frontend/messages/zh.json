@@ -53,7 +53,15 @@
     "scopeCustom": "自定义",
     "selectSkill": "选择技能",
     "selectSkillDesc": "浏览和管理平台、工作区和自定义技能",
-    "failedToLoad": "加载技能失败"
+    "failedToLoad": "加载技能失败",
+    "skillsActivated": "已激活技能",
+    "gitWorkflow": "Git 工作流"
+  },
+  "chat": {
+    "directRouting": "直接路由",
+    "skillsActivated": "已激活 {count} 个技能",
+    "lowConfidenceHint": "意图不明确，AI 将先询问澄清",
+    "gitSkillHint": "使用 @git 激活 Git 工作流技能"
   },
   "knowledge": {
     "tabDocs": "文档",

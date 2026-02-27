@@ -35,11 +35,7 @@ class GitService {
     }
 
     fun pull(workspaceDir: Path): String {
-        val result = runGitCommand(listOf("git", "pull", "--ff-only"), workspaceDir)
-        if (result.exitCode != 0) {
-            throw GitOperationException("git pull failed: ${result.stderr}")
-        }
-        return result.stdout
+        return pull(workspaceDir, rebase = false)
     }
 
     fun status(workspaceDir: Path): GitStatus {
@@ -56,6 +52,87 @@ class GitService {
             clean = modifiedFiles.isEmpty(),
             modifiedFiles = modifiedFiles
         )
+    }
+
+    fun diff(workspaceDir: Path): String {
+        val result = runGitCommand(listOf("git", "diff", "HEAD"), workspaceDir)
+        return result.stdout.ifBlank { "(no changes)" }
+    }
+
+    fun add(workspaceDir: Path, paths: List<String>): String {
+        val cmd = if (paths.isEmpty()) {
+            listOf("git", "add", "-A")
+        } else {
+            listOf("git", "add") + paths
+        }
+        val result = runGitCommand(cmd, workspaceDir)
+        if (result.exitCode != 0) {
+            throw GitOperationException("git add failed: ${result.stderr}")
+        }
+        return "Staged: ${if (paths.isEmpty()) "all changes" else paths.joinToString(", ")}"
+    }
+
+    fun commit(workspaceDir: Path, message: String): String {
+        val taggedMessage = if (message.contains("[Forge-Agent]")) message else "$message [Forge-Agent]"
+        val result = runGitCommand(listOf("git", "commit", "-m", taggedMessage), workspaceDir)
+        if (result.exitCode != 0) {
+            throw GitOperationException("git commit failed: ${result.stderr}")
+        }
+        return result.stdout.trim()
+    }
+
+    fun push(workspaceDir: Path, remote: String = "origin", branch: String? = null): String {
+        val currentBranch = branch ?: runGitCommand(
+            listOf("git", "rev-parse", "--abbrev-ref", "HEAD"), workspaceDir
+        ).stdout.trim()
+
+        // Safety: warn instead of pushing directly to main/master
+        if (currentBranch == "main" || currentBranch == "master") {
+            return "⚠️ 安全警告：当前在 $currentBranch 分支上。直接推送到 $currentBranch 存在风险。\n" +
+                "建议：先创建 feature branch，通过 PR 合并到 $currentBranch。\n" +
+                "如确需推送，请手动执行 git push $remote $currentBranch。"
+        }
+
+        val cmd = listOf("git", "push", remote, currentBranch)
+        val result = runGitCommand(cmd, workspaceDir)
+        if (result.exitCode != 0) {
+            throw GitOperationException("git push failed: ${result.stderr}")
+        }
+        return result.stdout.ifBlank { "Pushed $currentBranch to $remote" }
+    }
+
+    fun pull(workspaceDir: Path, remote: String = "origin", rebase: Boolean = true): String {
+        val cmd = if (rebase) {
+            listOf("git", "pull", "--rebase", remote)
+        } else {
+            listOf("git", "pull", remote)
+        }
+        val result = runGitCommand(cmd, workspaceDir)
+        if (result.exitCode != 0) {
+            throw GitOperationException("git pull failed: ${result.stderr}")
+        }
+        return result.stdout.trim().ifBlank { "Already up to date." }
+    }
+
+    fun createBranch(workspaceDir: Path, name: String): String {
+        val result = runGitCommand(listOf("git", "checkout", "-b", name), workspaceDir)
+        if (result.exitCode != 0) {
+            throw GitOperationException("git checkout -b failed: ${result.stderr}")
+        }
+        return "Created and switched to branch: $name"
+    }
+
+    fun listBranches(workspaceDir: Path): String {
+        val result = runGitCommand(listOf("git", "branch", "-a"), workspaceDir)
+        return result.stdout.trim().ifBlank { "(no branches)" }
+    }
+
+    fun log(workspaceDir: Path, limit: Int = 10): String {
+        val result = runGitCommand(
+            listOf("git", "log", "--oneline", "-$limit"),
+            workspaceDir
+        )
+        return result.stdout.trim().ifBlank { "(no commits)" }
     }
 
     private fun runGitCommand(cmd: List<String>, workDir: Path): GitResult {

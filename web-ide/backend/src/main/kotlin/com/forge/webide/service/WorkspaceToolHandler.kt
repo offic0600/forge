@@ -9,12 +9,15 @@ import org.springframework.stereotype.Service
 
 /**
  * Handles workspace-scoped MCP tools: workspace_write_file, workspace_read_file,
- * workspace_list_files, workspace_compile, workspace_test.
+ * workspace_list_files, workspace_compile, workspace_test, workspace_delete_file,
+ * workspace_git_status, workspace_git_diff, workspace_git_add, workspace_git_commit,
+ * workspace_git_push, workspace_git_pull, workspace_git_branch.
  */
 @Service
 class WorkspaceToolHandler(
     private val workspaceService: WorkspaceService,
-    private val runtimeService: WorkspaceRuntimeService
+    private val runtimeService: WorkspaceRuntimeService,
+    private val gitService: GitService
 ) {
 
     private val logger = LoggerFactory.getLogger(WorkspaceToolHandler::class.java)
@@ -84,6 +87,13 @@ class WorkspaceToolHandler(
                 }
                 "workspace_start_service" -> handleStartService(workspaceId, args)
                 "workspace_stop_service" -> handleStopService(workspaceId, args)
+                "workspace_git_status" -> handleGitStatus(workspaceId)
+                "workspace_git_diff" -> handleGitDiff(workspaceId)
+                "workspace_git_add" -> handleGitAdd(workspaceId, args)
+                "workspace_git_commit" -> handleGitCommit(workspaceId, args)
+                "workspace_git_push" -> handleGitPush(workspaceId, args)
+                "workspace_git_pull" -> handleGitPull(workspaceId, args)
+                "workspace_git_branch" -> handleGitBranch(workspaceId, args)
                 else -> McpProxyService.errorResponse("Unknown workspace tool: $toolName")
             }
         } catch (e: Exception) {
@@ -382,5 +392,105 @@ class WorkspaceToolHandler(
             else -> return 0
         }
         return pattern.findAll(content).count()
+    }
+
+    // ---- Git tool implementations ----
+
+    private fun handleGitStatus(workspaceId: String): McpToolCallResponse {
+        return try {
+            val workspaceDir = workspaceService.getWorkspaceDir(workspaceId)
+            val status = gitService.status(workspaceDir)
+            val text = buildString {
+                appendLine("Branch: ${status.branch}")
+                appendLine("Status: ${if (status.clean) "clean (no changes)" else "${status.modifiedFiles.size} file(s) modified"}")
+                if (status.modifiedFiles.isNotEmpty()) {
+                    appendLine()
+                    appendLine("Modified files:")
+                    status.modifiedFiles.forEach { appendLine("  $it") }
+                }
+            }
+            McpToolCallResponse(content = listOf(McpContent(type = "text", text = text.trim())), isError = false)
+        } catch (e: Exception) {
+            McpProxyService.errorResponse("git status failed: ${e.message}")
+        }
+    }
+
+    private fun handleGitDiff(workspaceId: String): McpToolCallResponse {
+        return try {
+            val workspaceDir = workspaceService.getWorkspaceDir(workspaceId)
+            val diff = gitService.diff(workspaceDir)
+            McpToolCallResponse(content = listOf(McpContent(type = "text", text = diff)), isError = false)
+        } catch (e: Exception) {
+            McpProxyService.errorResponse("git diff failed: ${e.message}")
+        }
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun handleGitAdd(workspaceId: String, args: Map<String, Any?>): McpToolCallResponse {
+        return try {
+            val workspaceDir = workspaceService.getWorkspaceDir(workspaceId)
+            val all = args["all"] as? Boolean ?: false
+            val paths: List<String> = if (all) {
+                emptyList()
+            } else {
+                (args["paths"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
+            }
+            val result = gitService.add(workspaceDir, paths)
+            McpToolCallResponse(content = listOf(McpContent(type = "text", text = result)), isError = false)
+        } catch (e: Exception) {
+            McpProxyService.errorResponse("git add failed: ${e.message}")
+        }
+    }
+
+    private fun handleGitCommit(workspaceId: String, args: Map<String, Any?>): McpToolCallResponse {
+        val message = args["message"] as? String
+            ?: return McpProxyService.errorResponse("'message' parameter is required")
+        return try {
+            val workspaceDir = workspaceService.getWorkspaceDir(workspaceId)
+            val result = gitService.commit(workspaceDir, message)
+            McpToolCallResponse(content = listOf(McpContent(type = "text", text = result)), isError = false)
+        } catch (e: Exception) {
+            McpProxyService.errorResponse("git commit failed: ${e.message}")
+        }
+    }
+
+    private fun handleGitPush(workspaceId: String, args: Map<String, Any?>): McpToolCallResponse {
+        return try {
+            val workspaceDir = workspaceService.getWorkspaceDir(workspaceId)
+            val remote = args["remote"] as? String ?: "origin"
+            val branch = args["branch"] as? String
+            val result = gitService.push(workspaceDir, remote, branch)
+            McpToolCallResponse(content = listOf(McpContent(type = "text", text = result)), isError = false)
+        } catch (e: Exception) {
+            McpProxyService.errorResponse("git push failed: ${e.message}")
+        }
+    }
+
+    private fun handleGitPull(workspaceId: String, args: Map<String, Any?>): McpToolCallResponse {
+        return try {
+            val workspaceDir = workspaceService.getWorkspaceDir(workspaceId)
+            val remote = args["remote"] as? String ?: "origin"
+            val rebase = args["rebase"] as? Boolean ?: true
+            val result = gitService.pull(workspaceDir, remote, rebase)
+            McpToolCallResponse(content = listOf(McpContent(type = "text", text = result)), isError = false)
+        } catch (e: Exception) {
+            McpProxyService.errorResponse("git pull failed: ${e.message}")
+        }
+    }
+
+    private fun handleGitBranch(workspaceId: String, args: Map<String, Any?>): McpToolCallResponse {
+        return try {
+            val workspaceDir = workspaceService.getWorkspaceDir(workspaceId)
+            val name = args["name"] as? String
+            val list = args["list"] as? Boolean ?: false
+            val result = if (name != null && !list) {
+                gitService.createBranch(workspaceDir, name)
+            } else {
+                gitService.listBranches(workspaceDir)
+            }
+            McpToolCallResponse(content = listOf(McpContent(type = "text", text = result)), isError = false)
+        } catch (e: Exception) {
+            McpProxyService.errorResponse("git branch failed: ${e.message}")
+        }
     }
 }
