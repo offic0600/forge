@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, LayoutDashboard, Settings } from "lucide-react";
+import { Building2, LayoutDashboard, Zap } from "lucide-react";
 
 const navItems = [
   {
@@ -28,15 +28,15 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="flex h-screen w-52 flex-col border-r border-gray-700 bg-gray-900">
+    <aside className="flex h-screen w-52 flex-col border-r border-border bg-card">
       {/* Logo */}
-      <div className="flex items-center gap-2 border-b border-gray-700 px-4 py-4">
-        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-indigo-600">
-          <Settings size={16} className="text-white" />
+      <div className="flex items-center gap-2 border-b border-border px-4 py-4">
+        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary">
+          <Zap size={16} className="text-primary-foreground" />
         </div>
         <div>
-          <p className="text-sm font-semibold text-white">Enterprise</p>
-          <p className="text-xs text-gray-400">Console</p>
+          <p className="text-sm font-semibold text-foreground">Forge</p>
+          <p className="text-xs text-muted-foreground">Enterprise Console</p>
         </div>
       </div>
 
@@ -52,8 +52,8 @@ export function Sidebar() {
                   href={item.href}
                   className={`flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
                     active
-                      ? "bg-indigo-600/20 text-indigo-300"
-                      : "text-gray-400 hover:bg-gray-800 hover:text-gray-200"
+                      ? "bg-primary/15 text-primary"
+                      : "text-muted-foreground hover:bg-accent hover:text-foreground"
                   }`}
                 >
                   <Icon size={16} />
@@ -66,8 +66,8 @@ export function Sidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="border-t border-gray-700 px-4 py-3">
-        <p className="text-xs text-gray-500">Phase 13 — Enterprise Console</p>
+      <div className="border-t border-border px-4 py-3">
+        <p className="text-xs text-muted-foreground">Phase 13 — Enterprise</p>
       </div>
     </aside>
   );

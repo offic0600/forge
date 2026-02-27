@@ -30,7 +30,6 @@ export default function OrgDetailPage() {
   const qc = useQueryClient();
   const [tab, setTab] = useState<Tab>("overview");
 
-  // Data queries
   const { data: org, isLoading } = useQuery({
     queryKey: ["orgs", id],
     queryFn: () => api.orgs.get(id),
@@ -51,20 +50,14 @@ export default function OrgDetailPage() {
     enabled: tab === "workspaces",
   });
 
-  // Edit state
   const [editName, setEditName] = useState("");
   const [editDesc, setEditDesc] = useState("");
   const [editing, setEditing] = useState(false);
-
-  // Add member state
   const [newUserId, setNewUserId] = useState("");
   const [newRole, setNewRole] = useState("MEMBER");
   const [mutationError, setMutationError] = useState<string | null>(null);
-
-  // Bind workspace
   const [selectedWsId, setSelectedWsId] = useState("");
 
-  // Mutations
   const updateMutation = useMutation({
     mutationFn: (req: { name: string; description: string }) =>
       api.orgs.update(id, req),
@@ -114,7 +107,7 @@ export default function OrgDetailPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent" />
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
       </div>
     );
   }
@@ -122,7 +115,7 @@ export default function OrgDetailPage() {
   if (!org) {
     return (
       <div className="text-center py-20">
-        <p className="text-gray-400">Organization not found</p>
+        <p className="text-muted-foreground">Organization not found</p>
         <Link href="/orgs" className="mt-4 inline-block">
           <Button variant="secondary">Back to Organizations</Button>
         </Link>
@@ -151,8 +144,8 @@ export default function OrgDetailPage() {
             </Button>
           </Link>
           <div className="flex-1">
-            <h1 className="text-2xl font-bold text-white">{org.name}</h1>
-            <p className="text-sm text-gray-400 font-mono">/{org.slug}</p>
+            <h1 className="text-2xl font-bold text-foreground">{org.name}</h1>
+            <p className="text-sm text-muted-foreground font-mono">/{org.slug}</p>
           </div>
           <Badge color={org.status === "ACTIVE" ? "green" : "gray"}>
             {org.status.toLowerCase()}
@@ -160,24 +153,24 @@ export default function OrgDetailPage() {
         </div>
 
         {/* Sub-navigation links */}
-        <div className="flex items-center gap-4 text-sm text-gray-400 mb-6">
+        <div className="flex items-center gap-4 text-sm text-muted-foreground mb-6">
           <Link
             href={`/orgs/${id}/model-config`}
-            className="flex items-center gap-1.5 hover:text-indigo-400 transition-colors"
+            className="flex items-center gap-1.5 hover:text-primary transition-colors"
           >
             <Key size={14} />
             Model Config
           </Link>
           <Link
             href={`/orgs/${id}/db-connections`}
-            className="flex items-center gap-1.5 hover:text-indigo-400 transition-colors"
+            className="flex items-center gap-1.5 hover:text-primary transition-colors"
           >
             <Database size={14} />
             DB Connections
           </Link>
           <Link
             href={`/orgs/${id}/build-env`}
-            className="flex items-center gap-1.5 hover:text-indigo-400 transition-colors"
+            className="flex items-center gap-1.5 hover:text-primary transition-colors"
           >
             <Settings size={14} />
             Build Env
@@ -185,15 +178,15 @@ export default function OrgDetailPage() {
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-1 border-b border-gray-700">
+        <div className="flex gap-1 border-b border-border">
           {tabs.map(({ key, label, icon: Icon }) => (
             <button
               key={key}
               onClick={() => setTab(key)}
               className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
                 tab === key
-                  ? "border-indigo-500 text-indigo-300"
-                  : "border-transparent text-gray-400 hover:text-gray-200"
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
               }`}
             >
               <Icon size={14} />
@@ -215,11 +208,11 @@ export default function OrgDetailPage() {
                   onChange={(e) => setEditName(e.target.value)}
                 />
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-gray-400">
+                  <label className="text-xs font-medium text-muted-foreground">
                     Description
                   </label>
                   <textarea
-                    className="rounded-md border border-gray-600 bg-gray-800 px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-none"
+                    className="rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring resize-none"
                     rows={3}
                     value={editDesc}
                     onChange={(e) => setEditDesc(e.target.value)}
@@ -247,25 +240,25 @@ export default function OrgDetailPage() {
             <Card title="Organization Details">
               <dl className="space-y-3">
                 <div>
-                  <dt className="text-xs text-gray-400">Name</dt>
-                  <dd className="mt-0.5 text-sm text-gray-200">{org.name}</dd>
+                  <dt className="text-xs text-muted-foreground">Name</dt>
+                  <dd className="mt-0.5 text-sm text-foreground">{org.name}</dd>
                 </div>
                 <div>
-                  <dt className="text-xs text-gray-400">Slug</dt>
-                  <dd className="mt-0.5 text-sm font-mono text-gray-200">
+                  <dt className="text-xs text-muted-foreground">Slug</dt>
+                  <dd className="mt-0.5 text-sm font-mono text-foreground">
                     {org.slug}
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-xs text-gray-400">Description</dt>
-                  <dd className="mt-0.5 text-sm text-gray-200">
+                  <dt className="text-xs text-muted-foreground">Description</dt>
+                  <dd className="mt-0.5 text-sm text-foreground">
                     {org.description || (
-                      <span className="text-gray-500">—</span>
+                      <span className="text-muted-foreground">—</span>
                     )}
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-xs text-gray-400">Status</dt>
+                  <dt className="text-xs text-muted-foreground">Status</dt>
                   <dd className="mt-0.5">
                     <Badge color={org.status === "ACTIVE" ? "green" : "gray"}>
                       {org.status.toLowerCase()}
@@ -273,13 +266,13 @@ export default function OrgDetailPage() {
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-xs text-gray-400">Created</dt>
-                  <dd className="mt-0.5 text-sm text-gray-200">
+                  <dt className="text-xs text-muted-foreground">Created</dt>
+                  <dd className="mt-0.5 text-sm text-foreground">
                     {new Date(org.createdAt).toLocaleString()}
                   </dd>
                 </div>
               </dl>
-              <div className="mt-4 flex gap-2 border-t border-gray-700 pt-4">
+              <div className="mt-4 flex gap-2 border-t border-border pt-4">
                 <Button
                   variant="secondary"
                   size="sm"
@@ -319,7 +312,7 @@ export default function OrgDetailPage() {
         <div className="space-y-4">
           <Card title="Add Member">
             {mutationError && (
-              <div className="mb-3 rounded-md border border-red-800 bg-red-900/30 px-3 py-2 text-sm text-red-300">
+              <div className="mb-3 rounded-md border border-destructive/40 bg-destructive/20 px-3 py-2 text-sm text-destructive-foreground">
                 {mutationError}
               </div>
             )}
@@ -331,7 +324,7 @@ export default function OrgDetailPage() {
                 className="flex-1"
               />
               <select
-                className="rounded-md border border-gray-600 bg-gray-800 px-3 py-2 text-sm text-gray-100"
+                className="rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
                 value={newRole}
                 onChange={(e) => setNewRole(e.target.value)}
               >
@@ -350,67 +343,41 @@ export default function OrgDetailPage() {
             </div>
           </Card>
 
-          <div className="overflow-x-auto rounded-lg border border-gray-700">
+          <div className="overflow-x-auto rounded-lg border border-border">
             <table className="w-full text-sm">
-              <thead className="border-b border-gray-700 bg-gray-900/50">
+              <thead className="border-b border-border bg-muted/50">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-400">
-                    User ID
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-400">
-                    Role
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-400">
-                    Joined
-                  </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium uppercase text-gray-400">
-                    Actions
-                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-muted-foreground">User ID</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-muted-foreground">Role</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-muted-foreground">Joined</th>
+                  <th className="px-4 py-3 text-right text-xs font-medium uppercase text-muted-foreground">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-700/50">
+              <tbody className="divide-y divide-border/50">
                 {members.length === 0 ? (
                   <tr>
-                    <td
-                      colSpan={4}
-                      className="px-4 py-8 text-center text-gray-500"
-                    >
+                    <td colSpan={4} className="px-4 py-8 text-center text-muted-foreground">
                       No members yet
                     </td>
                   </tr>
                 ) : (
                   members.map((m) => (
-                    <tr
-                      key={m.userId}
-                      className="hover:bg-gray-800/30 transition-colors"
-                    >
-                      <td className="px-4 py-3 font-mono text-xs text-gray-300">
-                        {m.userId}
-                      </td>
+                    <tr key={m.userId} className="hover:bg-accent/30 transition-colors">
+                      <td className="px-4 py-3 font-mono text-xs text-foreground">{m.userId}</td>
                       <td className="px-4 py-3">
-                        <Badge
-                          color={
-                            m.role === "OWNER"
-                              ? "blue"
-                              : m.role === "ADMIN"
-                              ? "yellow"
-                              : "gray"
-                          }
-                        >
+                        <Badge color={m.role === "OWNER" ? "blue" : m.role === "ADMIN" ? "yellow" : "gray"}>
                           {m.role.toLowerCase()}
                         </Badge>
                       </td>
-                      <td className="px-4 py-3 text-xs text-gray-500">
+                      <td className="px-4 py-3 text-xs text-muted-foreground">
                         {new Date(m.joinedAt).toLocaleDateString()}
                       </td>
                       <td className="px-4 py-3 text-right">
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="text-red-400 hover:text-red-300"
-                          onClick={() =>
-                            removeMemberMutation.mutate(m.userId)
-                          }
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                          onClick={() => removeMemberMutation.mutate(m.userId)}
                         >
                           <X size={13} />
                         </Button>
@@ -430,7 +397,7 @@ export default function OrgDetailPage() {
           <Card title="Bind Workspace">
             <div className="flex gap-2">
               <select
-                className="flex-1 rounded-md border border-gray-600 bg-gray-800 px-3 py-2 text-sm text-gray-100"
+                className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
                 value={selectedWsId}
                 onChange={(e) => setSelectedWsId(e.target.value)}
               >
@@ -452,50 +419,30 @@ export default function OrgDetailPage() {
             </div>
           </Card>
 
-          <div className="overflow-x-auto rounded-lg border border-gray-700">
+          <div className="overflow-x-auto rounded-lg border border-border">
             <table className="w-full text-sm">
-              <thead className="border-b border-gray-700 bg-gray-900/50">
+              <thead className="border-b border-border bg-muted/50">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-400">
-                    Workspace
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-400">
-                    Owner
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-400">
-                    Status
-                  </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium uppercase text-gray-400">
-                    Actions
-                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-muted-foreground">Workspace</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-muted-foreground">Owner</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-muted-foreground">Status</th>
+                  <th className="px-4 py-3 text-right text-xs font-medium uppercase text-muted-foreground">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-700/50">
+              <tbody className="divide-y divide-border/50">
                 {boundWorkspaces.length === 0 ? (
                   <tr>
-                    <td
-                      colSpan={4}
-                      className="px-4 py-8 text-center text-gray-500"
-                    >
+                    <td colSpan={4} className="px-4 py-8 text-center text-muted-foreground">
                       No workspaces bound to this organization
                     </td>
                   </tr>
                 ) : (
                   boundWorkspaces.map((ws) => (
-                    <tr
-                      key={ws.id}
-                      className="hover:bg-gray-800/30 transition-colors"
-                    >
-                      <td className="px-4 py-3 font-medium text-gray-200">
-                        {ws.name}
-                      </td>
-                      <td className="px-4 py-3 text-xs text-gray-500 font-mono">
-                        {ws.owner}
-                      </td>
+                    <tr key={ws.id} className="hover:bg-accent/30 transition-colors">
+                      <td className="px-4 py-3 font-medium text-foreground">{ws.name}</td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground font-mono">{ws.owner}</td>
                       <td className="px-4 py-3">
-                        <Badge
-                          color={ws.status === "active" ? "green" : "gray"}
-                        >
+                        <Badge color={ws.status === "active" ? "green" : "gray"}>
                           {ws.status}
                         </Badge>
                       </td>
@@ -503,7 +450,7 @@ export default function OrgDetailPage() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="text-red-400 hover:text-red-300"
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
                           onClick={() => unbindMutation.mutate(ws.id)}
                         >
                           <X size={13} />

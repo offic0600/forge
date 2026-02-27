@@ -29,8 +29,8 @@ export default function OrgsPage() {
     <div>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Organizations</h1>
-          <p className="mt-1 text-sm text-gray-400">
+          <h1 className="text-2xl font-bold text-foreground">Organizations</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             Manage enterprise organizations and their configurations
           </p>
         </div>
@@ -44,13 +44,13 @@ export default function OrgsPage() {
 
       {isLoading ? (
         <div className="flex items-center justify-center py-20">
-          <div className="h-6 w-6 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent" />
+          <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
         </div>
       ) : orgs.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-gray-700 py-20 text-center">
-          <Building2 size={40} className="mb-3 text-gray-600" />
-          <p className="text-gray-400">No organizations yet</p>
-          <p className="mt-1 text-sm text-gray-600">
+        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-20 text-center">
+          <Building2 size={40} className="mb-3 text-muted-foreground" />
+          <p className="text-muted-foreground">No organizations yet</p>
+          <p className="mt-1 text-sm text-muted-foreground">
             Create your first organization to get started
           </p>
           <Link href="/orgs/new" className="mt-4">
@@ -61,44 +61,44 @@ export default function OrgsPage() {
           </Link>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-gray-700">
+        <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-sm">
-            <thead className="border-b border-gray-700 bg-gray-900/50">
+            <thead className="border-b border-border bg-muted/50">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-400">
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   Name
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-400">
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   Slug
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-400">
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   Status
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-400">
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   Created
                 </th>
-                <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-400">
+                <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-700/50">
+            <tbody className="divide-y divide-border/50">
               {orgs.map((org) => (
-                <tr key={org.id} className="hover:bg-gray-800/30 transition-colors">
+                <tr key={org.id} className="hover:bg-accent/30 transition-colors">
                   <td className="px-4 py-3">
                     <Link
                       href={`/orgs/${org.id}`}
-                      className="font-medium text-white hover:text-indigo-400 transition-colors"
+                      className="font-medium text-foreground hover:text-primary transition-colors"
                     >
                       {org.name}
                     </Link>
                     {org.description && (
-                      <p className="mt-0.5 text-xs text-gray-500 truncate max-w-xs">
+                      <p className="mt-0.5 text-xs text-muted-foreground truncate max-w-xs">
                         {org.description}
                       </p>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-gray-400 font-mono text-xs">
+                  <td className="px-4 py-3 text-muted-foreground font-mono text-xs">
                     {org.slug}
                   </td>
                   <td className="px-4 py-3">
@@ -106,7 +106,7 @@ export default function OrgsPage() {
                       {org.status.toLowerCase()}
                     </Badge>
                   </td>
-                  <td className="px-4 py-3 text-gray-500 text-xs">
+                  <td className="px-4 py-3 text-muted-foreground text-xs">
                     {new Date(org.createdAt).toLocaleDateString()}
                   </td>
                   <td className="px-4 py-3">
@@ -119,7 +119,7 @@ export default function OrgsPage() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="text-red-400 hover:text-red-300 hover:bg-red-900/20"
+                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
                         onClick={() => {
                           if (
                             confirm(

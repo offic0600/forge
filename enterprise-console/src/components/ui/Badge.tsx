@@ -9,10 +9,10 @@ interface BadgeProps {
 
 const colorClasses: Record<Color, string> = {
   green: "bg-green-900/50 text-green-300 border border-green-800",
-  red: "bg-red-900/50 text-red-300 border border-red-800",
+  red: "bg-destructive/20 text-destructive-foreground border border-destructive/40",
   yellow: "bg-yellow-900/50 text-yellow-300 border border-yellow-800",
-  blue: "bg-blue-900/50 text-blue-300 border border-blue-800",
-  gray: "bg-gray-700 text-gray-300 border border-gray-600",
+  blue: "bg-primary/15 text-primary border border-primary/30",
+  gray: "bg-muted text-muted-foreground border border-border",
 };
 
 export function Badge({ children, color = "gray" }: BadgeProps) {
