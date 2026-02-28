@@ -49,9 +49,14 @@ export default function NewOrgPage() {
     e.preventDefault();
     setError(null);
     if (!name.trim()) return;
+    const finalSlug = slug.trim() || autoSlug(name);
+    if (!finalSlug) {
+      setError("Slug 不能为空，请手动填写（仅限小写字母、数字和连字符）");
+      return;
+    }
     createMutation.mutate({
       name: name.trim(),
-      slug: slug.trim() || autoSlug(name),
+      slug: finalSlug,
       description: description.trim() || undefined,
     });
   }
