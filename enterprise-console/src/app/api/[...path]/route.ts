@@ -27,6 +27,9 @@ async function proxy(req: NextRequest, params: Params): Promise<NextResponse> {
 
     const respHeaders = new Headers();
     res.headers.forEach((value, key) => {
+      // Node.js fetch auto-decompresses gzip, so drop encoding/length headers
+      // to avoid ERR_CONTENT_DECODING_FAILED in the browser
+      if (key === "content-encoding" || key === "content-length") return;
       respHeaders.set(key, value);
     });
 
