@@ -36,7 +36,7 @@ class OrganizationService(
     @Transactional
     fun createOrg(req: CreateOrgRequest): Organization {
         if (orgRepository.findBySlug(req.slug) != null) {
-            throw IllegalArgumentException("Slug '${req.slug}' already taken")
+            throw IllegalArgumentException("Slug「${req.slug}」已被使用，请更换")
         }
         val entity = OrganizationEntity(
             name = req.name,

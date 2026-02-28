@@ -20,7 +20,15 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const body = await res.text().catch(() => "");
-    throw new Error(`API error ${res.status}: ${body}`);
+    // Try to extract a human-readable message from JSON error responses
+    let message = body;
+    try {
+      const json = JSON.parse(body);
+      message = json.error ?? json.message ?? json.detail ?? body;
+    } catch {
+      // body is not JSON, use as-is
+    }
+    throw new Error(message || `HTTP ${res.status}`);
   }
   if (res.status === 204) return undefined as T;
   return res.json();
