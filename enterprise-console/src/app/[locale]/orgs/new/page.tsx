@@ -38,11 +38,15 @@ export default function NewOrgPage() {
   }
 
   function autoSlug(n: string) {
-    return n
+    const ascii = n
       .toLowerCase()
       .replace(/\s+/g, "-")
       .replace(/[^a-z0-9-]/g, "")
+      .replace(/--+/g, "-")
+      .replace(/^-|-$/g, "")
       .slice(0, 50);
+    // For non-ASCII names (e.g. Chinese), generate a short unique slug
+    return ascii || `org-${Date.now().toString(36)}`;
   }
 
   function handleSubmit(e: React.FormEvent) {
