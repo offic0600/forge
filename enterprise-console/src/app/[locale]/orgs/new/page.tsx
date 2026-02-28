@@ -16,6 +16,7 @@ export default function NewOrgPage() {
   const qc = useQueryClient();
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
+  const [slugEdited, setSlugEdited] = useState(false);
   const [description, setDescription] = useState("");
   const [error, setError] = useState<string | null>(null);
 
@@ -30,34 +31,36 @@ export default function NewOrgPage() {
     },
   });
 
-  function handleNameChange(value: string) {
-    setName(value);
-    if (!slug || slug === autoSlug(name)) {
-      setSlug(autoSlug(value));
-    }
-  }
-
-  function autoSlug(n: string) {
-    const ascii = n
+  /** Derive ASCII-safe slug from a name; returns empty string for all-non-ASCII input. */
+  function toAsciiSlug(n: string): string {
+    return n
       .toLowerCase()
       .replace(/\s+/g, "-")
       .replace(/[^a-z0-9-]/g, "")
       .replace(/--+/g, "-")
       .replace(/^-|-$/g, "")
       .slice(0, 50);
-    // For non-ASCII names (e.g. Chinese), generate a short unique slug
-    return ascii || `org-${Date.now().toString(36)}`;
+  }
+
+  function handleNameChange(value: string) {
+    setName(value);
+    // Only auto-fill slug if user hasn't manually edited it
+    if (!slugEdited) {
+      setSlug(toAsciiSlug(value));
+    }
+  }
+
+  function handleSlugChange(value: string) {
+    setSlug(value);
+    setSlugEdited(true);
   }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     if (!name.trim()) return;
-    const finalSlug = slug.trim() || autoSlug(name);
-    if (!finalSlug) {
-      setError("Slug 不能为空，请手动填写（仅限小写字母、数字和连字符）");
-      return;
-    }
+    // If slug is empty (e.g. all-Chinese name), auto-generate a timestamp-based slug
+    const finalSlug = slug.trim() || `org-${Date.now().toString(36)}`;
     createMutation.mutate({
       name: name.trim(),
       slug: finalSlug,
@@ -93,9 +96,8 @@ export default function NewOrgPage() {
             label={t("slugLabel")}
             placeholder={t("slugPlaceholder")}
             value={slug}
-            onChange={(e) => setSlug(e.target.value)}
-            required
-            pattern="[a-z0-9\-]+"
+            onChange={(e) => handleSlugChange(e.target.value)}
+            pattern="[a-z0-9\-]*"
             title={t("slugTitle")}
           />
           <div className="flex flex-col gap-1">
