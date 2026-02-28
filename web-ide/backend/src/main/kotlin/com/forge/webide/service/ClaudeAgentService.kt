@@ -166,9 +166,10 @@ class ClaudeAgentService(
             logger.info("Profile: {}, Skills: {}", promptResult.activeProfile, promptResult.loadedSkills)
 
             // Resolve adapter and model based on modelId
-            val actualModel = modelId ?: model
-            val adapter = if (modelId != null) modelRegistry.adapterForModel(modelId) else claudeAdapter
-            val provider = if (modelId != null) modelRegistry.providerForModel(modelId) ?: "anthropic" else "anthropic"
+            // BUG-066: isNullOrBlank() guards against empty-string modelId from frontend default
+            val actualModel = if (!modelId.isNullOrBlank()) modelId else model
+            val adapter = if (!modelId.isNullOrBlank()) modelRegistry.adapterForModel(modelId) else claudeAdapter
+            val provider = if (!modelId.isNullOrBlank()) modelRegistry.providerForModel(modelId) ?: "anthropic" else "anthropic"
             val userApiKey = resolveUserApiKey(sessionId, provider)
             val options = CompletionOptions(
                 model = actualModel,
@@ -269,9 +270,10 @@ class ClaudeAgentService(
                 }
 
                 // Resolve adapter and model based on modelId
-                val actualModel = modelId ?: model
-                val adapter = if (modelId != null) modelRegistry.adapterForModel(modelId) else claudeAdapter
-                val provider = if (modelId != null) modelRegistry.providerForModel(modelId) ?: "anthropic" else "anthropic"
+                // BUG-066: isNullOrBlank() guards against empty-string modelId from frontend default
+                val actualModel = if (!modelId.isNullOrBlank()) modelId else model
+                val adapter = if (!modelId.isNullOrBlank()) modelRegistry.adapterForModel(modelId) else claudeAdapter
+                val provider = if (!modelId.isNullOrBlank()) modelRegistry.providerForModel(modelId) ?: "anthropic" else "anthropic"
                 val userApiKey = resolveUserApiKey(sessionId, provider)
                 logger.info("Stream profile: {}, model: {}, provider: {}", promptResult.activeProfile, actualModel, provider)
                 val options = CompletionOptions(

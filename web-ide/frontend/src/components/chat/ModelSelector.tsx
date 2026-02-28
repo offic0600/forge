@@ -50,7 +50,10 @@ export function ModelSelector({ selectedModel, onModelChange }: ModelSelectorPro
   }, []);
 
   const currentModel = models.find((m) => m.id === selectedModel);
-  const displayName = currentModel?.displayName ?? selectedModel.split("/").pop() ?? "Select model";
+  // BUG-066: empty selectedModel means "use server default (MODEL_PROVIDER)"
+  const displayName = currentModel?.displayName
+    ?? (selectedModel ? selectedModel.split("/").pop() : undefined)
+    ?? "默认模型";
 
   // Group models by provider
   const grouped = models.reduce<Record<string, ModelInfo[]>>((acc, model) => {

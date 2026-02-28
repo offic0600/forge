@@ -191,7 +191,8 @@ class ClaudeClient {
             content: message,
             contexts,
             workspaceId,
-            modelId,
+            // BUG-066: only send modelId when explicitly selected; empty → backend uses MODEL_PROVIDER default
+            ...(modelId ? { modelId } : {}),
           })
         );
       };

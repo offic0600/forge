@@ -75,8 +75,8 @@ export function AiChatSidebar({
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [selectedModel, setSelectedModel] = useState(() => {
-    if (typeof window === "undefined") return "claude-sonnet-4-6";
-    return localStorage.getItem("forge_selected_model") ?? "claude-sonnet-4-6";
+    if (typeof window === "undefined") return "";
+    return localStorage.getItem("forge_selected_model") ?? "";
   });
   const [showContextPicker, setShowContextPicker] = useState(false);
   const [showModelSettings, setShowModelSettings] = useState(false);
