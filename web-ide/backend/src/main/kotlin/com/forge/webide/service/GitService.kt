@@ -139,6 +139,33 @@ class GitService {
         return result.stdout.trim().ifBlank { "(no commits)" }
     }
 
+    /** Returns current HEAD commit hash, empty string on failure. */
+    fun getCurrentHash(workspaceDir: Path): String {
+        val result = runGitCommand(listOf("git", "rev-parse", "HEAD"), workspaceDir)
+        return if (result.exitCode == 0) result.stdout.trim() else ""
+    }
+
+    /** Fetch from remote. Returns true if successful. */
+    fun fetch(workspaceDir: Path, remote: String = "origin"): Boolean {
+        val result = runGitCommand(listOf("git", "fetch", remote), workspaceDir)
+        return result.exitCode == 0
+    }
+
+    /** Show commits in range from..to (one-line format). */
+    fun logRange(workspaceDir: Path, from: String, to: String, limit: Int = 20): String {
+        val result = runGitCommand(
+            listOf("git", "log", "--oneline", "-$limit", "$from..$to"),
+            workspaceDir
+        )
+        return result.stdout.trim()
+    }
+
+    /** Show file change stats between two refs. */
+    fun diffStat(workspaceDir: Path, from: String, to: String): String {
+        val result = runGitCommand(listOf("git", "diff", "--stat", from, to), workspaceDir)
+        return result.stdout.trim()
+    }
+
     private fun runGitCommand(cmd: List<String>, workDir: Path): GitResult {
         val process = ProcessBuilder(cmd)
             .directory(workDir.toFile())

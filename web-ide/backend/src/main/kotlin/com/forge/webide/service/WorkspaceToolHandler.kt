@@ -465,7 +465,29 @@ class WorkspaceToolHandler(
     private fun buildPullPreview(workspaceId: String, args: Map<String, Any?>): String {
         val remote = args["remote"] as? String ?: "origin"
         val rebase = args["rebase"] as? Boolean ?: true
-        return "git pull $remote${if (rebase) " (--rebase)" else ""}"
+        return buildString {
+            appendLine("git pull $remote${if (rebase) " --rebase" else ""}")
+            try {
+                val workspaceDir = workspaceService.getWorkspaceDir(workspaceId)
+                val status = gitService.status(workspaceDir)
+                appendLine("当前分支：${status.branch}")
+                // Fetch to inspect incoming commits (read-only, doesn't change working tree)
+                val fetched = gitService.fetch(workspaceDir, remote)
+                if (fetched) {
+                    val incoming = gitService.logRange(workspaceDir, "HEAD", "FETCH_HEAD")
+                    if (incoming.isNotBlank()) {
+                        val lines = incoming.lines().filter { it.isNotBlank() }
+                        appendLine()
+                        appendLine("待拉取的提交（${lines.size} 个）：")
+                        lines.take(15).forEach { appendLine("  $it") }
+                        if (lines.size > 15) appendLine("  … 还有 ${lines.size - 15} 个提交")
+                    } else {
+                        appendLine()
+                        appendLine("（已是最新，无待拉取提交）")
+                    }
+                }
+            } catch (_: Exception) { /* ignore — proceed without preview */ }
+        }.trim()
     }
 
     // ---- Git tool implementations ----
@@ -549,8 +571,42 @@ class WorkspaceToolHandler(
             val rebase = args["rebase"] as? Boolean ?: true
             // Use authenticated URL if workspace has an access token (private repos)
             val authUrl = workspaceService.getWorkspaceAuthUrl(workspaceId)
-            val result = gitService.pull(workspaceDir, remote, rebase, remoteUrl = authUrl)
-            McpToolCallResponse(content = listOf(McpContent(type = "text", text = result)), isError = false)
+
+            // Snapshot HEAD before pull to compute what changed
+            val hashBefore = try { gitService.getCurrentHash(workspaceDir) } catch (_: Exception) { "" }
+
+            val pullOutput = gitService.pull(workspaceDir, remote, rebase, remoteUrl = authUrl)
+
+            val hashAfter = try { gitService.getCurrentHash(workspaceDir) } catch (_: Exception) { "" }
+
+            val text = buildString {
+                appendLine(pullOutput)
+                if (hashBefore.isNotBlank() && hashAfter.isNotBlank() && hashBefore != hashAfter) {
+                    // New commits were pulled — show log and file stats
+                    appendLine()
+                    try {
+                        val newLog = gitService.logRange(workspaceDir, hashBefore, "HEAD")
+                        if (newLog.isNotBlank()) {
+                            val logLines = newLog.lines().filter { it.isNotBlank() }
+                            appendLine("拉取了 ${logLines.size} 个新提交：")
+                            logLines.take(20).forEach { appendLine("  $it") }
+                            if (logLines.size > 20) appendLine("  … 还有 ${logLines.size - 20} 个提交")
+                        }
+                    } catch (_: Exception) {}
+                    try {
+                        val stat = gitService.diffStat(workspaceDir, hashBefore, "HEAD")
+                        if (stat.isNotBlank()) {
+                            appendLine()
+                            appendLine("变更文件统计：")
+                            stat.lines().take(20).forEach { appendLine("  $it") }
+                        }
+                    } catch (_: Exception) {}
+                } else if (hashBefore == hashAfter) {
+                    appendLine("（当前已是最新，无新提交）")
+                }
+            }.trim()
+
+            McpToolCallResponse(content = listOf(McpContent(type = "text", text = text)), isError = false)
         } catch (e: Exception) {
             McpProxyService.errorResponse("git pull failed: ${e.message}")
         }

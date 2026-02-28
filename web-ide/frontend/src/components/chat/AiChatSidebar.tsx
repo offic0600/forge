@@ -253,6 +253,11 @@ export function AiChatSidebar({
     setThinkingText("");
     setActivityLog([]);
     setBaselineResult(null);
+    setActivatedSkills([]);
+    setActiveProfile(null);
+    setOodaPhase(null);
+    setCurrentTurn(null);
+    setGitConfirm(null);
 
     const assistantId = `assistant-${Date.now()}`;
     let fullContent = "";
