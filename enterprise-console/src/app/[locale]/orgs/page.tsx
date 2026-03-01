@@ -7,10 +7,12 @@ import { Link } from "@/navigation";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
+import { useIsSystemAdmin } from "@/lib/session";
 
 export default function OrgsPage() {
   const t = useTranslations("orgs");
   const qc = useQueryClient();
+  const isAdmin = useIsSystemAdmin();
   const { data: orgs = [], isLoading } = useQuery({
     queryKey: ["orgs"],
     queryFn: api.orgs.list,
@@ -34,12 +36,14 @@ export default function OrgsPage() {
           <h1 className="text-2xl font-bold text-foreground">{t("title")}</h1>
           <p className="mt-1 text-sm text-muted-foreground">{t("subtitle")}</p>
         </div>
-        <Link href="/orgs/new">
-          <Button>
-            <Plus size={14} />
-            {t("newOrg")}
-          </Button>
-        </Link>
+        {isAdmin && (
+          <Link href="/orgs/new">
+            <Button>
+              <Plus size={14} />
+              {t("newOrg")}
+            </Button>
+          </Link>
+        )}
       </div>
 
       {isLoading ? (
@@ -51,12 +55,14 @@ export default function OrgsPage() {
           <Building2 size={40} className="mb-3 text-muted-foreground" />
           <p className="text-muted-foreground">{t("noOrgs")}</p>
           <p className="mt-1 text-sm text-muted-foreground">{t("noOrgsDesc")}</p>
-          <Link href="/orgs/new" className="mt-4">
-            <Button size="sm">
-              <Plus size={13} />
-              {t("newOrg")}
-            </Button>
-          </Link>
+          {isAdmin && (
+            <Link href="/orgs/new" className="mt-4">
+              <Button size="sm">
+                <Plus size={13} />
+                {t("newOrg")}
+              </Button>
+            </Link>
+          )}
         </div>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border">
@@ -114,18 +120,20 @@ export default function OrgsPage() {
                           <Edit size={13} />
                         </Button>
                       </Link>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                        onClick={() => {
-                          if (confirm(t("deleteConfirm", { name: org.name }))) {
-                            deleteMutation.mutate(org.id);
-                          }
-                        }}
-                      >
-                        <Trash2 size={13} />
-                      </Button>
+                      {isAdmin && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                          onClick={() => {
+                            if (confirm(t("deleteConfirm", { name: org.name }))) {
+                              deleteMutation.mutate(org.id);
+                            }
+                          }}
+                        >
+                          <Trash2 size={13} />
+                        </Button>
+                      )}
                     </div>
                   </td>
                 </tr>

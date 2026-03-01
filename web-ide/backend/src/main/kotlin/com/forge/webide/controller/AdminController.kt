@@ -3,15 +3,19 @@ package com.forge.webide.controller
 import com.forge.webide.model.*
 import com.forge.webide.service.OrgConfigService
 import com.forge.webide.service.OrganizationService
+import com.forge.webide.service.RbacHelper
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
+import org.springframework.security.core.annotation.AuthenticationPrincipal
+import org.springframework.security.oauth2.jwt.Jwt
 import org.springframework.web.bind.annotation.*
 
 @RestController
 @RequestMapping("/api/admin")
 class AdminController(
     private val orgService: OrganizationService,
-    private val configService: OrgConfigService
+    private val configService: OrgConfigService,
+    private val rbacHelper: RbacHelper
 ) {
 
     // =========================================================================
@@ -19,11 +23,21 @@ class AdminController(
     // =========================================================================
 
     @GetMapping("/orgs")
-    fun listOrgs(): ResponseEntity<List<Organization>> =
-        ResponseEntity.ok(orgService.listOrgs())
+    fun listOrgs(@AuthenticationPrincipal jwt: Jwt? = null): ResponseEntity<List<Organization>> {
+        return if (rbacHelper.isSystemAdmin(jwt)) {
+            ResponseEntity.ok(orgService.listOrgs())
+        } else {
+            val userId = jwt?.subject ?: return ResponseEntity.ok(emptyList())
+            ResponseEntity.ok(orgService.listOrgsForUser(userId))
+        }
+    }
 
     @PostMapping("/orgs")
-    fun createOrg(@RequestBody req: CreateOrgRequest): ResponseEntity<Any> {
+    fun createOrg(
+        @RequestBody req: CreateOrgRequest,
+        @AuthenticationPrincipal jwt: Jwt? = null
+    ): ResponseEntity<Any> {
+        rbacHelper.requireSystemAdmin(jwt)
         return try {
             val org = orgService.createOrg(req)
             ResponseEntity.status(HttpStatus.CREATED).body(org)
@@ -65,8 +79,10 @@ class AdminController(
     @PostMapping("/orgs/{orgId}/members")
     fun addMember(
         @PathVariable orgId: String,
-        @RequestBody req: AddMemberRequest
+        @RequestBody req: AddMemberRequest,
+        @AuthenticationPrincipal jwt: Jwt? = null
     ): ResponseEntity<OrgMember> {
+        rbacHelper.requireOrgAdmin(jwt, orgId)
         val member = orgService.addMember(orgId, req)
         return ResponseEntity.status(HttpStatus.CREATED).body(member)
     }
@@ -74,8 +90,10 @@ class AdminController(
     @DeleteMapping("/orgs/{orgId}/members/{userId}")
     fun removeMember(
         @PathVariable orgId: String,
-        @PathVariable userId: String
+        @PathVariable userId: String,
+        @AuthenticationPrincipal jwt: Jwt? = null
     ): ResponseEntity<Void> {
+        rbacHelper.requireOrgAdmin(jwt, orgId)
         val removed = orgService.removeMember(orgId, userId)
         return if (removed) ResponseEntity.noContent().build()
         else ResponseEntity.notFound().build()

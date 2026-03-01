@@ -44,6 +44,7 @@ class SecurityConfig {
                         .requestMatchers("/ws/**").permitAll() // WebSocket upgrade
                         .requestMatchers("/api/auth/**").permitAll() // Auth endpoints
                         .requestMatchers("/h2-console/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/admin/invitations/**").permitAll() // Public invitation preview
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .anyRequest().authenticated()
                 }

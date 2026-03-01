@@ -15,6 +15,7 @@ import {
   Plus,
   X,
   Link as LinkIcon,
+  UserPlus,
 } from "lucide-react";
 import { Link, useRouter } from "@/navigation";
 import { api } from "@/lib/api";
@@ -22,6 +23,8 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
+import { InviteModal } from "@/components/InviteModal";
+import { useIsSystemAdmin, useOrgRole } from "@/lib/session";
 
 type Tab = "overview" | "members" | "workspaces";
 
@@ -31,6 +34,8 @@ export default function OrgDetailPage() {
   const t = useTranslations("orgDetail");
   const qc = useQueryClient();
   const [tab, setTab] = useState<Tab>("overview");
+  const [showInvite, setShowInvite] = useState(false);
+  const isAdmin = useIsSystemAdmin();
 
   const { data: org, isLoading } = useQuery({
     queryKey: ["orgs", id],
@@ -51,6 +56,9 @@ export default function OrgDetailPage() {
     queryFn: api.workspaces.listAll,
     enabled: tab === "workspaces",
   });
+
+  const orgRole = useOrgRole(members);
+  const canInvite = isAdmin || orgRole === "OWNER" || orgRole === "ADMIN";
 
   const [editName, setEditName] = useState("");
   const [editDesc, setEditDesc] = useState("");
@@ -152,6 +160,16 @@ export default function OrgDetailPage() {
           <Badge color={org.status === "ACTIVE" ? "green" : "gray"}>
             {org.status.toLowerCase()}
           </Badge>
+          {canInvite && (
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => setShowInvite(true)}
+            >
+              <UserPlus size={13} />
+              Invite Member
+            </Button>
+          )}
         </div>
 
         {/* Sub-navigation links */}
@@ -286,19 +304,21 @@ export default function OrgDetailPage() {
                 >
                   {t("editBtn")}
                 </Button>
-                <Button
-                  variant="danger"
-                  size="sm"
-                  onClick={() => {
-                    if (confirm(t("deleteConfirm", { name: org.name }))) {
-                      deleteMutation.mutate();
-                    }
-                  }}
-                  loading={deleteMutation.isPending}
-                >
-                  <Trash2 size={13} />
-                  {t("deleteBtn")}
-                </Button>
+                {isAdmin && (
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={() => {
+                      if (confirm(t("deleteConfirm", { name: org.name }))) {
+                        deleteMutation.mutate();
+                      }
+                    }}
+                    loading={deleteMutation.isPending}
+                  >
+                    <Trash2 size={13} />
+                    {t("deleteBtn")}
+                  </Button>
+                )}
               </div>
             </Card>
           )}
@@ -308,38 +328,40 @@ export default function OrgDetailPage() {
       {/* Members tab */}
       {tab === "members" && (
         <div className="space-y-4">
-          <Card title={t("addMemberTitle")}>
-            {mutationError && (
-              <div className="mb-3 rounded-md border border-destructive/40 bg-destructive/20 px-3 py-2 text-sm text-destructive-foreground">
-                {mutationError}
+          {canInvite && (
+            <Card title={t("addMemberTitle")}>
+              {mutationError && (
+                <div className="mb-3 rounded-md border border-destructive/40 bg-destructive/20 px-3 py-2 text-sm text-destructive-foreground">
+                  {mutationError}
+                </div>
+              )}
+              <div className="flex gap-2">
+                <Input
+                  placeholder={t("userIdPlaceholder")}
+                  value={newUserId}
+                  onChange={(e) => setNewUserId(e.target.value)}
+                  className="flex-1"
+                />
+                <select
+                  className="rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
+                  value={newRole}
+                  onChange={(e) => setNewRole(e.target.value)}
+                >
+                  <option value="MEMBER">{t("roleMember")}</option>
+                  <option value="ADMIN">{t("roleAdmin")}</option>
+                  <option value="OWNER">{t("roleOwner")}</option>
+                </select>
+                <Button
+                  onClick={() => addMemberMutation.mutate()}
+                  disabled={!newUserId.trim()}
+                  loading={addMemberMutation.isPending}
+                >
+                  <Plus size={14} />
+                  {t("addBtn")}
+                </Button>
               </div>
-            )}
-            <div className="flex gap-2">
-              <Input
-                placeholder={t("userIdPlaceholder")}
-                value={newUserId}
-                onChange={(e) => setNewUserId(e.target.value)}
-                className="flex-1"
-              />
-              <select
-                className="rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
-                value={newRole}
-                onChange={(e) => setNewRole(e.target.value)}
-              >
-                <option value="MEMBER">{t("roleMember")}</option>
-                <option value="ADMIN">{t("roleAdmin")}</option>
-                <option value="OWNER">{t("roleOwner")}</option>
-              </select>
-              <Button
-                onClick={() => addMemberMutation.mutate()}
-                disabled={!newUserId.trim()}
-                loading={addMemberMutation.isPending}
-              >
-                <Plus size={14} />
-                {t("addBtn")}
-              </Button>
-            </div>
-          </Card>
+            </Card>
+          )}
 
           <div className="overflow-x-auto rounded-lg border border-border">
             <table className="w-full text-sm">
@@ -348,13 +370,15 @@ export default function OrgDetailPage() {
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase text-muted-foreground">{t("colUserId")}</th>
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase text-muted-foreground">{t("colRole")}</th>
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase text-muted-foreground">{t("colJoined")}</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium uppercase text-muted-foreground">{t("colActions")}</th>
+                  {canInvite && (
+                    <th className="px-4 py-3 text-right text-xs font-medium uppercase text-muted-foreground">{t("colActions")}</th>
+                  )}
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/50">
                 {members.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="px-4 py-8 text-center text-muted-foreground">
+                    <td colSpan={canInvite ? 4 : 3} className="px-4 py-8 text-center text-muted-foreground">
                       {t("noMembers")}
                     </td>
                   </tr>
@@ -370,16 +394,18 @@ export default function OrgDetailPage() {
                       <td className="px-4 py-3 text-xs text-muted-foreground">
                         {new Date(m.joinedAt).toLocaleDateString()}
                       </td>
-                      <td className="px-4 py-3 text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                          onClick={() => removeMemberMutation.mutate(m.userId)}
-                        >
-                          <X size={13} />
-                        </Button>
-                      </td>
+                      {canInvite && (
+                        <td className="px-4 py-3 text-right">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                            onClick={() => removeMemberMutation.mutate(m.userId)}
+                          >
+                            <X size={13} />
+                          </Button>
+                        </td>
+                      )}
                     </tr>
                   ))
                 )}
@@ -462,6 +488,11 @@ export default function OrgDetailPage() {
             </table>
           </div>
         </div>
+      )}
+
+      {/* Invite Modal */}
+      {showInvite && (
+        <InviteModal orgId={id} onClose={() => setShowInvite(false)} />
       )}
     </div>
   );

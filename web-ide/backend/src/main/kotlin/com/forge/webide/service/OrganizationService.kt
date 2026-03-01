@@ -29,6 +29,12 @@ class OrganizationService(
         return orgRepository.findAll().map { it.toModel() }
     }
 
+    fun listOrgsForUser(userId: String): List<Organization> {
+        return memberRepository.findByUserId(userId)
+            .mapNotNull { orgRepository.findById(it.orgId).orElse(null) }
+            .map { it.toModel() }
+    }
+
     fun getOrg(id: String): Organization? {
         return orgRepository.findById(id).orElse(null)?.toModel()
     }

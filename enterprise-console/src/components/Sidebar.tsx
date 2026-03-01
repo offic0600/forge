@@ -1,14 +1,18 @@
 "use client";
 
-import { Building2, LayoutDashboard, Zap, Languages } from "lucide-react";
+import { Building2, LayoutDashboard, Zap, Languages, LogOut } from "lucide-react";
 import { useTranslations, useLocale } from "next-intl";
 import { Link, usePathname, useRouter } from "@/navigation";
+import { signOut } from "next-auth/react";
+import { useCurrentUser, useIsSystemAdmin } from "@/lib/session";
 
 export function Sidebar() {
   const t = useTranslations();
   const locale = useLocale();
   const pathname = usePathname();
   const router = useRouter();
+  const user = useCurrentUser();
+  const isAdmin = useIsSystemAdmin();
 
   const navItems = [
     { href: "/", label: t("nav.dashboard"), icon: LayoutDashboard, exact: true },
@@ -63,16 +67,37 @@ export function Sidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="border-t border-border px-4 py-3 flex items-center justify-between">
-        <p className="text-xs text-muted-foreground">{t("sidebar.footer")}</p>
-        <button
-          onClick={toggleLocale}
-          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-          title={locale === "zh" ? t("common.langEn") : t("common.langZh")}
-        >
-          <Languages size={12} />
-          {locale === "zh" ? "EN" : "中"}
-        </button>
+      <div className="border-t border-border px-3 py-3 space-y-2">
+        {user && (
+          <div className="space-y-1">
+            <div className="text-xs font-medium text-foreground truncate">
+              {user.name ?? user.email}
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">
+                {isAdmin ? "SystemAdmin" : "Member"}
+              </span>
+              <button
+                onClick={() => signOut()}
+                className="flex items-center gap-1 text-xs text-destructive hover:text-destructive/80 transition-colors"
+                title="Sign out"
+              >
+                <LogOut size={11} />
+              </button>
+            </div>
+          </div>
+        )}
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-muted-foreground">{t("sidebar.footer")}</p>
+          <button
+            onClick={toggleLocale}
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            title={locale === "zh" ? t("common.langEn") : t("common.langZh")}
+          >
+            <Languages size={12} />
+            {locale === "zh" ? "EN" : "中"}
+          </button>
+        </div>
       </div>
     </aside>
   );

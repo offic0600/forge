@@ -542,3 +542,28 @@ data class UpsertEnvConfigRequest(
     val isSensitive: Boolean = false,
     val description: String? = null
 )
+
+// --- Invitation Models ---
+
+data class OrgInvitation(
+    val id: Long,
+    val token: String,
+    val orgId: String,
+    val role: String,
+    val createdBy: String,
+    val expiresAt: java.time.Instant,
+    val usedBy: String?,
+    val usedAt: java.time.Instant?
+)
+
+data class OrgInvitationInfo(
+    val token: String,
+    val orgId: String,
+    val orgName: String,
+    val role: String,
+    val expiresAt: java.time.Instant
+)
+
+data class CreateInvitationRequest(
+    val role: String = "MEMBER"
+)

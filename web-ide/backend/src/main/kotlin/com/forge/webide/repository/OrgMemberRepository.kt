@@ -7,4 +7,5 @@ import org.springframework.data.jpa.repository.JpaRepository
 interface OrgMemberRepository : JpaRepository<OrgMemberEntity, OrgMemberId> {
     fun findByOrgId(orgId: String): List<OrgMemberEntity>
     fun findByUserId(userId: String): List<OrgMemberEntity>
+    fun findByOrgIdAndUserId(orgId: String, userId: String): java.util.Optional<OrgMemberEntity>
 }

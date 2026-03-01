@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/auth";
 
 type Params = { path: string[] };
 
@@ -8,10 +9,18 @@ async function proxy(req: NextRequest, params: Params): Promise<NextResponse> {
   const search = req.nextUrl.search;
   const target = `${backendUrl}/api/${path}${search}`;
 
+  // Get session for Authorization header
+  const session = await auth();
+
   const headers: Record<string, string> = {};
   req.headers.forEach((value, key) => {
     if (key !== "host") headers[key] = value;
   });
+
+  // Forward access token to backend
+  if (session?.accessToken) {
+    headers["Authorization"] = `Bearer ${session.accessToken}`;
+  }
 
   const body =
     req.method === "GET" || req.method === "HEAD"

@@ -105,6 +105,34 @@
         "email",
         "roles"
       ]
+    },
+    {
+      "clientId": "forge-enterprise",
+      "name": "Forge Enterprise Console",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "enterprise-secret",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "rootUrl": "http://localhost:19001",
+      "baseUrl": "/",
+      "redirectUris": [
+        "http://localhost:19001/*",
+        "http://forge-enterprise-console:3000/*"
+      ],
+      "webOrigins": [
+        "http://localhost:19001"
+      ],
+      "protocol": "openid-connect",
+      "attributes": {
+        "post.logout.redirect.uris": "http://localhost:19001/*"
+      },
+      "defaultClientScopes": [
+        "openid",
+        "profile",
+        "email",
+        "roles"
+      ]
     }
   ],
   "clientScopes": [

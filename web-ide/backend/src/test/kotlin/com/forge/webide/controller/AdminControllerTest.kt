@@ -4,8 +4,11 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.forge.webide.model.*
 import com.forge.webide.service.OrgConfigService
 import com.forge.webide.service.OrganizationService
+import com.forge.webide.service.RbacHelper
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
+import io.mockk.runs
 import io.mockk.verify
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -35,6 +38,9 @@ class AdminControllerTest {
     @Autowired
     private lateinit var configService: OrgConfigService
 
+    @Autowired
+    private lateinit var rbacHelper: RbacHelper
+
     @TestConfiguration
     class Config {
         @Bean
@@ -42,6 +48,14 @@ class AdminControllerTest {
 
         @Bean
         fun configService(): OrgConfigService = mockk(relaxed = true)
+
+        @Bean
+        fun rbacHelper(): RbacHelper = mockk {
+            every { isSystemAdmin(any()) } returns true
+            every { isOrgAdmin(any(), any()) } returns true
+            every { requireSystemAdmin(any()) } just runs
+            every { requireOrgAdmin(any(), any()) } just runs
+        }
     }
 
     private fun sampleOrg(id: String = "org-1") = Organization(

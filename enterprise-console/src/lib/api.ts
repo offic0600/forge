@@ -5,6 +5,8 @@ import type {
   OrgDbConnection,
   OrgEnvConfig,
   Workspace,
+  OrgInvitation,
+  OrgInvitationInfo,
   CreateOrgRequest,
   UpdateOrgRequest,
   AddMemberRequest,
@@ -110,6 +112,20 @@ export const api = {
         `/api/admin/orgs/${orgId}/db-connections/${id}/test`,
         { method: "POST" }
       ),
+  },
+
+  invitations: {
+    create: (orgId: string, role: string) =>
+      fetchJson<OrgInvitation>(`/api/admin/orgs/${orgId}/invitations`, {
+        method: "POST",
+        body: JSON.stringify({ role }),
+      }),
+    get: (token: string) =>
+      fetchJson<OrgInvitationInfo>(`/api/admin/invitations/${token}`),
+    accept: (token: string) =>
+      fetchJson<OrgMember>(`/api/admin/invitations/${token}/accept`, {
+        method: "POST",
+      }),
   },
 
   envConfigs: {

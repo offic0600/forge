@@ -55,6 +55,25 @@ export interface Workspace {
   updatedAt: string;
 }
 
+export interface OrgInvitation {
+  id: number;
+  token: string;
+  orgId: string;
+  role: string;
+  createdBy: string;
+  expiresAt: string;
+  usedBy: string | null;
+  usedAt: string | null;
+}
+
+export interface OrgInvitationInfo {
+  token: string;
+  orgId: string;
+  orgName: string;
+  role: string;
+  expiresAt: string;
+}
+
 export interface CreateOrgRequest {
   name: string;
   slug: string;
