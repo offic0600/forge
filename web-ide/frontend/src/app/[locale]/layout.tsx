@@ -68,15 +68,22 @@ export default function LocaleLayout({
 
     if (!pub && !isAuthenticated()) {
       fetch("/api/auth/me")
-        .then((res) => {
+        .then(async (res) => {
           if (res.status === 401) {
+            window.location.href = "/login";
+            return;
+          }
+          // /api/auth/me is whitelisted (always returns 200), so also check
+          // the authenticated field — anonymous users get {authenticated: false}
+          const data = await res.json();
+          if (!data.authenticated) {
             window.location.href = "/login";
           } else {
             setAuthChecked(true);
           }
         })
         .catch(() => {
-          setAuthChecked(true);
+          window.location.href = "/login";
         });
     } else {
       setAuthChecked(true);
