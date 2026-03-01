@@ -2,6 +2,7 @@ package com.forge.webide.controller
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.forge.webide.model.*
+import com.forge.webide.service.AuditLogService
 import com.forge.webide.service.OrgConfigService
 import com.forge.webide.service.OrganizationService
 import com.forge.webide.service.RbacHelper
@@ -56,6 +57,9 @@ class AdminControllerTest {
             every { requireSystemAdmin(any()) } just runs
             every { requireOrgAdmin(any(), any()) } just runs
         }
+
+        @Bean
+        fun auditLogService(): AuditLogService = mockk(relaxed = true)
     }
 
     private fun sampleOrg(id: String = "org-1") = Organization(

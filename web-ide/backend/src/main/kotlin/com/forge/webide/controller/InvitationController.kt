@@ -4,6 +4,7 @@ import com.forge.webide.model.CreateInvitationRequest
 import com.forge.webide.model.OrgInvitation
 import com.forge.webide.model.OrgInvitationInfo
 import com.forge.webide.model.OrgMember
+import com.forge.webide.service.AuditLogService
 import com.forge.webide.service.InvitationService
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -14,7 +15,8 @@ import org.springframework.web.bind.annotation.*
 @RestController
 @RequestMapping("/api/admin")
 class InvitationController(
-    private val invitationService: InvitationService
+    private val invitationService: InvitationService,
+    private val auditLogService: AuditLogService
 ) {
     @PostMapping("/orgs/{orgId}/invitations")
     fun createInvitation(
@@ -23,6 +25,7 @@ class InvitationController(
         @AuthenticationPrincipal jwt: Jwt? = null
     ): ResponseEntity<OrgInvitation> {
         val invitation = invitationService.createInvitation(orgId, req.role, jwt)
+        auditLogService.log(orgId, jwt?.subject ?: "system", "INVITATION_CREATED", "INVITATION", invitation.token, "role=${req.role}")
         return ResponseEntity.status(HttpStatus.CREATED).body(invitation)
     }
 
@@ -38,6 +41,7 @@ class InvitationController(
         @AuthenticationPrincipal jwt: Jwt? = null
     ): ResponseEntity<OrgMember> {
         val member = invitationService.acceptInvitation(token, jwt)
+        auditLogService.log(member.orgId, jwt?.subject ?: "anonymous", "INVITATION_ACCEPTED", "MEMBER", member.userId)
         return ResponseEntity.ok(member)
     }
 }

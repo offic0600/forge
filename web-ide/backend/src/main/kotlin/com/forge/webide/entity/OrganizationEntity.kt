@@ -22,6 +22,12 @@ class OrganizationEntity(
     @Column(nullable = false, length = 20)
     var status: String = "ACTIVE",
 
+    @Column(name = "monthly_message_quota")
+    var monthlyMessageQuota: Int? = null,
+
+    @Column(name = "monthly_exec_quota")
+    var monthlyExecQuota: Int? = null,
+
     @Column(name = "created_at", nullable = false)
     val createdAt: Instant = Instant.now()
 )

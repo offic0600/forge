@@ -16,6 +16,9 @@ import {
   X,
   Link as LinkIcon,
   UserPlus,
+  BarChart2,
+  ClipboardList,
+  Gauge,
 } from "lucide-react";
 import { Link, useRouter } from "@/navigation";
 import { api } from "@/lib/api";
@@ -173,7 +176,7 @@ export default function OrgDetailPage() {
         </div>
 
         {/* Sub-navigation links */}
-        <div className="flex items-center gap-4 text-sm text-muted-foreground mb-6">
+        <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground mb-6">
           <Link
             href={`/orgs/${id}/model-config`}
             className="flex items-center gap-1.5 hover:text-primary transition-colors"
@@ -195,6 +198,29 @@ export default function OrgDetailPage() {
             <Settings size={14} />
             {t("navBuildEnv")}
           </Link>
+          <Link
+            href={`/orgs/${id}/usage`}
+            className="flex items-center gap-1.5 hover:text-primary transition-colors"
+          >
+            <BarChart2 size={14} />
+            Usage
+          </Link>
+          <Link
+            href={`/orgs/${id}/audit-log`}
+            className="flex items-center gap-1.5 hover:text-primary transition-colors"
+          >
+            <ClipboardList size={14} />
+            Audit Log
+          </Link>
+          {isAdmin && (
+            <Link
+              href={`/orgs/${id}/quota`}
+              className="flex items-center gap-1.5 hover:text-primary transition-colors"
+            >
+              <Gauge size={14} />
+              Quota
+            </Link>
+          )}
         </div>
 
         {/* Tabs */}

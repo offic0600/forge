@@ -151,7 +151,9 @@ class OrganizationService(
         slug = slug,
         description = description,
         status = status,
-        createdAt = createdAt
+        createdAt = createdAt,
+        monthlyMessageQuota = monthlyMessageQuota,
+        monthlyExecQuota = monthlyExecQuota
     )
 
     private fun OrgMemberEntity.toModel() = OrgMember(

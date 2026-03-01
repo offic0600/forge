@@ -7,6 +7,9 @@ import type {
   Workspace,
   OrgInvitation,
   OrgInvitationInfo,
+  OrgUsageSummary,
+  AuditLogEntry,
+  UpdateQuotaRequest,
   CreateOrgRequest,
   UpdateOrgRequest,
   AddMemberRequest,
@@ -125,6 +128,30 @@ export const api = {
     accept: (token: string) =>
       fetchJson<OrgMember>(`/api/admin/invitations/${token}/accept`, {
         method: "POST",
+      }),
+  },
+
+  usage: {
+    get: (orgId: string, days = 7) =>
+      fetchJson<OrgUsageSummary>(`/api/admin/orgs/${orgId}/usage?days=${days}`),
+  },
+
+  auditLogs: {
+    listByOrg: (orgId: string, page = 0) =>
+      fetchJson<{ content: AuditLogEntry[]; totalPages: number; totalElements: number }>(
+        `/api/admin/orgs/${orgId}/audit-logs?page=${page}&size=50`
+      ),
+    listAll: (page = 0) =>
+      fetchJson<{ content: AuditLogEntry[]; totalPages: number; totalElements: number }>(
+        `/api/admin/audit-logs?page=${page}&size=100`
+      ),
+  },
+
+  quota: {
+    update: (orgId: string, req: UpdateQuotaRequest) =>
+      fetchJson<Organization>(`/api/admin/orgs/${orgId}/quota`, {
+        method: "PUT",
+        body: JSON.stringify(req),
       }),
   },
 

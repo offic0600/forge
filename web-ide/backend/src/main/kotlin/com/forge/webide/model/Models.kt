@@ -461,7 +461,9 @@ data class Organization(
     val slug: String,
     val description: String?,
     val status: String,
-    val createdAt: Instant
+    val createdAt: Instant,
+    val monthlyMessageQuota: Int? = null,
+    val monthlyExecQuota: Int? = null
 )
 
 data class OrgMember(
@@ -566,4 +568,34 @@ data class OrgInvitationInfo(
 
 data class CreateInvitationRequest(
     val role: String = "MEMBER"
+)
+
+// --- Phase 17: Usage, Audit Logs, Quota ---
+
+data class OrgUsageSummary(
+    val orgId: String,
+    val days: Int,
+    val totalMessages: Long,
+    val totalExecutions: Long,
+    val activeWorkspaces: Long,
+    val monthlyMessageQuota: Int?,
+    val monthlyExecQuota: Int?,
+    val messagesByDay: Map<String, Long>,
+    val executionsByDay: Map<String, Long>
+)
+
+data class AuditLogEntry(
+    val id: Long,
+    val orgId: String?,
+    val actorId: String,
+    val action: String,
+    val targetType: String?,
+    val targetId: String?,
+    val detail: String?,
+    val createdAt: java.time.Instant
+)
+
+data class UpdateQuotaRequest(
+    val monthlyMessageQuota: Int?,
+    val monthlyExecQuota: Int?
 )

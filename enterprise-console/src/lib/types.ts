@@ -5,6 +5,8 @@ export interface Organization {
   description: string | null;
   status: string;
   createdAt: string;
+  monthlyMessageQuota: number | null;
+  monthlyExecQuota: number | null;
 }
 
 export interface OrgMember {
@@ -72,6 +74,34 @@ export interface OrgInvitationInfo {
   orgName: string;
   role: string;
   expiresAt: string;
+}
+
+export interface OrgUsageSummary {
+  orgId: string;
+  days: number;
+  totalMessages: number;
+  totalExecutions: number;
+  activeWorkspaces: number;
+  monthlyMessageQuota: number | null;
+  monthlyExecQuota: number | null;
+  messagesByDay: Record<string, number>;
+  executionsByDay: Record<string, number>;
+}
+
+export interface AuditLogEntry {
+  id: number;
+  orgId: string | null;
+  actorId: string;
+  action: string;
+  targetType: string | null;
+  targetId: string | null;
+  detail: string | null;
+  createdAt: string;
+}
+
+export interface UpdateQuotaRequest {
+  monthlyMessageQuota: number | null;
+  monthlyExecQuota: number | null;
 }
 
 export interface CreateOrgRequest {

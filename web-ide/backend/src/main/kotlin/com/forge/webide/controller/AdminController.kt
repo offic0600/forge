@@ -1,6 +1,7 @@
 package com.forge.webide.controller
 
 import com.forge.webide.model.*
+import com.forge.webide.service.AuditLogService
 import com.forge.webide.service.OrgConfigService
 import com.forge.webide.service.OrganizationService
 import com.forge.webide.service.RbacHelper
@@ -15,7 +16,8 @@ import org.springframework.web.bind.annotation.*
 class AdminController(
     private val orgService: OrganizationService,
     private val configService: OrgConfigService,
-    private val rbacHelper: RbacHelper
+    private val rbacHelper: RbacHelper,
+    private val auditLogService: AuditLogService
 ) {
 
     // =========================================================================
@@ -40,6 +42,7 @@ class AdminController(
         rbacHelper.requireSystemAdmin(jwt)
         return try {
             val org = orgService.createOrg(req)
+            auditLogService.log(org.id, jwt?.subject ?: "system", "ORG_CREATED", "ORGANIZATION", org.id, org.name)
             ResponseEntity.status(HttpStatus.CREATED).body(org)
         } catch (e: IllegalArgumentException) {
             ResponseEntity.badRequest().body(mapOf("error" to e.message))
@@ -62,8 +65,14 @@ class AdminController(
     }
 
     @DeleteMapping("/orgs/{orgId}")
-    fun deleteOrg(@PathVariable orgId: String): ResponseEntity<Void> {
+    fun deleteOrg(
+        @PathVariable orgId: String,
+        @AuthenticationPrincipal jwt: Jwt? = null
+    ): ResponseEntity<Void> {
         val deleted = orgService.deleteOrg(orgId)
+        if (deleted) {
+            auditLogService.log(orgId, jwt?.subject ?: "system", "ORG_DELETED", "ORGANIZATION", orgId)
+        }
         return if (deleted) ResponseEntity.noContent().build()
         else ResponseEntity.notFound().build()
     }
@@ -84,6 +93,7 @@ class AdminController(
     ): ResponseEntity<OrgMember> {
         rbacHelper.requireOrgAdmin(jwt, orgId)
         val member = orgService.addMember(orgId, req)
+        auditLogService.log(orgId, jwt?.subject ?: "system", "MEMBER_ADDED", "MEMBER", req.userId, "role=${req.role}")
         return ResponseEntity.status(HttpStatus.CREATED).body(member)
     }
 
@@ -95,6 +105,9 @@ class AdminController(
     ): ResponseEntity<Void> {
         rbacHelper.requireOrgAdmin(jwt, orgId)
         val removed = orgService.removeMember(orgId, userId)
+        if (removed) {
+            auditLogService.log(orgId, jwt?.subject ?: "system", "MEMBER_REMOVED", "MEMBER", userId)
+        }
         return if (removed) ResponseEntity.noContent().build()
         else ResponseEntity.notFound().build()
     }
