@@ -68,6 +68,9 @@ function getAuthHeader(): Record<string, string> {
 
 function handleAuthError(response: Response): void {
   if (response.status === 401 && typeof window !== "undefined") {
+    localStorage.removeItem("forge_access_token");
+    localStorage.removeItem("forge_refresh_token");
+    localStorage.removeItem("forge_token_expiry");
     window.location.href = "/login";
   }
 }

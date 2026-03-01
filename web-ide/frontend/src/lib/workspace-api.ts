@@ -45,7 +45,11 @@ function getAuthHeader(): Record<string, string> {
 
 function handleAuthError(response: Response): void {
   if (response.status === 401 && typeof window !== "undefined") {
-    // Redirect to login on auth failure
+    // Clear stale token first — otherwise isAuthenticated() still returns true
+    // and the login page immediately redirects back, creating an infinite loop.
+    localStorage.removeItem("forge_access_token");
+    localStorage.removeItem("forge_refresh_token");
+    localStorage.removeItem("forge_token_expiry");
     window.location.href = "/login";
   }
 }

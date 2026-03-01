@@ -5,7 +5,7 @@ import { NextIntlClientProvider } from "next-intl";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Header } from "@/components/common/Header";
 import { Sidebar } from "@/components/common/Sidebar";
-import { isAuthenticated } from "@/lib/auth";
+import { getToken } from "@/lib/auth";
 
 function makeQueryClient(): QueryClient {
   return new QueryClient({
@@ -66,17 +66,25 @@ export default function LocaleLayout({
     const pub = isPublicPath(path);
     setIsPublic(pub);
 
-    if (!pub && !isAuthenticated()) {
-      fetch("/api/auth/me")
+    if (!pub) {
+      const token = getToken();
+      fetch("/api/auth/me", {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
         .then(async (res) => {
           if (res.status === 401) {
+            // Clear any stale token to prevent login→main redirect loop
+            localStorage.removeItem("forge_access_token");
+            localStorage.removeItem("forge_refresh_token");
+            localStorage.removeItem("forge_token_expiry");
             window.location.href = "/login";
             return;
           }
-          // /api/auth/me is whitelisted (always returns 200), so also check
-          // the authenticated field — anonymous users get {authenticated: false}
           const data = await res.json();
           if (!data.authenticated) {
+            localStorage.removeItem("forge_access_token");
+            localStorage.removeItem("forge_refresh_token");
+            localStorage.removeItem("forge_token_expiry");
             window.location.href = "/login";
           } else {
             setAuthChecked(true);
