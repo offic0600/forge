@@ -50,7 +50,11 @@ class AdminController(
     }
 
     @GetMapping("/orgs/{orgId}")
-    fun getOrg(@PathVariable orgId: String): ResponseEntity<Organization> {
+    fun getOrg(
+        @PathVariable orgId: String,
+        @AuthenticationPrincipal jwt: Jwt? = null
+    ): ResponseEntity<Organization> {
+        rbacHelper.requireOrgAdmin(jwt, orgId)
         val org = orgService.getOrg(orgId) ?: return ResponseEntity.notFound().build()
         return ResponseEntity.ok(org)
     }
@@ -58,8 +62,10 @@ class AdminController(
     @PutMapping("/orgs/{orgId}")
     fun updateOrg(
         @PathVariable orgId: String,
-        @RequestBody req: UpdateOrgRequest
+        @RequestBody req: UpdateOrgRequest,
+        @AuthenticationPrincipal jwt: Jwt? = null
     ): ResponseEntity<Organization> {
+        rbacHelper.requireOrgAdmin(jwt, orgId)
         val org = orgService.updateOrg(orgId, req) ?: return ResponseEntity.notFound().build()
         return ResponseEntity.ok(org)
     }
@@ -69,6 +75,7 @@ class AdminController(
         @PathVariable orgId: String,
         @AuthenticationPrincipal jwt: Jwt? = null
     ): ResponseEntity<Void> {
+        rbacHelper.requireSystemAdmin(jwt)
         val deleted = orgService.deleteOrg(orgId)
         if (deleted) {
             auditLogService.log(orgId, jwt?.subject ?: "system", "ORG_DELETED", "ORGANIZATION", orgId)
@@ -82,8 +89,13 @@ class AdminController(
     // =========================================================================
 
     @GetMapping("/orgs/{orgId}/members")
-    fun listMembers(@PathVariable orgId: String): ResponseEntity<List<OrgMember>> =
-        ResponseEntity.ok(orgService.listMembers(orgId))
+    fun listMembers(
+        @PathVariable orgId: String,
+        @AuthenticationPrincipal jwt: Jwt? = null
+    ): ResponseEntity<List<OrgMember>> {
+        rbacHelper.requireOrgAdmin(jwt, orgId)
+        return ResponseEntity.ok(orgService.listMembers(orgId))
+    }
 
     @PostMapping("/orgs/{orgId}/members")
     fun addMember(
@@ -117,14 +129,21 @@ class AdminController(
     // =========================================================================
 
     @GetMapping("/orgs/{orgId}/workspaces")
-    fun listWorkspaces(@PathVariable orgId: String): ResponseEntity<List<Workspace>> =
-        ResponseEntity.ok(orgService.listWorkspaces(orgId))
+    fun listWorkspaces(
+        @PathVariable orgId: String,
+        @AuthenticationPrincipal jwt: Jwt? = null
+    ): ResponseEntity<List<Workspace>> {
+        rbacHelper.requireOrgAdmin(jwt, orgId)
+        return ResponseEntity.ok(orgService.listWorkspaces(orgId))
+    }
 
     @PostMapping("/orgs/{orgId}/workspaces/{wsId}/bind")
     fun bindWorkspace(
         @PathVariable orgId: String,
-        @PathVariable wsId: String
+        @PathVariable wsId: String,
+        @AuthenticationPrincipal jwt: Jwt? = null
     ): ResponseEntity<Map<String, Any>> {
+        rbacHelper.requireOrgAdmin(jwt, orgId)
         val success = orgService.bindWorkspace(orgId, wsId)
         return if (success) ResponseEntity.ok(mapOf("success" to true))
         else ResponseEntity.notFound().build()
@@ -133,8 +152,10 @@ class AdminController(
     @DeleteMapping("/orgs/{orgId}/workspaces/{wsId}/bind")
     fun unbindWorkspace(
         @PathVariable orgId: String,
-        @PathVariable wsId: String
+        @PathVariable wsId: String,
+        @AuthenticationPrincipal jwt: Jwt? = null
     ): ResponseEntity<Void> {
+        rbacHelper.requireOrgAdmin(jwt, orgId)
         val success = orgService.unbindWorkspace(wsId)
         return if (success) ResponseEntity.noContent().build()
         else ResponseEntity.notFound().build()
@@ -145,15 +166,22 @@ class AdminController(
     // =========================================================================
 
     @GetMapping("/orgs/{orgId}/model-configs")
-    fun listModelConfigs(@PathVariable orgId: String): ResponseEntity<List<OrgModelConfig>> =
-        ResponseEntity.ok(configService.listModelConfigs(orgId))
+    fun listModelConfigs(
+        @PathVariable orgId: String,
+        @AuthenticationPrincipal jwt: Jwt? = null
+    ): ResponseEntity<List<OrgModelConfig>> {
+        rbacHelper.requireOrgAdmin(jwt, orgId)
+        return ResponseEntity.ok(configService.listModelConfigs(orgId))
+    }
 
     @PutMapping("/orgs/{orgId}/model-configs/{provider}")
     fun upsertModelConfig(
         @PathVariable orgId: String,
         @PathVariable provider: String,
-        @RequestBody req: UpsertModelConfigRequest
+        @RequestBody req: UpsertModelConfigRequest,
+        @AuthenticationPrincipal jwt: Jwt? = null
     ): ResponseEntity<OrgModelConfig> {
+        rbacHelper.requireOrgAdmin(jwt, orgId)
         val config = configService.upsertModelConfig(orgId, provider, req)
         return ResponseEntity.ok(config)
     }
@@ -163,14 +191,21 @@ class AdminController(
     // =========================================================================
 
     @GetMapping("/orgs/{orgId}/db-connections")
-    fun listDbConnections(@PathVariable orgId: String): ResponseEntity<List<OrgDbConnection>> =
-        ResponseEntity.ok(configService.listDbConnections(orgId))
+    fun listDbConnections(
+        @PathVariable orgId: String,
+        @AuthenticationPrincipal jwt: Jwt? = null
+    ): ResponseEntity<List<OrgDbConnection>> {
+        rbacHelper.requireOrgAdmin(jwt, orgId)
+        return ResponseEntity.ok(configService.listDbConnections(orgId))
+    }
 
     @PostMapping("/orgs/{orgId}/db-connections")
     fun createDbConnection(
         @PathVariable orgId: String,
-        @RequestBody req: CreateDbConnectionRequest
+        @RequestBody req: CreateDbConnectionRequest,
+        @AuthenticationPrincipal jwt: Jwt? = null
     ): ResponseEntity<OrgDbConnection> {
+        rbacHelper.requireOrgAdmin(jwt, orgId)
         val conn = configService.createDbConnection(orgId, req)
         return ResponseEntity.status(HttpStatus.CREATED).body(conn)
     }
@@ -178,8 +213,10 @@ class AdminController(
     @DeleteMapping("/orgs/{orgId}/db-connections/{id}")
     fun deleteDbConnection(
         @PathVariable orgId: String,
-        @PathVariable id: String
+        @PathVariable id: String,
+        @AuthenticationPrincipal jwt: Jwt? = null
     ): ResponseEntity<Void> {
+        rbacHelper.requireOrgAdmin(jwt, orgId)
         val deleted = configService.deleteDbConnection(orgId, id)
         return if (deleted) ResponseEntity.noContent().build()
         else ResponseEntity.notFound().build()
@@ -188,8 +225,10 @@ class AdminController(
     @PostMapping("/orgs/{orgId}/db-connections/{id}/test")
     fun testDbConnection(
         @PathVariable orgId: String,
-        @PathVariable id: String
+        @PathVariable id: String,
+        @AuthenticationPrincipal jwt: Jwt? = null
     ): ResponseEntity<Map<String, Any>> {
+        rbacHelper.requireOrgAdmin(jwt, orgId)
         val result = configService.testDbConnection(orgId, id)
         return ResponseEntity.ok(result)
     }
@@ -201,17 +240,22 @@ class AdminController(
     @GetMapping("/orgs/{orgId}/env-configs")
     fun listEnvConfigs(
         @PathVariable orgId: String,
-        @RequestParam(required = false) category: String?
-    ): ResponseEntity<List<OrgEnvConfig>> =
-        ResponseEntity.ok(configService.listEnvConfigs(orgId, category))
+        @RequestParam(required = false) category: String?,
+        @AuthenticationPrincipal jwt: Jwt? = null
+    ): ResponseEntity<List<OrgEnvConfig>> {
+        rbacHelper.requireOrgAdmin(jwt, orgId)
+        return ResponseEntity.ok(configService.listEnvConfigs(orgId, category))
+    }
 
     @PutMapping("/orgs/{orgId}/env-configs/{cat}/{key}")
     fun upsertEnvConfig(
         @PathVariable orgId: String,
         @PathVariable cat: String,
         @PathVariable key: String,
-        @RequestBody req: UpsertEnvConfigRequest
+        @RequestBody req: UpsertEnvConfigRequest,
+        @AuthenticationPrincipal jwt: Jwt? = null
     ): ResponseEntity<OrgEnvConfig> {
+        rbacHelper.requireOrgAdmin(jwt, orgId)
         val config = configService.upsertEnvConfig(orgId, cat, req.copy(configKey = key))
         return ResponseEntity.ok(config)
     }
@@ -220,8 +264,10 @@ class AdminController(
     fun deleteEnvConfig(
         @PathVariable orgId: String,
         @PathVariable cat: String,
-        @PathVariable key: String
+        @PathVariable key: String,
+        @AuthenticationPrincipal jwt: Jwt? = null
     ): ResponseEntity<Void> {
+        rbacHelper.requireOrgAdmin(jwt, orgId)
         val deleted = configService.deleteEnvConfig(orgId, cat, key)
         return if (deleted) ResponseEntity.noContent().build()
         else ResponseEntity.notFound().build()

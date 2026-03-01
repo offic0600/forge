@@ -30,7 +30,6 @@ class ClaudeAgentServiceTest {
     private lateinit var knowledgeGapDetectorService: KnowledgeGapDetectorService
     private lateinit var chatSessionRepository: ChatSessionRepository
     private lateinit var chatMessageRepository: ChatMessageRepository
-    private lateinit var profileRouter: ProfileRouter
     private lateinit var skillLoader: SkillLoader
     private lateinit var systemPromptAssembler: SystemPromptAssembler
     private lateinit var metricsService: MetricsService
@@ -56,7 +55,6 @@ class ClaudeAgentServiceTest {
         knowledgeGapDetectorService = mockk(relaxed = true)
         chatSessionRepository = mockk(relaxed = true)
         chatMessageRepository = mockk(relaxed = true)
-        profileRouter = mockk()
         skillLoader = mockk()
         systemPromptAssembler = mockk()
         metricsService = mockk(relaxed = true)
@@ -64,12 +62,6 @@ class ClaudeAgentServiceTest {
         hitlCheckpointManager = mockk(relaxed = true)
         baselineAutoChecker = mockk(relaxed = true)
 
-        // Default routing: always route to development profile (confidence above 0.5 to skip intent confirmation)
-        every { profileRouter.route(any(), any()) } returns ProfileRoutingResult(
-            profile = defaultProfile,
-            confidence = 0.6,
-            reason = "Keyword detected: test"
-        )
         every { skillLoader.loadSkillsForProfile(any(), any()) } returns emptyList()
         every { skillLoader.loadProfile(any()) } returns defaultProfile
         every { systemPromptAssembler.assemble(any(), any()) } returns "You are a test assistant."
@@ -84,7 +76,6 @@ class ClaudeAgentServiceTest {
             chatSessionRepository = chatSessionRepository,
             chatMessageRepository = chatMessageRepository,
             executionRecordRepository = mockk(relaxed = true),
-            profileRouter = profileRouter,
             intentSkillRouter = mockk(relaxed = true),
             skillLoader = skillLoader,
             systemPromptAssembler = systemPromptAssembler,

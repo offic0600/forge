@@ -122,15 +122,6 @@ data class ProfileDefinition(
     val mode: String = "default"
 )
 
-/**
- * Result of routing a user message to a specific Profile.
- */
-data class ProfileRoutingResult(
-    val profile: ProfileDefinition,
-    val confidence: Double,
-    val reason: String
-)
-
 // ---- HITL (Human-In-The-Loop) types ----
 
 enum class HitlStatus { PENDING, APPROVED, REJECTED, TIMEOUT }

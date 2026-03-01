@@ -93,9 +93,9 @@ class LearningLoopPipelineService(
                     score = avgIntent,
                     sampleSize = records.size,
                     rootCause = "Low routing confidence ($routingIssues/${records.size} below 0.5, $confirmed confirmed by user)",
-                    suggestion = "Add more keywords for $profile in ProfileRouter or review keyword overlap with other profiles"
+                    suggestion = "Add more keywords for $profile in IntentSkillRouter or review keyword overlap with other profiles"
                 ))
-                recommendations.add("ProfileRouter: Review keyword coverage for $profile")
+                recommendations.add("IntentSkillRouter: Review keyword coverage for $profile")
             }
 
             if (avgCompletion < LOW_SCORE_THRESHOLD) {

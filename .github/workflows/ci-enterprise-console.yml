@@ -1,0 +1,37 @@
+name: CI - Enterprise Console
+
+on:
+  pull_request:
+    paths: ['enterprise-console/**']
+  push:
+    branches: [main]
+    paths: ['enterprise-console/**']
+
+permissions:
+  contents: read
+
+jobs:
+  build-typecheck:
+    name: Build & TypeScript Check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: enterprise-console
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: enterprise-console/package-lock.json
+      - run: npm ci
+      - run: npm run build
+        env:
+          NEXTAUTH_SECRET: ci-secret-placeholder-for-build-only-32c
+          NEXTAUTH_URL: http://localhost:19001
+          KEYCLOAK_CLIENT_ID: forge-enterprise
+          KEYCLOAK_CLIENT_SECRET: ci-secret
+          KEYCLOAK_ISSUER: http://localhost:8180/realms/forge
+          BACKEND_URL: http://localhost:8080

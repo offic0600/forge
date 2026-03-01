@@ -31,6 +31,7 @@ class RbacHelper(
     }
 
     fun requireOrgAdmin(jwt: Jwt?, orgId: String) {
-        if (!isOrgAdmin(jwt, orgId)) throw AccessDeniedException("Requires OrgAdmin")
+        if (!isSystemAdmin(jwt) && !isOrgAdmin(jwt, orgId))
+            throw AccessDeniedException("Requires OrgAdmin or SystemAdmin for org $orgId")
     }
 }

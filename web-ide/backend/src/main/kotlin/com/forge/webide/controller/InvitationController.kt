@@ -6,6 +6,7 @@ import com.forge.webide.model.OrgInvitationInfo
 import com.forge.webide.model.OrgMember
 import com.forge.webide.service.AuditLogService
 import com.forge.webide.service.InvitationService
+import com.forge.webide.service.RbacHelper
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.security.core.annotation.AuthenticationPrincipal
@@ -16,7 +17,8 @@ import org.springframework.web.bind.annotation.*
 @RequestMapping("/api/admin")
 class InvitationController(
     private val invitationService: InvitationService,
-    private val auditLogService: AuditLogService
+    private val auditLogService: AuditLogService,
+    private val rbacHelper: RbacHelper
 ) {
     @PostMapping("/orgs/{orgId}/invitations")
     fun createInvitation(
@@ -24,6 +26,7 @@ class InvitationController(
         @RequestBody req: CreateInvitationRequest,
         @AuthenticationPrincipal jwt: Jwt? = null
     ): ResponseEntity<OrgInvitation> {
+        rbacHelper.requireOrgAdmin(jwt, orgId)
         val invitation = invitationService.createInvitation(orgId, req.role, jwt)
         auditLogService.log(orgId, jwt?.subject ?: "system", "INVITATION_CREATED", "INVITATION", invitation.token, "role=${req.role}")
         return ResponseEntity.status(HttpStatus.CREATED).body(invitation)

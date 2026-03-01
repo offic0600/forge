@@ -45,7 +45,6 @@ class ClaudeAgentService(
     private val chatSessionRepository: ChatSessionRepository,
     private val chatMessageRepository: ChatMessageRepository,
     private val executionRecordRepository: ExecutionRecordRepository,
-    private val profileRouter: ProfileRouter,
     private val intentSkillRouter: IntentSkillRouter,
     private val skillLoader: SkillLoader,
     private val systemPromptAssembler: SystemPromptAssembler,
