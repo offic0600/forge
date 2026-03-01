@@ -41,7 +41,10 @@
           "temporary": false
         }
       ],
-      "realmRoles": ["admin", "developer"]
+      "realmRoles": [
+        "admin",
+        "developer"
+      ]
     },
     {
       "username": "dev1",
@@ -57,7 +60,9 @@
           "temporary": false
         }
       ],
-      "realmRoles": ["developer"]
+      "realmRoles": [
+        "developer"
+      ]
     },
     {
       "username": "viewer1",
@@ -73,7 +78,9 @@
           "temporary": false
         }
       ],
-      "realmRoles": ["viewer"]
+      "realmRoles": [
+        "viewer"
+      ]
     }
   ],
   "clients": [
@@ -88,11 +95,13 @@
       "baseUrl": "/",
       "redirectUris": [
         "http://localhost:9000/*",
-        "http://localhost:3000/*"
+        "http://localhost:3000/*",
+        "http://localhost:19000/*"
       ],
       "webOrigins": [
         "http://localhost:9000",
-        "http://localhost:3000"
+        "http://localhost:3000",
+        "http://localhost:19000"
       ],
       "protocol": "openid-connect",
       "attributes": {
