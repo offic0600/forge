@@ -128,6 +128,7 @@ forge:
   # ---------------------------------------------------------------------------
   security:
     enabled: ${FORGE_SECURITY_ENABLED:false}
+    jwk-set-uri: ${FORGE_SECURITY_JWK_SET_URI:}
 
   # ---------------------------------------------------------------------------
   # Encryption — 用户 API Key 加密存储
