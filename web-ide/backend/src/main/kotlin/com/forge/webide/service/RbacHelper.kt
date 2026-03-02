@@ -13,6 +13,11 @@ class RbacHelper(
 ) {
     fun isSystemAdmin(jwt: Jwt?): Boolean {
         if (!securityEnabled) return true
+        // Support both claim formats:
+        // 1. realm_roles: ["admin", ...] — flat array (custom Keycloak mapper, claim.name=realm_roles)
+        // 2. realm_access: { roles: ["admin", ...] } — standard Keycloak nested format
+        val flatRoles = jwt?.getClaimAsStringList("realm_roles")
+        if (!flatRoles.isNullOrEmpty()) return "admin" in flatRoles
         @Suppress("UNCHECKED_CAST")
         val realmAccess = jwt?.getClaim<Map<String, Any>>("realm_access") ?: return false
         val roles = realmAccess["roles"] as? List<*> ?: return false

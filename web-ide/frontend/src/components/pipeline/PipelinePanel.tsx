@@ -11,6 +11,7 @@ import {
   Lightbulb,
   Database,
 } from "lucide-react";
+import { getAuthHeaders } from "@/lib/auth";
 
 interface GapStats {
   total: number;
@@ -66,9 +67,9 @@ export function PipelinePanel() {
     setError(null);
     try {
       const [statusRes, qualityRes, suggestionsRes] = await Promise.all([
-        fetch("/api/knowledge-pipeline/status"),
-        fetch("/api/knowledge-pipeline/skill-quality?days=30"),
-        fetch("/api/knowledge-pipeline/skill-suggestions?days=30"),
+        fetch("/api/knowledge-pipeline/status", { headers: getAuthHeaders() }),
+        fetch("/api/knowledge-pipeline/skill-quality?days=30", { headers: getAuthHeaders() }),
+        fetch("/api/knowledge-pipeline/skill-suggestions?days=30", { headers: getAuthHeaders() }),
       ]);
 
       if (statusRes.ok) setStatus(await statusRes.json());
@@ -92,7 +93,7 @@ export function PipelinePanel() {
   const handleRunPipeline = async () => {
     setRunning(true);
     try {
-      const res = await fetch("/api/knowledge-pipeline/run", { method: "POST" });
+      const res = await fetch("/api/knowledge-pipeline/run", { method: "POST", headers: getAuthHeaders() });
       if (res.ok) {
         await fetchData();
       }

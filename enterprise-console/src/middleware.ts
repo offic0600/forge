@@ -1,26 +1,41 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { auth } from "@/auth";
-import createIntlMiddleware from "next-intl/middleware";
-import { routing } from "../i18n/routing";
 
-const intlMiddleware = createIntlMiddleware(routing);
+// In Next.js 15 standalone mode, NextResponse.rewrite() with an absolute URL
+// triggers an internal HTTP proxy request. When next-intl's createIntlMiddleware
+// does this rewrite to inject locale context, it proxies to itself → ECONNRESET loop.
+// Fix: handle locale routing with NextResponse.redirect() (browser-side) instead.
+// next-intl's getRequestConfig reads locale from requestLocale (URL params), so
+// the intl middleware rewrite is not needed for i18n to work in App Router.
+
+const locales = ["zh", "en"];
+const defaultLocale = "zh";
 
 export default auth((req: NextRequest & { auth: unknown }) => {
-  const isAuthRoute = req.nextUrl.pathname.startsWith("/api/auth");
-  const isApiRoute = req.nextUrl.pathname.startsWith("/api/");
+  const { pathname } = req.nextUrl;
 
-  // Skip auth check for API routes (handled server-side) and auth routes
-  if (isApiRoute) {
+  // API routes: skip auth check (handled server-side)
+  if (pathname.startsWith("/api/")) {
     return NextResponse.next();
   }
 
   // Redirect unauthenticated users to sign-in
-  if (!req.auth && !isAuthRoute) {
+  if (!req.auth) {
     return NextResponse.redirect(new URL("/api/auth/signin", req.url));
   }
 
-  return intlMiddleware(req);
+  // Add locale prefix via redirect (NOT rewrite — avoids Next.js internal proxy loop)
+  const hasLocale = locales.some(
+    (l) => pathname === `/${l}` || pathname.startsWith(`/${l}/`)
+  );
+  if (!hasLocale) {
+    const url = req.nextUrl.clone();
+    url.pathname = `/${defaultLocale}${pathname}`;
+    return NextResponse.redirect(url);
+  }
+
+  return NextResponse.next();
 });
 
 export const config = {

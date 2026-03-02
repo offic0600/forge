@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ZoomIn, ZoomOut, Maximize2, RotateCcw, Download } from "lucide-react";
+import { getAuthHeaders } from "@/lib/auth";
 
 interface ArchDiagram {
   id: string;
@@ -24,7 +25,7 @@ export function ArchDiagramViewer() {
   const { data: diagrams, isLoading } = useQuery<ArchDiagram[]>({
     queryKey: ["arch-diagrams"],
     queryFn: async () => {
-      const res = await fetch("/api/knowledge/diagrams");
+      const res = await fetch("/api/knowledge/diagrams", { headers: getAuthHeaders() });
       if (!res.ok) throw new Error("Failed to fetch diagrams");
       return res.json();
     },

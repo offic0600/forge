@@ -3,6 +3,7 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
+import { getAuthHeaders } from "@/lib/auth";
 import { Link } from "@/navigation";
 import {
   FolderOpen,
@@ -111,7 +112,7 @@ export default function DashboardPage() {
   } = useQuery<ActivityItem[]>({
     queryKey: ["activities"],
     queryFn: async () => {
-      const res = await fetch("/api/activities?limit=10");
+      const res = await fetch("/api/activities?limit=10", { headers: getAuthHeaders() });
       if (!res.ok) return [];
       return res.json();
     },

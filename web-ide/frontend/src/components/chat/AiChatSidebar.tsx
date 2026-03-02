@@ -29,6 +29,7 @@ import {
   type StreamEvent,
   type OodaPhase,
 } from "@/lib/claude-client";
+import { getAuthHeaders } from "@/lib/auth";
 import { HitlApprovalPanel } from "@/components/chat/HitlApprovalPanel";
 import { QualityPanel } from "@/components/dashboard/QualityPanel";
 import { MemoryPanel } from "@/components/memory/MemoryPanel";
@@ -118,7 +119,7 @@ export function AiChatSidebar({
     if (!sessionId) return;
     (async () => {
       try {
-        const res = await fetch(`/api/chat/sessions/${sessionId}/messages`);
+        const res = await fetch(`/api/chat/sessions/${sessionId}/messages`, { headers: getAuthHeaders() });
         if (!res.ok) {
           // Session expired or invalid, clear it
           localStorage.removeItem(`forge_chat_session_${workspaceId}`);
@@ -189,7 +190,7 @@ export function AiChatSidebar({
     try {
       const res = await fetch("/api/chat/sessions", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify({ workspaceId }),
       });
       if (!res.ok) throw new Error("Failed to create chat session");

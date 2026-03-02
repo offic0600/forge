@@ -9,6 +9,7 @@ import {
   Timer,
   RefreshCw,
 } from "lucide-react";
+import { getAuthHeaders } from "@/lib/auth";
 
 interface ProfileStat {
   name: string;
@@ -69,9 +70,9 @@ export function QualityPanel() {
     setError(null);
     try {
       const [metricsRes, execRes, trendsRes] = await Promise.all([
-        fetch("/api/dashboard/metrics"),
-        fetch("/api/dashboard/executions?limit=20"),
-        fetch("/api/dashboard/trends?days=7"),
+        fetch("/api/dashboard/metrics", { headers: getAuthHeaders() }),
+        fetch("/api/dashboard/executions?limit=20", { headers: getAuthHeaders() }),
+        fetch("/api/dashboard/trends?days=7", { headers: getAuthHeaders() }),
       ]);
 
       if (metricsRes.ok) setMetrics(await metricsRes.json());

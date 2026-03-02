@@ -2,6 +2,7 @@
 
 import React, { useState, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { getAuthHeaders } from "@/lib/auth";
 import { useTranslations } from "next-intl";
 import { WorkflowCanvas, type WorkflowNode, type WorkflowEdge } from "@/components/workflow/WorkflowCanvas";
 import { NodePalette } from "@/components/workflow/NodePalette";
@@ -31,7 +32,7 @@ export default function WorkflowsPage() {
   const { data: workflows, isLoading } = useQuery<Workflow[]>({
     queryKey: ["workflows"],
     queryFn: async () => {
-      const res = await fetch("/api/workflows");
+      const res = await fetch("/api/workflows", { headers: getAuthHeaders() });
       if (!res.ok) throw new Error("Failed to fetch workflows");
       return res.json();
     },
@@ -51,7 +52,7 @@ export default function WorkflowsPage() {
         : "/api/workflows";
       const res = await fetch(url, {
         method,
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify(workflow),
       });
       if (!res.ok) throw new Error("Failed to save workflow");
@@ -67,6 +68,7 @@ export default function WorkflowsPage() {
     mutationFn: async (workflowId: string) => {
       const res = await fetch(`/api/workflows/${workflowId}/run`, {
         method: "POST",
+        headers: getAuthHeaders(),
       });
       if (!res.ok) throw new Error("Failed to run workflow");
       return res.json();

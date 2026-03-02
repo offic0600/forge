@@ -138,9 +138,12 @@ services:
     build:
       context: ../../enterprise-console
       dockerfile: Dockerfile
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
-      - "19001:3000"
+      - "19001:19001"
     environment:
+      PORT: "19001"
       BACKEND_URL: http://backend:8080
       KEYCLOAK_CLIENT_ID: forge-enterprise
       KEYCLOAK_CLIENT_SECRET: enterprise-secret

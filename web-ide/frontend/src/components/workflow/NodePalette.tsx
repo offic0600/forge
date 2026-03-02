@@ -2,6 +2,7 @@
 
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
+import { getAuthHeaders } from "@/lib/auth";
 import {
   Zap,
   Wrench,
@@ -96,7 +97,7 @@ export function NodePalette({ onAddNode }: NodePaletteProps) {
   const { data: mcpTools } = useQuery<McpTool[]>({
     queryKey: ["mcp-tools"],
     queryFn: async () => {
-      const res = await fetch("/api/mcp/tools");
+      const res = await fetch("/api/mcp/tools", { headers: getAuthHeaders() });
       if (!res.ok) return [];
       return res.json();
     },

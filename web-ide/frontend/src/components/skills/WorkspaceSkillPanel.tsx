@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { type SkillView, skillApi } from "@/lib/skill-api";
+import { getAuthHeaders } from "@/lib/auth";
 
 interface WorkspaceSkillPanelProps {
   workspaceId: string;
@@ -17,7 +18,7 @@ export function WorkspaceSkillPanel({ workspaceId }: WorkspaceSkillPanelProps) {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch("/api/skills");
+        const res = await fetch("/api/skills", { headers: getAuthHeaders() });
         if (res.ok) {
           const data = (await res.json()) as SkillView[];
           setSkills(data);
@@ -32,7 +33,7 @@ export function WorkspaceSkillPanel({ workspaceId }: WorkspaceSkillPanelProps) {
 
   const loadSkillContent = async (name: string) => {
     try {
-      const res = await fetch(`/api/skills/${name}`);
+      const res = await fetch(`/api/skills/${name}`, { headers: getAuthHeaders() });
       if (res.ok) {
         const data = (await res.json()) as { content: string };
         setSkillContent(data.content);

@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { StageMemoryView } from "./StageMemoryView";
 import { SessionHistoryView } from "./SessionHistoryView";
+import { getAuthHeaders } from "@/lib/auth";
 
 interface MemoryPanelProps {
   workspaceId: string;
@@ -19,7 +20,7 @@ export function MemoryPanel({ workspaceId }: MemoryPanelProps) {
 
   const loadWorkspaceMemory = useCallback(async () => {
     try {
-      const res = await fetch(`/api/memory/workspace/${workspaceId}`);
+      const res = await fetch(`/api/memory/workspace/${workspaceId}`, { headers: getAuthHeaders() });
       if (res.ok) {
         const data = (await res.json()) as { content: string };
         setWorkspaceMemory(data.content);
@@ -39,7 +40,7 @@ export function MemoryPanel({ workspaceId }: MemoryPanelProps) {
     try {
       const res = await fetch(`/api/memory/workspace/${workspaceId}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify({ content: editContent }),
       });
       if (res.ok) {
@@ -56,7 +57,7 @@ export function MemoryPanel({ workspaceId }: MemoryPanelProps) {
     try {
       const res = await fetch(`/api/memory/workspace/${workspaceId}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify({ content: "" }),
       });
       if (res.ok) {

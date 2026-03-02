@@ -14,7 +14,10 @@ async function proxy(req: NextRequest, params: Params): Promise<NextResponse> {
 
   const headers: Record<string, string> = {};
   req.headers.forEach((value, key) => {
-    if (key !== "host") headers[key] = value;
+    // Skip host (would confuse backend) and cookie (next-auth session JWT makes
+    // the Cookie header too large for Tomcat's default 8KB limit)
+    if (key === "host" || key === "cookie") return;
+    headers[key] = value;
   });
 
   // Forward access token to backend

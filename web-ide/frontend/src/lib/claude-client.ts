@@ -77,6 +77,13 @@ export interface ChatContext {
   content?: string;
 }
 
+function getAuthHeaders(): Record<string, string> {
+  if (typeof window === "undefined") return {};
+  const token = localStorage.getItem("forge_access_token");
+  if (!token) return {};
+  return { Authorization: `Bearer ${token}` };
+}
+
 class ClaudeClient {
   private baseUrl: string;
   private activeWs: WebSocket | null = null;
@@ -262,6 +269,7 @@ class ClaudeClient {
       headers: {
         "Content-Type": "application/json",
         Accept: "text/event-stream",
+        ...getAuthHeaders(),
       },
       body: JSON.stringify({ type: "message", content: message, contexts }),
       signal,
@@ -331,7 +339,7 @@ class ClaudeClient {
 
     const response = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...getAuthHeaders() },
       body: JSON.stringify({ type: "message", content: message, contexts }),
     });
 
@@ -357,7 +365,7 @@ class ClaudeClient {
   > {
     const url = `${this.baseUrl}/api/chat/sessions/${sessionId}/messages`;
 
-    const response = await fetch(url);
+    const response = await fetch(url, { headers: getAuthHeaders() });
     if (!response.ok) {
       throw new Error(`Failed to get messages: ${response.status}`);
     }

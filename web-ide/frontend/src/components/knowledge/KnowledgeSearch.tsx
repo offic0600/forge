@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
+import { getAuthHeaders } from "@/lib/auth";
 import {
   Search,
   FileText,
@@ -109,7 +110,7 @@ export function KnowledgeSearch({
       if (typeFilter !== "all") params.set("type", typeFilter);
       if (scopeFilter !== "all") params.set("scope", scopeFilter);
       if (workspaceId) params.set("workspaceId", workspaceId);
-      const res = await fetch(`/api/knowledge/search?${params}`);
+      const res = await fetch(`/api/knowledge/search?${params}`, { headers: getAuthHeaders() });
       if (!res.ok) throw new Error("Search failed");
       return res.json();
     },

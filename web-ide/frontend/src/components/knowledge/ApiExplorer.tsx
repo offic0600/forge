@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { getAuthHeaders } from "@/lib/auth";
 import {
   ChevronRight,
   ChevronDown,
@@ -94,7 +95,7 @@ function EndpointCard({
 
       const res = await fetch("/api/knowledge/apis/try", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify({
           method: endpoint.method,
           url,
@@ -326,7 +327,7 @@ export function ApiExplorer() {
   const { data: services, isLoading } = useQuery<ApiService[]>({
     queryKey: ["api-catalog"],
     queryFn: async () => {
-      const res = await fetch("/api/knowledge/apis");
+      const res = await fetch("/api/knowledge/apis", { headers: getAuthHeaders() });
       if (!res.ok) throw new Error("Failed to fetch API catalog");
       return res.json();
     },

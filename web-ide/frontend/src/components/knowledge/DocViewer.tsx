@@ -3,6 +3,7 @@
 import React, { useMemo, useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { List, ExternalLink, Clock, User } from "lucide-react";
+import { getAuthHeaders } from "@/lib/auth";
 
 interface KnowledgeDocFull {
   id: string;
@@ -167,7 +168,7 @@ export function DocViewer({ documentId }: DocViewerProps) {
   const { data: doc, isLoading, error } = useQuery<KnowledgeDocFull>({
     queryKey: ["knowledge-doc", documentId],
     queryFn: async () => {
-      const res = await fetch(`/api/knowledge/docs/${documentId}`);
+      const res = await fetch(`/api/knowledge/docs/${documentId}`, { headers: getAuthHeaders() });
       if (!res.ok) throw new Error("Failed to load document");
       return res.json();
     },

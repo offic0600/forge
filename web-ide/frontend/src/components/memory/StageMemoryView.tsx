@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { getAuthHeaders } from "@/lib/auth";
 
 interface StageMemory {
   workspaceId: string;
@@ -33,7 +34,7 @@ export function StageMemoryView({ workspaceId }: StageMemoryViewProps) {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`/api/memory/stage/${workspaceId}`);
+        const res = await fetch(`/api/memory/stage/${workspaceId}`, { headers: getAuthHeaders() });
         if (res.ok) {
           const data = (await res.json()) as StageMemory[];
           setStages(data);

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { getAuthHeaders } from "@/lib/auth";
 import {
   File,
   BookOpen,
@@ -102,7 +103,7 @@ export function ContextPicker({
         q: searchQuery,
         workspaceId,
       });
-      const res = await fetch(`/api/context/search?${params}`);
+      const res = await fetch(`/api/context/search?${params}`, { headers: getAuthHeaders() });
       if (!res.ok) return [];
       return res.json();
     },

@@ -1,3 +1,5 @@
+import { getAuthHeaders } from "@/lib/auth";
+
 export interface McpTool {
   name: string;
   description: string;
@@ -45,7 +47,7 @@ class McpClient {
    * Discover available MCP tools from all connected servers.
    */
   async listTools(): Promise<McpTool[]> {
-    const response = await fetch(`${this.baseUrl}/api/mcp/tools`);
+    const response = await fetch(`${this.baseUrl}/api/mcp/tools`, { headers: getAuthHeaders() });
     if (!response.ok) {
       throw new Error(`Failed to list MCP tools: ${response.status}`);
     }
@@ -61,7 +63,7 @@ class McpClient {
   ): Promise<McpToolCallResult> {
     const response = await fetch(`${this.baseUrl}/api/mcp/tools/call`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...getAuthHeaders() },
       body: JSON.stringify({
         name: toolName,
         arguments: args,
@@ -82,7 +84,7 @@ class McpClient {
    * List available MCP resources.
    */
   async listResources(): Promise<McpResource[]> {
-    const response = await fetch(`${this.baseUrl}/api/mcp/resources`);
+    const response = await fetch(`${this.baseUrl}/api/mcp/resources`, { headers: getAuthHeaders() });
     if (!response.ok) {
       throw new Error(`Failed to list MCP resources: ${response.status}`);
     }
@@ -103,7 +105,8 @@ class McpClient {
     }>;
   }> {
     const response = await fetch(
-      `${this.baseUrl}/api/mcp/resources/read?uri=${encodeURIComponent(uri)}`
+      `${this.baseUrl}/api/mcp/resources/read?uri=${encodeURIComponent(uri)}`,
+      { headers: getAuthHeaders() }
     );
     if (!response.ok) {
       throw new Error(`Failed to read MCP resource: ${response.status}`);

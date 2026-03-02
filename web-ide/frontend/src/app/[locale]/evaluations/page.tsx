@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { useTranslations } from "next-intl";
+import { getAuthHeaders } from "@/lib/auth";
 
 interface EvaluationSummary {
   groupKey: string;
@@ -158,8 +159,8 @@ export default function EvaluationsPage() {
     setLoading(true);
     try {
       const [summaryRes, trendRes] = await Promise.all([
-        fetch(`/api/evaluations/summary?days=${days}`),
-        fetch(`/api/evaluations/trend?days=${days}`),
+        fetch(`/api/evaluations/summary?days=${days}`, { headers: getAuthHeaders() }),
+        fetch(`/api/evaluations/trend?days=${days}`, { headers: getAuthHeaders() }),
       ]);
       if (summaryRes.ok) {
         const data = await summaryRes.json();

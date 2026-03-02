@@ -1,51 +1,133 @@
 import NextAuth from "next-auth";
-import Keycloak from "next-auth/providers/keycloak";
+import type { OAuthConfig } from "next-auth/providers";
+import type { JWT } from "next-auth/jwt";
 
-// In Docker, the container cannot reach localhost:8180 (host machine).
-// KEYCLOAK_INTERNAL_URL (e.g. http://host.docker.internal:8180/realms/forge) is used
-// for server-side calls (token exchange, JWKS, userinfo).
-// KEYCLOAK_ISSUER (localhost:8180) is kept for JWT iss claim validation.
+// Auth.js OIDC discovery fetches the Keycloak discovery document, which returns
+// mixed URLs: token/userinfo/jwks use host.docker.internal (reachable inside Docker),
+// but end_session_endpoint and revocation_endpoint use localhost:8180 (unreachable
+// inside Docker). Fix: use type:"oauth" with explicit endpoints to bypass discovery.
 const keycloakIssuer = process.env.KEYCLOAK_ISSUER!;
 const keycloakInternal = process.env.KEYCLOAK_INTERNAL_URL ?? keycloakIssuer;
-const useInternalUrl = keycloakInternal !== keycloakIssuer;
+
+interface KeycloakProfile {
+  sub: string;
+  name?: string;
+  preferred_username?: string;
+  email?: string;
+  picture?: string;
+}
+
+const KeycloakProvider: OAuthConfig<KeycloakProfile> = {
+  id: "keycloak",
+  name: "Keycloak",
+  type: "oauth",
+  clientId: process.env.KEYCLOAK_CLIENT_ID!,
+  clientSecret: process.env.KEYCLOAK_CLIENT_SECRET!,
+  issuer: keycloakIssuer,
+  authorization: {
+    url: `${keycloakIssuer}/protocol/openid-connect/auth`,
+    params: { scope: "openid email profile" },
+  },
+  token: `${keycloakInternal}/protocol/openid-connect/token`,
+  userinfo: `${keycloakInternal}/protocol/openid-connect/userinfo`,
+  checks: ["pkce", "state"],
+  profile(profile) {
+    return {
+      id: profile.sub,
+      name: profile.name ?? profile.preferred_username ?? profile.sub,
+      email: profile.email ?? "",
+      image: profile.picture,
+    };
+  },
+};
+
+/** Decode a Keycloak JWT and extract realm roles. */
+function extractRoles(jwtStr: string): string[] {
+  try {
+    const b64 = jwtStr.split(".")[1];
+    const padded =
+      b64.replace(/-/g, "+").replace(/_/g, "/") +
+      "=".repeat((4 - (b64.length % 4)) % 4);
+    const payload = JSON.parse(
+      Buffer.from(padded, "base64").toString("utf8")
+    ) as { realm_roles?: string[]; realm_access?: { roles?: string[] } };
+    // Keycloak mapper outputs realm_roles (top-level); fall back to realm_access.roles
+    return payload.realm_roles ?? payload.realm_access?.roles ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/** Use the refresh_token to obtain a new access_token from Keycloak. */
+async function refreshAccessToken(token: JWT): Promise<JWT> {
+  try {
+    const res = await fetch(
+      `${keycloakInternal}/protocol/openid-connect/token`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          client_id: process.env.KEYCLOAK_CLIENT_ID!,
+          client_secret: process.env.KEYCLOAK_CLIENT_SECRET!,
+          grant_type: "refresh_token",
+          refresh_token: token.refreshToken as string,
+        }),
+      }
+    );
+    const refreshed = (await res.json()) as {
+      access_token?: string;
+      refresh_token?: string;
+      expires_in?: number;
+      error?: string;
+    };
+    if (!res.ok || !refreshed.access_token) throw refreshed;
+
+    return {
+      ...token,
+      accessToken: refreshed.access_token,
+      refreshToken: refreshed.refresh_token ?? token.refreshToken,
+      accessTokenExpires:
+        Date.now() + (refreshed.expires_in ?? 300) * 1000,
+      realmRoles: extractRoles(refreshed.access_token),
+      error: undefined,
+    };
+  } catch (err) {
+    console.error("[auth] Token refresh failed:", err);
+    return { ...token, error: "RefreshAccessTokenError" };
+  }
+}
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
-  providers: [
-    Keycloak({
-      clientId: process.env.KEYCLOAK_CLIENT_ID!,
-      clientSecret: process.env.KEYCLOAK_CLIENT_SECRET!,
-      issuer: keycloakIssuer,
-      // Override server-side endpoints to use internal URL when running in Docker
-      ...(useInternalUrl && {
-        wellKnown: `${keycloakInternal}/.well-known/openid-configuration`,
-        token: `${keycloakInternal}/protocol/openid-connect/token`,
-        userinfo: `${keycloakInternal}/protocol/openid-connect/userinfo`,
-        jwks_endpoint: `${keycloakInternal}/protocol/openid-connect/certs`,
-      }),
-    }),
-  ],
+  providers: [KeycloakProvider],
   callbacks: {
-    jwt({ token, account, profile }) {
+    jwt({ token, account }) {
+      // Initial sign-in: store tokens and metadata
       if (account) {
-        token.accessToken = account.access_token;
-        token.realmRoles =
-          (profile as Record<string, unknown> | undefined)
-            ?.realm_access &&
-          typeof (profile as Record<string, unknown>).realm_access === "object"
-            ? (
-                (profile as Record<string, unknown>).realm_access as Record<
-                  string,
-                  unknown
-                >
-              )["roles"] ?? []
-            : [];
+        return {
+          ...token,
+          accessToken: account.access_token,
+          refreshToken: account.refresh_token,
+          accessTokenExpires:
+            Date.now() + ((account.expires_in as number) ?? 300) * 1000,
+          realmRoles: extractRoles(account.access_token as string),
+        };
       }
-      return token;
+
+      // Token still valid (30s buffer before expiry)
+      if (Date.now() < (token.accessTokenExpires as number) - 30_000) {
+        return token;
+      }
+
+      // Token expired — refresh
+      return refreshAccessToken(token);
     },
     session({ session, token }) {
       session.accessToken = token.accessToken as string;
       (session.user as { realmRoles?: string[] }).realmRoles =
         token.realmRoles as string[];
+      if (token.error) {
+        (session as unknown as Record<string, unknown>).error = token.error;
+      }
       return session;
     },
   },

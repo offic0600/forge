@@ -2,6 +2,7 @@
 
 import React, { useCallback, useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { getAuthHeaders } from "@/lib/auth";
 import {
   ReactFlow,
   Background,
@@ -63,7 +64,7 @@ export function ServiceGraphViewer() {
   const { data: graph, isLoading } = useQuery<ServiceGraph>({
     queryKey: ["service-graph"],
     queryFn: async () => {
-      const res = await fetch("/api/knowledge/services");
+      const res = await fetch("/api/knowledge/services", { headers: getAuthHeaders() });
       if (!res.ok) throw new Error("Failed to fetch service graph");
       return res.json();
     },

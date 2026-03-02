@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { getAuthHeaders } from "@/lib/auth";
 
 interface SessionSummary {
   id: string;
@@ -38,7 +39,8 @@ export function SessionHistoryView({ workspaceId }: SessionHistoryViewProps) {
     (async () => {
       try {
         const res = await fetch(
-          `/api/memory/sessions/${workspaceId}?limit=20`
+          `/api/memory/sessions/${workspaceId}?limit=20`,
+          { headers: getAuthHeaders() }
         );
         if (res.ok) {
           const data = (await res.json()) as SessionSummary[];
