@@ -40,7 +40,7 @@ class OrganizationService(
     }
 
     @Transactional
-    fun createOrg(req: CreateOrgRequest): Organization {
+    fun createOrg(req: CreateOrgRequest, creatorId: String? = null): Organization {
         if (orgRepository.findBySlug(req.slug) != null) {
             throw IllegalArgumentException("Slug「${req.slug}」已被使用，请更换")
         }
@@ -50,6 +50,16 @@ class OrganizationService(
             description = req.description
         )
         orgRepository.save(entity)
+        // Auto-add creator as OWNER so they can immediately manage the org
+        if (creatorId != null) {
+            val memberEntity = OrgMemberEntity(
+                orgId = entity.id,
+                userId = creatorId,
+                role = "OWNER"
+            )
+            memberRepository.save(memberEntity)
+            logger.info("Added creator {} as OWNER of org {}", creatorId, entity.id)
+        }
         logger.info("Created organization: {} ({})", entity.name, entity.id)
         return entity.toModel()
     }

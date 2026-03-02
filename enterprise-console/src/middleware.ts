@@ -20,8 +20,12 @@ export default auth((req: NextRequest & { auth: unknown }) => {
     return NextResponse.next();
   }
 
-  // Redirect unauthenticated users to sign-in
-  if (!req.auth) {
+  // Redirect unauthenticated users to sign-in.
+  // Also redirect when the refresh token has expired (RefreshAccessTokenError) —
+  // the session cookie is still present but the access token can no longer be
+  // renewed, so the user needs to log in again.
+  const session = req.auth as { error?: string } | null;
+  if (!session || session.error === "RefreshAccessTokenError") {
     return NextResponse.redirect(new URL("/api/auth/signin", req.url));
   }
 

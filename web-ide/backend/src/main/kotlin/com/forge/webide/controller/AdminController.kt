@@ -39,9 +39,11 @@ class AdminController(
         @RequestBody req: CreateOrgRequest,
         @AuthenticationPrincipal jwt: Jwt? = null
     ): ResponseEntity<Any> {
-        rbacHelper.requireSystemAdmin(jwt)
+        // Any authenticated user can create an org; they become its OWNER automatically.
+        // (SystemAdmin can also create orgs for other users via the addMember endpoint.)
+        rbacHelper.requireAuthenticated(jwt)
         return try {
-            val org = orgService.createOrg(req)
+            val org = orgService.createOrg(req, jwt?.subject)
             auditLogService.log(org.id, jwt?.subject ?: "system", "ORG_CREATED", "ORGANIZATION", org.id, org.name)
             ResponseEntity.status(HttpStatus.CREATED).body(org)
         } catch (e: IllegalArgumentException) {

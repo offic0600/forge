@@ -99,6 +99,11 @@ async function refreshAccessToken(token: JWT): Promise<JWT> {
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [KeycloakProvider],
+  session: {
+    // Explicit 30-day session lifetime so the cookie never expires during normal use.
+    // Without this, Auth.js v5 beta may use a shorter default in some environments.
+    maxAge: 30 * 24 * 60 * 60,
+  },
   callbacks: {
     jwt({ token, account }) {
       // Initial sign-in: store tokens and metadata
@@ -110,11 +115,18 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           accessTokenExpires:
             Date.now() + ((account.expires_in as number) ?? 300) * 1000,
           realmRoles: extractRoles(account.access_token as string),
+          error: undefined,
         };
       }
 
       // Token still valid (30s buffer before expiry)
       if (Date.now() < (token.accessTokenExpires as number) - 30_000) {
+        return token;
+      }
+
+      // If a previous refresh already failed, don't keep hammering Keycloak —
+      // let the middleware redirect to sign-in instead.
+      if (token.error === "RefreshAccessTokenError") {
         return token;
       }
 

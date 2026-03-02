@@ -26,7 +26,7 @@ export default async function LocaleLayout({
   return (
     <html lang={locale} className="dark">
       <body className={inter.className}>
-        <NextIntlClientProvider messages={messages}>
+        <NextIntlClientProvider locale={locale} messages={messages}>
           <Providers>
             <div className="flex h-screen overflow-hidden bg-background">
               <Sidebar />
