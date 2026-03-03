@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import Link from "next/link";
 import { handleCallback, getRedirectAfterLogin } from "@/lib/auth";
 
 export default function AuthCallbackPage() {
@@ -36,12 +37,12 @@ export default function AuthCallbackPage() {
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="text-center space-y-4">
           <p className="text-destructive">{error}</p>
-          <a
+          <Link
             href="/login"
             className="text-sm text-primary hover:underline"
           >
             Back to login
-          </a>
+          </Link>
         </div>
       </div>
     );
