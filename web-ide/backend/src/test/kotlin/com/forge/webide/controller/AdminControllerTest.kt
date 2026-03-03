@@ -54,6 +54,7 @@ class AdminControllerTest {
         fun rbacHelper(): RbacHelper = mockk {
             every { isSystemAdmin(any()) } returns true
             every { isOrgAdmin(any(), any()) } returns true
+            every { requireAuthenticated(any()) } just runs
             every { requireSystemAdmin(any()) } just runs
             every { requireOrgAdmin(any(), any()) } just runs
         }
@@ -88,7 +89,7 @@ class AdminControllerTest {
     @Test
     fun `POST orgs returns 201 when created`() {
         val req = CreateOrgRequest(name = "New Org", slug = "new-org")
-        every { orgService.createOrg(any()) } returns sampleOrg()
+        every { orgService.createOrg(any(), any()) } returns sampleOrg()
 
         mockMvc.perform(
             post("/api/admin/orgs")
@@ -101,7 +102,7 @@ class AdminControllerTest {
 
     @Test
     fun `POST orgs returns 400 when slug taken`() {
-        every { orgService.createOrg(any()) } throws IllegalArgumentException("Slug already taken")
+        every { orgService.createOrg(any(), any()) } throws IllegalArgumentException("Slug already taken")
 
         mockMvc.perform(
             post("/api/admin/orgs")

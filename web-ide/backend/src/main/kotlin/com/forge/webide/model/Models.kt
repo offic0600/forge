@@ -436,7 +436,8 @@ data class ExtractionJobStatus(
     val status: String,
     val progress: ExtractionProgress,
     val results: List<TagExtractionResult>,
-    val workspaceId: String = ""
+    val workspaceId: String = "",
+    val tagId: String? = null
 )
 
 data class ExtractionProgress(

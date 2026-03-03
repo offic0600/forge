@@ -3,12 +3,13 @@
 import React, { useState, useMemo, useCallback } from "react";
 import { KnowledgeTagView, knowledgeTagApi } from "@/lib/knowledge-tag-api";
 import { MonacoEditor } from "@/components/editor/MonacoEditor";
-import { Pencil, Save, X, Clock, List, CheckCircle, RotateCw, FileQuestion } from "lucide-react";
+import { Pencil, Save, X, Clock, List, CheckCircle, RotateCw, FileQuestion, Loader2 } from "lucide-react";
 
 interface KnowledgeTagDetailProps {
   tag: KnowledgeTagView;
   onUpdated: (tag: KnowledgeTagView) => void;
   onReExtract?: (tagId: string) => void;
+  reExtracting?: boolean;
 }
 
 interface TocEntry {
@@ -146,7 +147,7 @@ function renderDocMarkdown(content: string): React.ReactNode {
   return <>{elements}</>;
 }
 
-export function KnowledgeTagDetail({ tag, onUpdated, onReExtract }: KnowledgeTagDetailProps) {
+export function KnowledgeTagDetail({ tag, onUpdated, onReExtract, reExtracting = false }: KnowledgeTagDetailProps) {
   const [editing, setEditing] = useState(false);
   const [editContent, setEditContent] = useState(tag.content);
   const [saving, setSaving] = useState(false);
@@ -208,10 +209,15 @@ export function KnowledgeTagDetail({ tag, onUpdated, onReExtract }: KnowledgeTag
           {onReExtract && (
             <button
               onClick={() => onReExtract(tag.id)}
-              className="mt-4 flex items-center gap-1.5 mx-auto rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"
+              disabled={reExtracting}
+              className="mt-4 flex items-center gap-1.5 mx-auto rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             >
-              <RotateCw className="h-4 w-4" />
-              Extract This Tag
+              {reExtracting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RotateCw className="h-4 w-4" />
+              )}
+              {reExtracting ? "Extracting..." : "Extract This Tag"}
             </button>
           )}
         </div>
@@ -233,10 +239,15 @@ export function KnowledgeTagDetail({ tag, onUpdated, onReExtract }: KnowledgeTag
           {onReExtract && (
             <button
               onClick={() => onReExtract(tag.id)}
-              className="mt-4 flex items-center gap-1.5 mx-auto rounded-md border border-border px-3 py-1.5 text-sm hover:bg-accent"
+              disabled={reExtracting}
+              className="mt-4 flex items-center gap-1.5 mx-auto rounded-md border border-border px-3 py-1.5 text-sm hover:bg-accent disabled:opacity-50"
             >
-              <RotateCw className="h-3.5 w-3.5" />
-              Re-extract
+              {reExtracting ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <RotateCw className="h-3.5 w-3.5" />
+              )}
+              {reExtracting ? "Extracting..." : "Re-extract"}
             </button>
           )}
         </div>
@@ -320,10 +331,15 @@ export function KnowledgeTagDetail({ tag, onUpdated, onReExtract }: KnowledgeTag
                 {onReExtract && (
                   <button
                     onClick={() => onReExtract(tag.id)}
-                    className="flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-xs hover:bg-accent"
+                    disabled={reExtracting}
+                    className="flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-xs hover:bg-accent disabled:opacity-50"
                   >
-                    <RotateCw className="h-3 w-3" />
-                    Re-extract
+                    {reExtracting ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <RotateCw className="h-3 w-3" />
+                    )}
+                    {reExtracting ? "Extracting..." : "Re-extract"}
                   </button>
                 )}
                 <button

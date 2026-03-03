@@ -50,6 +50,8 @@ export default function KnowledgePage() {
     currentTag: string | null;
   } | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Per-tag re-extraction loading state
+  const [reExtractingTagId, setReExtractingTagId] = useState<string | null>(null);
 
   // Load workspace list
   useEffect(() => {
@@ -126,7 +128,8 @@ export default function KnowledgePage() {
 
   const handleReExtract = useCallback(
     async (tagId: string) => {
-      if (!selectedWorkspaceId) return;
+      if (!selectedWorkspaceId || reExtractingTagId === tagId) return;
+      setReExtractingTagId(tagId);
       try {
         const { jobId } = await knowledgeTagApi.triggerExtraction(
           selectedWorkspaceId,
@@ -139,6 +142,7 @@ export default function KnowledgePage() {
             const status = await knowledgeTagApi.getJobStatus(jobId);
             if (status.status === "completed" || status.status === "failed") {
               clearInterval(poll);
+              setReExtractingTagId(null);
               loadTags();
             }
           } catch {
@@ -147,9 +151,10 @@ export default function KnowledgePage() {
         }, 2000);
       } catch (err) {
         console.error("Failed to re-extract tag:", err);
+        setReExtractingTagId(null);
       }
     },
-    [selectedWorkspaceId, loadTags]
+    [selectedWorkspaceId, reExtractingTagId, loadTags]
   );
 
   return (
@@ -289,6 +294,7 @@ export default function KnowledgePage() {
                   tag={selectedTag}
                   onUpdated={handleTagUpdated}
                   onReExtract={selectedWorkspaceId ? handleReExtract : undefined}
+                  reExtracting={reExtractingTagId === selectedTagId}
                 />
               ) : (
                 <div className="flex h-full items-center justify-center text-muted-foreground">

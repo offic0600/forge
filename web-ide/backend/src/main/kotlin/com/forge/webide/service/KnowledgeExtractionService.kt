@@ -30,12 +30,16 @@ class KnowledgeExtractionService(
     // =========================================================================
 
     fun triggerExtraction(request: ExtractionTriggerRequest): String {
-        // Prevent duplicate jobs on same workspace
-        val existingJob = activeJobs.values.find {
-            it.status == "running" && it.workspaceId == request.workspaceId
+        // Prevent duplicate jobs for the exact same operation (same workspaceId + same tagId).
+        // A single-tag extraction is allowed even when a full-workspace job is running.
+        val existingJob = activeJobs.values.find { job ->
+            job.status == "running" &&
+            job.workspaceId == request.workspaceId &&
+            job.tagId == request.tagId
         }
         if (existingJob != null) {
-            logger.warn("Extraction job already running for workspace {}: {}", request.workspaceId, existingJob.jobId)
+            logger.warn("Identical extraction job already running for workspace {}, tag {}: {}",
+                request.workspaceId, request.tagId, existingJob.jobId)
             return existingJob.jobId
         }
 
@@ -45,7 +49,8 @@ class KnowledgeExtractionService(
             status = "running",
             progress = ExtractionProgress(totalTags = 0, completedTags = 0, currentTag = "initializing"),
             results = emptyList(),
-            workspaceId = request.workspaceId
+            workspaceId = request.workspaceId,
+            tagId = request.tagId
         )
         activeJobs[jobId] = status
 
