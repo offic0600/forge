@@ -179,6 +179,8 @@ class AgenticLoopOrchestrator(
                 val toolResults = mutableListOf<ToolResult>()
                 for ((toolIdx, toolUse) in currentToolUses.withIndex()) {
                     emitSubStep(onEvent, "Turn $turn — 调用 ${toolUse.name} (${toolIdx + 1}/${currentToolUses.size})")
+                    // Emit thinking status before tool execution to avoid blank gap in frontend
+                    onEvent(mapOf("type" to "thinking", "content" to "执行: ${toolUse.name}"))
                     val startMs = System.currentTimeMillis()
                     val result = try {
                         val mcpResult = mcpProxyService.callTool(toolUse.name, toolUse.input, workspaceId.ifBlank { null }, sessionId, onEvent)

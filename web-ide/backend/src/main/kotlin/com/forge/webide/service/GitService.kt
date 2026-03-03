@@ -55,8 +55,13 @@ class GitService {
     }
 
     fun diff(workspaceDir: Path): String {
-        val result = runGitCommand(listOf("git", "diff", "HEAD"), workspaceDir)
-        return result.stdout.ifBlank { "(no changes)" }
+        val staged = runGitCommand(listOf("git", "diff", "--cached"), workspaceDir).stdout
+        val unstaged = runGitCommand(listOf("git", "diff"), workspaceDir).stdout
+        return buildString {
+            if (staged.isNotBlank()) { appendLine("=== Staged changes (已暂存) ==="); appendLine(staged) }
+            if (unstaged.isNotBlank()) { appendLine("=== Unstaged changes (未暂存) ==="); appendLine(unstaged) }
+            if (staged.isBlank() && unstaged.isBlank()) append("(no changes)")
+        }.trim()
     }
 
     fun add(workspaceDir: Path, paths: List<String>): String {
@@ -73,11 +78,15 @@ class GitService {
     }
 
     fun commit(workspaceDir: Path, message: String): String {
+        // Pre-check: auto-configure git identity if missing
+        val name = runGitCommand(listOf("git", "config", "user.name"), workspaceDir).stdout.trim()
+        val email = runGitCommand(listOf("git", "config", "user.email"), workspaceDir).stdout.trim()
+        if (name.isBlank()) runGitCommand(listOf("git", "config", "user.name", "forge-agent"), workspaceDir)
+        if (email.isBlank()) runGitCommand(listOf("git", "config", "user.email", "forge-agent@local"), workspaceDir)
+
         val taggedMessage = if (message.contains("[Forge-Agent]")) message else "$message [Forge-Agent]"
         val result = runGitCommand(listOf("git", "commit", "-m", taggedMessage), workspaceDir)
-        if (result.exitCode != 0) {
-            throw GitOperationException("git commit failed: ${result.stderr}")
-        }
+        if (result.exitCode != 0) throw GitOperationException("git commit failed: ${result.stderr}")
         return result.stdout.trim()
     }
 

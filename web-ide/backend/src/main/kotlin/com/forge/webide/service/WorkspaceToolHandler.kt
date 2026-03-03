@@ -40,7 +40,7 @@ class WorkspaceToolHandler(
                         ?: return McpProxyService.errorResponse("'path' parameter is required")
                     val content = args["content"] as? String
                         ?: return McpProxyService.errorResponse("'content' parameter is required")
-                    if (path.contains("..")) {
+                    if (isPathTraversal(path)) {
                         return McpProxyService.errorResponse("Path traversal not allowed")
                     }
                     workspaceService.createFile(workspaceId, path, content)
@@ -56,7 +56,7 @@ class WorkspaceToolHandler(
                 "workspace_read_file" -> {
                     val path = args["path"] as? String
                         ?: return McpProxyService.errorResponse("'path' parameter is required")
-                    if (path.contains("..")) {
+                    if (isPathTraversal(path)) {
                         return McpProxyService.errorResponse("Path traversal not allowed")
                     }
                     val content = workspaceService.getFileContent(workspaceId, path)
@@ -79,7 +79,7 @@ class WorkspaceToolHandler(
                 "workspace_delete_file" -> {
                     val path = args["path"] as? String
                         ?: return McpProxyService.errorResponse("'path' parameter is required")
-                    if (path.contains("..")) {
+                    if (isPathTraversal(path)) {
                         return McpProxyService.errorResponse("Path traversal not allowed")
                     }
                     workspaceService.deleteFile(workspaceId, path)
@@ -129,6 +129,12 @@ class WorkspaceToolHandler(
             )
         }
     }
+
+    // ---- Path security ----
+
+    /** 按路径组件判断，避免误拦截 [...name] 等合法语法 */
+    private fun isPathTraversal(path: String): Boolean =
+        path.split("/", "\\").any { it == ".." }
 
     // ---- Service management tool implementations ----
 

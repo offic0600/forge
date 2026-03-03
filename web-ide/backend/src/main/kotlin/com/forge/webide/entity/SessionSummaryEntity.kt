@@ -38,10 +38,10 @@ class SessionSummaryEntity(
     var nextSteps: String = "[]",
 
     @Column(name = "turn_count")
-    val turnCount: Int = 0,
+    var turnCount: Int = 0,
 
     @Column(name = "tool_call_count")
-    val toolCallCount: Int = 0,
+    var toolCallCount: Int = 0,
 
     @Column(name = "created_at", nullable = false)
     val createdAt: Instant = Instant.now()

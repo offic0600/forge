@@ -243,6 +243,8 @@ git clone "$REPO_URL" .
 
 ## 7. 可用 MCP 工具清单
 
+> ⚠️ **重要**：本技能**无 scripts 目录**，禁止调用 `run_skill_script`。所有 git 操作均通过以下 MCP 工具完成。
+
 | 工具 | 说明 |
 |------|------|
 | `workspace_git_status` | 查看当前分支 + 修改文件列表 |

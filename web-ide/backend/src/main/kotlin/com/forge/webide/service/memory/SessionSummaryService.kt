@@ -54,9 +54,14 @@ class SessionSummaryService(
         adapterOverride: ModelAdapter? = null,
         modelOverride: String? = null
     ) {
-        // Skip if summary already exists for this session
-        if (sessionSummaryRepository.findBySessionId(sessionId) != null) {
-            logger.debug("Summary already exists for session {}", sessionId)
+        // If summary already exists, update counts only — no expensive LLM call
+        val existing = sessionSummaryRepository.findBySessionId(sessionId)
+        if (existing != null) {
+            existing.turnCount = conversationHistory.size / 2
+            existing.toolCallCount = toolCalls.size
+            sessionSummaryRepository.save(existing)
+            logger.debug("Updated session summary counts for {}: turns={}, tools={}",
+                sessionId, existing.turnCount, existing.toolCallCount)
             return
         }
 

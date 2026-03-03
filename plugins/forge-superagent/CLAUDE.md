@@ -63,8 +63,9 @@ Gather all relevant context before taking any action:
    - `forge-knowledge-server`: domain knowledge, past decisions, patterns
 3. Read relevant files in the codebase (design docs, existing code, configs)
 4. Check git history for recent related changes
-5. Identify what you know and what you do NOT know
-6. **Check workspace memory for `[BLOCKER]` tags** — scan all memory entries for lines starting with `[BLOCKER]`:
+5. **若当前任务与近期历史高度相似**（如"帮我看下 git 状态"），调用 `get_session_history` 查看上次执行结果，直接复用而非重复执行工具。
+6. Identify what you know and what you do NOT know
+7. **Check workspace memory for `[BLOCKER]` tags** — scan all memory entries for lines starting with `[BLOCKER]`:
    - If a `[BLOCKER]` directly applies to the current task → **STOP**. Do NOT proceed to Act.
    - Immediately report the blocker to the user: "⚠️ Known blocker: [description]. I will not retry this approach. Suggested alternatives: [options]."
    - Wait for user instruction before taking any action.

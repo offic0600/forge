@@ -211,6 +211,11 @@ Generate the code:
 
 ### Step 5: Build & Verify (标准交付流程)
 
+> **Baseline 豁免条件**：以下场景**跳过** baseline 执行：
+> - 纯 git 操作（status / diff / log / pull / push）
+> - 只读查询（代码阅读、知识检索、文档生成）
+> - 用户明确说明无需验证的场景
+
 执行以下完整交付流程，每步使用对应工具：
 
 1. **编码** → `workspace_write_file`（写入代码文件）
