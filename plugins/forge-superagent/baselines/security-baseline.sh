@@ -28,6 +28,13 @@ log_info() { echo "[INFO] $1"; }
 # Source directories to scan (exclude build artifacts and test code)
 SRC_DIRS=("src/main" "src/commonMain")
 
+# Workspace-mode: if src/main doesn't exist, scan scripts in root (Agent-generated files)
+WORKSPACE_MODE=false
+if [ ! -d "$PROJECT_ROOT/src/main" ] && [ ! -d "$PROJECT_ROOT/src/commonMain" ]; then
+    WORKSPACE_MODE=true
+    log_info "Workspace mode: scanning root-level scripts (no src/main found)"
+fi
+
 find_source_files() {
     local extensions=("$@")
     for src_dir in "${SRC_DIRS[@]}"; do
@@ -60,6 +67,15 @@ check_hardcoded_credentials() {
         'jdbc:.*password=[^&"]*[^${}]'
         'BEGIN\s+(RSA\s+)?PRIVATE\s+KEY'
         'AKIA[0-9A-Z]{16}'
+        # Platform-specific token formats (matched as bare strings, no assignment context needed)
+        'glpat-[A-Za-z0-9_-]{10,}'
+        'ghp_[A-Za-z0-9]{10,}'
+        'github_pat_[A-Za-z0-9_]{10,}'
+        'ghs_[A-Za-z0-9]{10,}'
+        'gho_[A-Za-z0-9]{10,}'
+        'xoxb-[0-9]+-[0-9]+-[A-Za-z0-9]+'
+        'xoxp-[0-9]+-[0-9]+-[0-9]+-[A-Za-z0-9]+'
+        'sk-[A-Za-z0-9]{20,}'
     )
 
     # Files to exclude (test fixtures, documentation, configuration templates)
@@ -79,14 +95,35 @@ check_hardcoded_credentials() {
         exclude_args="${exclude_args} --exclude=${pattern}"
     done
 
+    # Determine scan targets: project source OR workspace root scripts
+    local scan_targets=()
+    if [ "$WORKSPACE_MODE" = true ]; then
+        # Scan all script/code files in workspace root (Agent-generated scripts)
+        mapfile -t scan_targets < <(find "$PROJECT_ROOT" -maxdepth 3 \
+            \( -name "*.py" -o -name "*.sh" -o -name "*.js" -o -name "*.ts" -o -name "*.kt" \) \
+            -not -path "*/.git/*" -not -path "*/node_modules/*" -not -path "*/__pycache__/*" \
+            -type f 2>/dev/null)
+    else
+        mapfile -t scan_targets < <(find "$PROJECT_ROOT/src/main" -type f 2>/dev/null)
+        if [ -d "$PROJECT_ROOT/src/commonMain" ]; then
+            mapfile -t extra < <(find "$PROJECT_ROOT/src/commonMain" -type f 2>/dev/null)
+            scan_targets+=("${extra[@]}")
+        fi
+    fi
+
     for pattern in "${patterns[@]}"; do
-        local matches
-        matches=$(grep -rn -E "$pattern" "$PROJECT_ROOT/src/main" $exclude_args 2>/dev/null || true)
+        local matches=""
+        for target_file in "${scan_targets[@]}"; do
+            [ -f "$target_file" ] || continue
+            local file_matches
+            file_matches=$(grep -n -E "$pattern" "$target_file" 2>/dev/null || true)
+            [ -n "$file_matches" ] && matches="${matches}${target_file}:${file_matches}"$'\n'
+        done
 
         if [ -n "$matches" ]; then
             # Filter out false positives: empty strings, placeholder values, environment variable references
             local real_matches
-            real_matches=$(echo "$matches" | grep -v -E '(=\s*""|\$\{|getenv|System\.getenv|@Value|config\.|properties\.)' || true)
+            real_matches=$(echo "$matches" | grep -v -E '(=\s*""|\$\{|getenv|System\.getenv|@Value|config\.|properties\.|YOUR_TOKEN_HERE|<token>|example|placeholder)' || true)
 
             if [ -n "$real_matches" ]; then
                 found=1

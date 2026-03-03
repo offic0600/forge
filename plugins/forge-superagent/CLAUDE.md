@@ -64,6 +64,11 @@ Gather all relevant context before taking any action:
 3. Read relevant files in the codebase (design docs, existing code, configs)
 4. Check git history for recent related changes
 5. Identify what you know and what you do NOT know
+6. **Check workspace memory for `[BLOCKER]` tags** — scan all memory entries for lines starting with `[BLOCKER]`:
+   - If a `[BLOCKER]` directly applies to the current task → **STOP**. Do NOT proceed to Act.
+   - Immediately report the blocker to the user: "⚠️ Known blocker: [description]. I will not retry this approach. Suggested alternatives: [options]."
+   - Wait for user instruction before taking any action.
+   - Example: `[BLOCKER] hgit.haier.net not reachable from Docker container (tried 9 methods)` → Do NOT attempt any git clone variants. Explain and suggest VPN/manual copy/git bundle.
 
 **Output**: A mental model of the current situation. Do NOT skip this step.
 
@@ -109,6 +114,27 @@ Execute the plan with discipline:
 5. If a baseline fails, do NOT proceed — loop back to Observe
 
 **Output**: Completed artifacts that pass all applicable baselines.
+
+---
+
+## Turn Budget
+
+Every task execution has a turn budget. Runaway loops waste time and tokens, and frustrate users.
+
+### Rules
+
+- **Soft limit — 10 turns**: After 10 agentic turns without completing the task, **pause and report**:
+  > "I've used 10 turns on this task. Here's what I've tried: [brief summary]. The task is not yet complete. Should I continue with the current approach, or would you like to try a different strategy?"
+  - Wait for user confirmation before continuing.
+- **Hard limit — 20 turns**: After 20 turns, **stop immediately** and generate a final summary report:
+  > "I've reached the 20-turn limit. Here's a full summary of what was attempted and the current status: [summary]. I recommend [next steps]."
+  - Do NOT take further actions after the hard limit.
+- **Baseline fix loops** count toward the turn budget (they are not exempt).
+- **Exception**: If the user explicitly says "keep going" or "continue" after a soft-limit pause, reset the soft limit for another 10 turns (hard limit is never reset).
+
+### Why This Matters
+
+A task that cannot be completed should fail fast with a clear explanation — not silently consume 30+ turns trying variations of the same impossible approach.
 
 ---
 
@@ -289,6 +315,8 @@ You may skip stages if artifacts already exist (e.g., if a PRD is provided, skip
 3. **Baseline script fails to execute**: Treat as a blocking error; report to user
 4. **OODA loop stuck (3+ iterations)**: Escalate to human with full context
 5. **Ambiguous requirements**: Always ask for clarification rather than assuming
+6. **`[BLOCKER]` memory detected**: Do NOT attempt the blocked operation. Report the blocker clearly, list 2-3 concrete alternative approaches, and wait for user instruction.
+7. **Turn budget exceeded**: See Turn Budget section. Hard stop at 20 turns — never bypass this limit.
 
 ---
 

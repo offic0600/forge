@@ -157,6 +157,90 @@ npm-debug.log*
 4. workspace_git_commit message="chore: 初始化 .gitignore"
 ```
 
+### 场景 E：克隆远程仓库（GitHub / GitLab 通用）
+
+> ⚠️ 克隆是网络操作。**必须先做 Pre-flight 验证，禁止直接尝试克隆**。最多尝试 2 次，失败后立即 escalate，不要穷举变体。
+
+#### E.1 识别平台和 token 格式
+
+| 平台 | URL 特征 | Token 格式 |
+|------|---------|-----------|
+| GitHub.com | `github.com` | `ghp_*`（PAT classic）/ `github_pat_*`（fine-grained） |
+| GitLab.com | `gitlab.com` | `glpat-*` |
+| 企业 GitLab | 自定义域名 | `glpat-*` |
+| 企业 GitHub | 自定义域名（Enterprise） | `ghp_*` / `ghs_*` |
+
+#### E.2 Pre-flight — 网络连通性（Step 1，必做）
+
+```bash
+# 提取主机名
+HOST=$(echo "$REPO_URL" | sed -E 's|https?://([^/@]+@)?([^/:]+).*|\2|')
+
+# 验证主机可达（10s 超时）
+curl --max-time 10 -s -o /dev/null -w "%{http_code}" "https://$HOST" 2>&1
+```
+
+- **返回 000 / 连接被拒 / 超时** → 主机不可达。立即写入 workspace 记忆：
+  ```
+  [BLOCKER] $HOST not reachable from this environment (network timeout).
+  Tried: curl. Do not retry clone variants.
+  ```
+  然后告知用户，**停止**，建议替代方案（见 E.5）。
+- **返回任何 HTTP 状态码** → 主机可达，进入 Step 2。
+
+#### E.3 Pre-flight — 认证验证（Step 2，必做）
+
+```bash
+# GitHub / GitLab 均支持：用 git ls-remote 测试认证（比 clone 快 10x）
+git ls-remote --exit-code "$REPO_URL" HEAD 2>&1 | head -5
+```
+
+- **exit 128 / 401 / 403** → token 无效或权限不足。告知用户具体错误，**不要继续**。
+- **exit 0** → 认证通过，进入 Step 3。
+
+#### E.4 执行克隆
+
+```bash
+# 默认 shallow clone（加速，适合大仓库）
+git clone --depth 50 "$REPO_URL" .
+
+# 如果需要完整历史（用户明确要求时才用）
+git clone "$REPO_URL" .
+```
+
+**失败重试规则**：
+- 第 1 次失败（如网络抖动）→ 等待 3s，去掉 `--depth` 重试一次
+- 第 2 次失败 → **停止**，生成诊断报告（见 E.5），不再尝试其他变体
+
+#### E.5 失败后的 escalation 模板
+
+```
+克隆失败。已验证：
+- 主机 $HOST：[可达/不可达]
+- 认证：[通过/失败，原因：xxx]
+- 尝试次数：[N]
+
+建议替代方案：
+1. 在能访问该仓库的机器上执行：git bundle create repo.bundle --all
+   然后将 repo.bundle 文件传入本环境，执行：git clone repo.bundle .
+2. 配置 VPN 或 SSH 隧道使本环境能访问 $HOST
+3. 在本地克隆后，使用 workspace_write_file 逐文件上传关键源码
+```
+
+#### E.6 Token 安全规范（重要）
+
+- ❌ **禁止**：将 token 硬编码进脚本或 URL：`https://glpat-xxx@gitlab.com/...`
+- ✅ **推荐**：使用环境变量传递 token：
+  ```bash
+  # GitHub
+  git clone "https://x-access-token:$GITHUB_TOKEN@github.com/org/repo.git" .
+  # GitLab
+  git clone "https://oauth2:$GITLAB_TOKEN@gitlab.com/org/repo.git" .
+  ```
+- 克隆完成后立即清理 token 引用，配置 credential 缓存替代明文存储
+
+---
+
 ## 7. 可用 MCP 工具清单
 
 | 工具 | 说明 |
