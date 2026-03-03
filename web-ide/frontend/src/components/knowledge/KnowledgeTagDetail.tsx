@@ -379,6 +379,20 @@ export function KnowledgeTagDetail({ tag, onUpdated, onReExtract, reExtracting =
               >
                 <List className="h-3.5 w-3.5" />
               </button>
+              {onReExtract && (
+                <button
+                  onClick={() => onReExtract(tag.id)}
+                  disabled={reExtracting}
+                  className="flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-xs hover:bg-accent disabled:opacity-50"
+                >
+                  {reExtracting ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <RotateCw className="h-3 w-3" />
+                  )}
+                  {reExtracting ? "Extracting..." : "Re-extract"}
+                </button>
+              )}
               <button
                 onClick={handleEdit}
                 className="flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-xs hover:bg-accent"
