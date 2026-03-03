@@ -289,7 +289,7 @@ class WorkspaceService(
     }
 
     private fun validatePath(path: String) {
-        if (path.contains("..")) {
+        if (path.split("/", "\\").any { it == ".." }) {
             throw IllegalArgumentException("Path traversal not allowed: $path")
         }
     }
