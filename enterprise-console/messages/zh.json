@@ -149,7 +149,11 @@
     "mavenPlaceholder": "例：-Xmx2g",
     "gradlePlaceholder": "例：-Xmx2g",
     "secretBadge": "敏感",
-    "plainBadge": "普通"
+    "plainBadge": "普通",
+    "networkTitle": "网络配置",
+    "networkSubtitle": "自定义 DNS 服务器（逗号分隔），保存后立即对 git 等子进程生效。留空则使用容器默认 DNS。",
+    "dnsServers": "DNS 服务器",
+    "dnsPlaceholder": "例：10.0.0.1,8.8.8.8（内网 DNS 在前）"
   },
   "common": {
     "loading": "加载中...",

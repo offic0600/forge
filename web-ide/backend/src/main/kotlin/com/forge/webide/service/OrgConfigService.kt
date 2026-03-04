@@ -20,7 +20,8 @@ class OrgConfigService(
     private val modelConfigRepository: OrgModelConfigRepository,
     private val dbConnectionRepository: OrgDbConnectionRepository,
     private val envConfigRepository: OrgEnvConfigRepository,
-    private val encryptionService: EncryptionService
+    private val encryptionService: EncryptionService,
+    private val networkConfigService: NetworkConfigService
 ) {
 
     private val logger = LoggerFactory.getLogger(OrgConfigService::class.java)
@@ -135,6 +136,12 @@ class OrgConfigService(
 
         envConfigRepository.save(entity)
         logger.info("Upserted env config {}/{} for org {}", category, req.configKey, orgId)
+
+        // Apply DNS immediately when network.DNS_SERVERS is saved
+        if (category == "network" && req.configKey == "DNS_SERVERS" && req.configValue != null) {
+            networkConfigService.applyDns(req.configValue)
+        }
+
         return entity.toModel()
     }
 

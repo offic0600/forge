@@ -149,7 +149,11 @@
     "mavenPlaceholder": "e.g. -Xmx2g",
     "gradlePlaceholder": "e.g. -Xmx2g",
     "secretBadge": "secret",
-    "plainBadge": "plain"
+    "plainBadge": "plain",
+    "networkTitle": "Network Configuration",
+    "networkSubtitle": "Custom DNS servers (comma-separated). Takes effect immediately for subprocesses like git. Leave blank to use container defaults.",
+    "dnsServers": "DNS Servers",
+    "dnsPlaceholder": "e.g. 10.0.0.1,8.8.8.8 (internal DNS first)"
   },
   "common": {
     "loading": "Loading...",

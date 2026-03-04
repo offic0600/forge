@@ -193,9 +193,6 @@ services:
     restart: unless-stopped
     cpus: 3
     mem_limit: 5g
-    dns:
-      - 8.8.8.8
-      - 114.114.114.114
     environment:
       # --- JVM 调优 ---
       JAVA_OPTS: >-

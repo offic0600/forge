@@ -61,9 +61,6 @@ services:
     build:
       context: ../../web-ide/backend
       dockerfile: Dockerfile
-    dns:
-      - 8.8.8.8
-      - 114.114.114.114
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:

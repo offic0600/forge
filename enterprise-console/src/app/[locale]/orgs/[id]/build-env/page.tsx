@@ -20,6 +20,10 @@ const PREDEFINED_KEYS = [
   { category: "build", key: "GRADLE_OPTS", labelKey: "gradleOpts", options: [], type: "text" as const, placeholderKey: "gradlePlaceholder" },
 ];
 
+const NETWORK_KEYS = [
+  { category: "network", key: "DNS_SERVERS", labelKey: "dnsServers", options: [], type: "text" as const, placeholderKey: "dnsPlaceholder" },
+];
+
 interface PredefinedFieldProps {
   orgId: string;
   field: (typeof PREDEFINED_KEYS)[0];
@@ -90,8 +94,9 @@ export default function BuildEnvPage() {
     queryFn: () => api.envConfigs.list(id),
   });
 
+  const allPredefined = [...PREDEFINED_KEYS, ...NETWORK_KEYS];
   const customConfigs = allConfigs.filter(
-    (c) => !PREDEFINED_KEYS.some((p) => p.category === c.category && p.key === c.configKey)
+    (c) => !allPredefined.some((p) => p.category === c.category && p.key === c.configKey)
   );
 
   const [newKey, setNewKey] = useState("");
@@ -141,6 +146,26 @@ export default function BuildEnvPage() {
           ) : (
             <div className="space-y-4">
               {PREDEFINED_KEYS.map((field) => (
+                <PredefinedField
+                  key={field.key}
+                  orgId={id}
+                  field={field}
+                  existing={allConfigs.find((c) => c.category === field.category && c.configKey === field.key)}
+                />
+              ))}
+            </div>
+          )}
+        </Card>
+
+        <Card title={t("networkTitle")}>
+          {isLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <p className="text-xs text-muted-foreground">{t("networkSubtitle")}</p>
+              {NETWORK_KEYS.map((field) => (
                 <PredefinedField
                   key={field.key}
                   orgId={id}
