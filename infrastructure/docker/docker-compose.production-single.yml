@@ -272,6 +272,7 @@ services:
     environment:
       BACKEND_URL: http://backend:8080
       BACKEND_WS_URL: ws://backend:8080
+      NEXT_PUBLIC_KEYCLOAK_URL: "${KEYCLOAK_PUBLIC_URL}"
     depends_on:
       backend:
         condition: service_healthy
