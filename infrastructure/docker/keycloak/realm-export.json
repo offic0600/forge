@@ -96,14 +96,18 @@
       "publicClient": true,
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": true,
-      "rootUrl": "http://localhost:9000",
+      "rootUrl": "https://forge.delivery",
       "baseUrl": "/",
       "redirectUris": [
+        "https://forge.delivery/*",
+        "https://www.forge.delivery/*",
         "http://localhost:9000/*",
         "http://localhost:3000/*",
         "http://localhost:19000/*"
       ],
       "webOrigins": [
+        "https://forge.delivery",
+        "https://www.forge.delivery",
         "http://localhost:9000",
         "http://localhost:3000",
         "http://localhost:19000"
@@ -111,7 +115,7 @@
       "protocol": "openid-connect",
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "post.logout.redirect.uris": "http://localhost:9000/*"
+        "post.logout.redirect.uris": "https://forge.delivery/*"
       },
       "defaultClientScopes": [
         "openid",
@@ -128,18 +132,22 @@
       "secret": "enterprise-secret",
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": false,
-      "rootUrl": "http://localhost:19001",
+      "rootUrl": "https://forge.delivery/console",
       "baseUrl": "/",
       "redirectUris": [
+        "https://forge.delivery/console/*",
+        "https://www.forge.delivery/console/*",
         "http://localhost:19001/*",
         "http://forge-enterprise-console:3000/*"
       ],
       "webOrigins": [
+        "https://forge.delivery",
+        "https://www.forge.delivery",
         "http://localhost:19001"
       ],
       "protocol": "openid-connect",
       "attributes": {
-        "post.logout.redirect.uris": "http://localhost:19001/*"
+        "post.logout.redirect.uris": "https://forge.delivery/console/*"
       },
       "defaultClientScopes": [
         "openid",
