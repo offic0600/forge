@@ -10,7 +10,6 @@ RUN addgroup --system --gid 1001 nodejs && \
 # 直接 COPY 本地预构建产物（本地 npm run build 已完成）
 COPY --chown=nextjs:nodejs .next/standalone ./
 COPY --chown=nextjs:nodejs .next/static ./.next/static
-COPY --chown=nextjs:nodejs public ./public
 
 USER nextjs
 EXPOSE 3000
